@@ -20,11 +20,11 @@ namespace EMS.Application.Features.Auth
             _refreshService = refreshService;
         }
 
-        public async Task<LoginResult> Handle(RegisterUserCommand cmd)
+        public async Task<LoginResult> Handle(RegisterUserCommand cmd, CancellationToken ct = default)
         {
-            // check uniqueness
-            var existing = await _repo.GetByUsernameOrEmailAsync(cmd.UserName);
-            if (existing != null) throw new InvalidOperationException("UserName or Email already exists");
+            var existing = await _repo.GetByUsernameOrEmailAsync(cmd.UserName, ct);
+            if (existing != null)
+                throw new InvalidOperationException("Username or email already exists.");
 
             var user = new User
             {
@@ -36,13 +36,13 @@ namespace EMS.Application.Features.Auth
                 RoleId = cmd.RoleId
             };
 
-            await _repo.AddUserAsync(user);
+            await _repo.AddUserAsync(user, ct);
 
             var access = _jwtService.GenerateAccessToken(user);
             var refresh = _refreshService.CreateRefreshToken(user.Id);
 
-            await _repo.AddRefreshTokenAsync(refresh);
-            await _repo.SaveChangesAsync();
+            await _repo.AddRefreshTokenAsync(refresh, ct);
+            await _repo.SaveChangesAsync(ct);
 
             return new LoginResult
             {

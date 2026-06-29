@@ -20,17 +20,20 @@ namespace EMS.Application.Features.Auth
             _refreshService = refreshService;
         }
 
-        public async Task<LoginResult> Handle(LoginCommand cmd)
+        public async Task<LoginResult> Handle(LoginCommand cmd, CancellationToken ct = default)
         {
-            var user = await _repo.GetByUsernameOrEmailAsync(cmd.UserNameOrEmail);
+            var user = await _repo.GetByUsernameOrEmailAsync(cmd.UserNameOrEmail, ct);
             if (user == null || !_passwordHasher.Verify(user.PasswordHash, cmd.Password))
-                throw new UnauthorizedAccessException("Invalid credentials");
+                throw new UnauthorizedAccessException("Invalid credentials.");
+
+            if (!user.IsActive)
+                throw new UnauthorizedAccessException("Account is disabled.");
 
             var access = _jwtService.GenerateAccessToken(user);
             var refresh = _refreshService.CreateRefreshToken(user.Id);
 
-            await _repo.AddRefreshTokenAsync(refresh);
-            await _repo.SaveChangesAsync();
+            await _repo.AddRefreshTokenAsync(refresh, ct);
+            await _repo.SaveChangesAsync(ct);
 
             return new LoginResult
             {

@@ -28,8 +28,16 @@ builder.Services.AddSingleton<EMS.Application.Interfaces.IPdfService, EMS.Infras
 builder.Services.AddScoped<EMS.Application.Interfaces.IReportRepository, EMS.Persistence.Repositories.ReportRepository>();
 builder.Services.AddSingleton<EMS.Application.Interfaces.IExportService, EMS.Infrastructure.Export.CsvExportService>();
 
-// Application handlers
+// Application handlers — Auth
 builder.Services.AddScoped<EMS.Application.Features.Auth.LoginCommandHandler>();
+builder.Services.AddScoped<EMS.Application.Features.Auth.RegisterUserCommandHandler>();
+builder.Services.AddScoped<EMS.Application.Features.Auth.RefreshTokenCommandHandler>();
+builder.Services.AddScoped<EMS.Application.Features.Auth.LogoutCommandHandler>();
+builder.Services.AddScoped<EMS.Application.Features.Auth.LogoutAllCommandHandler>();
+builder.Services.AddScoped<EMS.Application.Features.Auth.ForgotPasswordCommandHandler>();
+builder.Services.AddScoped<EMS.Application.Features.Auth.ResetPasswordCommandHandler>();
+builder.Services.AddScoped<EMS.Application.Features.Auth.ChangePasswordCommandHandler>();
+builder.Services.AddScoped<EMS.Application.Features.Auth.GetCurrentUserQueryHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.CreateSalaryStructureCommandHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.GetSalaryStructuresQueryHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.GetSalaryStructureByIdQueryHandler>();
@@ -38,7 +46,6 @@ builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.DeleteSalar
 builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.DryRunPayrollQueryHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.GetPayrollRunsQueryHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.ApprovePayrollRunCommandHandler>();
-builder.Services.AddScoped<EMS.Application.Features.Auth.RegisterUserCommandHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Departments.Handlers.CreateDepartmentCommandHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Departments.Handlers.UpdateDepartmentCommandHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Departments.Handlers.DeleteDepartmentCommandHandler>();
