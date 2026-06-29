@@ -20,10 +20,11 @@ namespace EMS.Application.Features.Employees.Handlers
 
         public async Task<Unit> Handle(Commands.ActivateEmployeeCommand request, CancellationToken cancellationToken)
         {
-            var emp = await _repo.GetByIdAsync(request.Id) ?? throw new System.InvalidOperationException("Employee not found");
+            var emp = await _repo.GetByIdAsync(request.Id, cancellationToken)
+                ?? throw new System.InvalidOperationException($"Employee {request.Id} not found.");
             emp.IsActive = true;
-            await _repo.UpdateAsync(emp);
-            await _repo.SaveChangesAsync();
+            await _repo.UpdateAsync(emp, cancellationToken);
+            await _repo.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Activated employee {EmployeeId}", emp.Id);
             return Unit.Value;
         }

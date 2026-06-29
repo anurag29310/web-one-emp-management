@@ -17,7 +17,7 @@ namespace EMS.Application.Features.Employees.Handlers
 
         public async Task<IEnumerable<EMS.Domain.Entities.Employee>> Handle(Queries.GetReportingEmployeesQuery request, CancellationToken cancellationToken)
         {
-            return await _repo.GetReportingEmployeesAsync(request.ManagerId, request.Page, request.PageSize);
+            return await _repo.GetDirectReportsAsync(request.ManagerId, request.Page, request.PageSize, cancellationToken);
         }
     }
 }

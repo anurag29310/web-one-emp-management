@@ -21,10 +21,10 @@ namespace EMS.Application.Features.Employees.Handlers
 
         public async Task<Employee> Handle(Commands.CreateEmployeeCommand request, CancellationToken cancellationToken)
         {
-            if (await _repo.EmployeeCodeExistsAsync(request.EmployeeCode))
-                throw new InvalidOperationException("Employee code already exists");
-            if (!string.IsNullOrWhiteSpace(request.Email) && await _repo.EmailExistsAsync(request.Email))
-                throw new InvalidOperationException("Email already exists");
+            if (await _repo.EmployeeCodeExistsAsync(request.EmployeeCode, ct: cancellationToken))
+                throw new InvalidOperationException("Employee code already exists.");
+            if (!string.IsNullOrWhiteSpace(request.Email) && await _repo.EmailExistsAsync(request.Email, ct: cancellationToken))
+                throw new InvalidOperationException("Email already exists.");
 
             var emp = new Employee
             {
@@ -48,8 +48,8 @@ namespace EMS.Application.Features.Employees.Handlers
                 IsActive = true
             };
 
-            await _repo.AddAsync(emp);
-            await _repo.SaveChangesAsync();
+            await _repo.AddAsync(emp, cancellationToken);
+            await _repo.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Created employee {EmployeeCode}", emp.EmployeeCode);
             return emp;
         }

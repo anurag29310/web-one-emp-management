@@ -17,7 +17,7 @@ namespace EMS.Application.Features.Employees.Handlers
 
         public async Task<IEnumerable<EMS.Domain.Entities.Employee>> Handle(Queries.GetEmployeesByDepartmentQuery request, CancellationToken cancellationToken)
         {
-            return await _repo.GetByDepartmentAsync(request.DepartmentId, request.Page, request.PageSize);
+            return await _repo.GetByDepartmentAsync(request.DepartmentId, request.Page, request.PageSize, cancellationToken);
         }
     }
 }

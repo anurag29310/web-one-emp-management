@@ -20,9 +20,10 @@ namespace EMS.Application.Features.Employees.Handlers
 
         public async Task<Unit> Handle(Commands.DeleteEmployeeCommand request, CancellationToken cancellationToken)
         {
-            var emp = await _repo.GetByIdAsync(request.Id) ?? throw new System.InvalidOperationException("Employee not found");
-            await _repo.DeleteAsync(emp);
-            await _repo.SaveChangesAsync();
+            var emp = await _repo.GetByIdAsync(request.Id, cancellationToken)
+                ?? throw new System.InvalidOperationException($"Employee {request.Id} not found.");
+            await _repo.DeleteAsync(emp, cancellationToken);
+            await _repo.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Deleted (deactivated) employee {EmployeeId}", emp.Id);
             return Unit.Value;
         }

@@ -21,12 +21,13 @@ namespace EMS.Application.Features.Employees.Handlers
 
         public async Task<Employee> Handle(Commands.UpdateEmployeeCommand request, CancellationToken cancellationToken)
         {
-            var emp = await _repo.GetByIdAsync(request.Id) ?? throw new InvalidOperationException("Employee not found");
+            var emp = await _repo.GetByIdAsync(request.Id, cancellationToken)
+                ?? throw new InvalidOperationException($"Employee {request.Id} not found.");
 
-            if (!string.IsNullOrWhiteSpace(request.Email) && await _repo.EmailExistsAsync(request.Email, request.Id))
-                throw new InvalidOperationException("Email already exists");
-            if (await _repo.EmployeeCodeExistsAsync(request.EmployeeCode, request.Id))
-                throw new InvalidOperationException("Employee code already exists");
+            if (!string.IsNullOrWhiteSpace(request.Email) && await _repo.EmailExistsAsync(request.Email, request.Id, cancellationToken))
+                throw new InvalidOperationException("Email already exists.");
+            if (await _repo.EmployeeCodeExistsAsync(request.EmployeeCode, request.Id, cancellationToken))
+                throw new InvalidOperationException("Employee code already exists.");
 
             emp.EmployeeCode = request.EmployeeCode;
             emp.FirstName = request.FirstName;
@@ -45,8 +46,8 @@ namespace EMS.Application.Features.Employees.Handlers
             emp.ProfilePhotoUrl = request.ProfilePhotoUrl;
             emp.EmploymentStatus = request.EmploymentStatus;
 
-            await _repo.UpdateAsync(emp);
-            await _repo.SaveChangesAsync();
+            await _repo.UpdateAsync(emp, cancellationToken);
+            await _repo.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Updated employee {EmployeeId}", emp.Id);
             return emp;
         }
