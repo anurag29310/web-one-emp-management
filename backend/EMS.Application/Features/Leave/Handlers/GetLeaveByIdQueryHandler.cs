@@ -15,6 +15,6 @@ namespace EMS.Application.Features.Leave.Handlers
         }
 
         public async Task<EMS.Domain.Entities.LeaveRequest?> Handle(Queries.GetLeaveByIdQuery request, CancellationToken cancellationToken)
-            => await _repo.GetLeaveByIdAsync(request.Id);
+            => await _repo.GetLeaveByIdAsync(request.Id, cancellationToken);
     }
 }

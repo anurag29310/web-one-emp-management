@@ -34,8 +34,8 @@ namespace EMS.Application.Features.Leave.Handlers
                 CreatedAtUtc = DateTime.UtcNow
             };
 
-            await _repo.AddLeaveRequestAsync(lr);
-            await _repo.SaveChangesAsync();
+            await _repo.AddLeaveRequestAsync(lr, cancellationToken);
+            await _repo.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Leave request created {LeaveRequestId} for Employee {EmployeeId}", lr.Id, lr.EmployeeId);
             return lr;
         }

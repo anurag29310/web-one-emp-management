@@ -16,6 +16,6 @@ namespace EMS.Application.Features.Leave.Handlers
         }
 
         public async Task<IEnumerable<EMS.Domain.Entities.LeaveBalance>> Handle(Queries.GetLeaveBalancesQuery request, CancellationToken cancellationToken)
-            => await _repo.GetLeaveBalancesForEmployeeAsync(request.EmployeeId);
+            => await _repo.GetLeaveBalancesForEmployeeAsync(request.EmployeeId, cancellationToken);
     }
 }
