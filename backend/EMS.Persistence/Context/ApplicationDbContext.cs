@@ -25,6 +25,7 @@ namespace EMS.Persistence.Context
         public DbSet<EMS.Domain.Entities.Deduction> Deductions => Set<EMS.Domain.Entities.Deduction>();
         public DbSet<EMS.Domain.Entities.PayrollRun> PayrollRuns => Set<EMS.Domain.Entities.PayrollRun>();
         public DbSet<EMS.Domain.Entities.Payslip> Payslips => Set<EMS.Domain.Entities.Payslip>();
+        public DbSet<EMS.Domain.Entities.AttendanceRecord> AttendanceRecords => Set<EMS.Domain.Entities.AttendanceRecord>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -45,6 +46,7 @@ namespace EMS.Persistence.Context
             modelBuilder.ApplyConfiguration(new Configurations.DeductionConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.PayrollRunConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.PayslipConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.AttendanceRecordConfiguration());
         }
     }
 }

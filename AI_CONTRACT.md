@@ -2,7 +2,7 @@
 
 Technology Stack
 
-* Angular 20
+* React 18+ (Vite, TypeScript, React Router)
 * .NET 9
 * SQL Server
 * Azure
@@ -36,9 +36,9 @@ Database
 
 Frontend
 
-* Angular standalone components
-* Reactive Forms
-* Route Guards
-* HTTP Interceptors
+* React functional components with hooks
+* React Hook Form + Zod
+* Protected route components
+* Axios interceptors
 
 Always explain design decisions before generating code.

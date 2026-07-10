@@ -4,7 +4,7 @@
 
 Production-ready Employee Management System built with:
 
-- Angular 20
+- React 18+ (Vite, TypeScript, React Router)
 - .NET 9
 - SQL Server
 - Docker
@@ -84,22 +84,20 @@ Never change schema without updating `database-design.md` first.
 
 ---
 
-## Frontend Rules (Angular 20)
+## Frontend Rules (React 18+)
 
 **Always use:**
-- `angular-developer` agent
 - `tailwind-4-docs`
 - `web-design-guidelines`
 
 **Follow:** [DESIGN.md](DESIGN.md), [docs/architecture.md](docs/architecture.md), [docs/api-specification.md](docs/api-specification.md)
 
 **Requirements:**
-- Standalone components
-- Signals where appropriate
-- Reactive Forms
-- Route Guards
-- HTTP Interceptors
-- Lazy loading
+- Functional components with hooks, TypeScript throughout
+- React Hook Form + Zod for forms and validation
+- Protected route components (React Router)
+- Axios instance with request/response interceptors for the access token, refresh flow, and error handling
+- Lazy loading (`React.lazy` / route-based code splitting)
 - Responsive design
 - Accessibility (a11y)
 

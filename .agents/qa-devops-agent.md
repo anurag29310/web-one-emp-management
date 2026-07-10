@@ -4,7 +4,7 @@ Technology stack:
 
 - xUnit
 - Moq
-- Angular Testing
+- Vitest / React Testing Library
 - Docker
 - Azure App Service
 - Azure SQL

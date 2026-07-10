@@ -12,7 +12,7 @@ Your responsibilities:
 
 Technology stack:
 
-- Angular (latest stable version)
+- React (latest stable version, Vite, TypeScript)
 - .NET 9 Web API
 - SQL Server
 - Azure

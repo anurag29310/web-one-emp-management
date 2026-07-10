@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The Employee Management System will be built as a modern web application using Angular 20, .NET 9 Web API, SQL Server, Docker, and Azure. The backend will follow Clean Architecture so business rules remain independent from frameworks, databases, UI concerns, and cloud infrastructure.
+The Employee Management System will be built as a modern web application using React 18+ (Vite, TypeScript, React Router), .NET 9 Web API, SQL Server, Docker, and Azure. The backend will follow Clean Architecture so business rules remain independent from frameworks, databases, UI concerns, and cloud infrastructure.
 
 The system must support the MVP modules defined in `docs/requirements.md`:
 
@@ -26,14 +26,14 @@ WEB-One/
 |   |       |   +-- app/
 |   |       |   |   +-- core/
 |   |       |   |   |   +-- auth/
-|   |       |   |   |   +-- guards/
-|   |       |   |   |   +-- interceptors/
-|   |       |   |   |   +-- services/
+|   |       |   |   |   +-- routes/
+|   |       |   |   |   +-- api/
+|   |       |   |   |   +-- hooks/
 |   |       |   |   |   +-- layout/
 |   |       |   |   +-- shared/
 |   |       |   |   |   +-- components/
-|   |       |   |   |   +-- directives/
-|   |       |   |   |   +-- pipes/
+|   |       |   |   |   +-- hooks/
+|   |       |   |   |   +-- utils/
 |   |       |   |   |   +-- models/
 |   |       |   |   +-- features/
 |   |       |   |   |   +-- dashboard/
@@ -42,9 +42,11 @@ WEB-One/
 |   |       |   |   |   +-- attendance/
 |   |       |   |   |   +-- leave/
 |   |       |   |   |   +-- administration/
-|   |       |   |   +-- app.routes.ts
-|   |       |   +-- environments/
-|   |       +-- angular.json
+|   |       |   |   +-- App.tsx
+|   |       |   |   +-- main.tsx
+|   |       |   +-- .env
+|   |       +-- vite.config.ts
+|   |       +-- package.json
 |   |
 |   +-- server/
 |       +-- EmployeeManagement.Api/
@@ -100,7 +102,7 @@ Purpose:
 
 - Own the core business model.
 - Contain business entities, enums, value objects, domain events, and shared domain rules.
-- Avoid dependencies on Entity Framework Core, ASP.NET Core, Angular, Azure SDKs, or external infrastructure.
+- Avoid dependencies on Entity Framework Core, ASP.NET Core, React, Azure SDKs, or external infrastructure.
 
 Recommended contents:
 
@@ -182,7 +184,7 @@ Project: `EmployeeManagement.Api`
 
 Purpose:
 
-- Expose REST endpoints to the Angular client.
+- Expose REST endpoints to the React client.
 - Handle request binding, authentication, authorization, exception handling, API versioning, Swagger, and response formatting.
 - Delegate business operations to the application layer.
 
@@ -207,26 +209,26 @@ Design decision:
 
 Controllers should remain thin. They should validate transport-level concerns, call application use cases, and return HTTP responses without containing business logic.
 
-### 3.5 Angular Frontend Layer
+### 3.5 React Frontend Layer
 
 Project: `employee-management-web`
 
 Purpose:
 
-- Provide a responsive UI using Angular 20 standalone components.
-- Use Reactive Forms for data entry.
-- Use route guards for protected pages.
-- Use HTTP interceptors for access tokens, refresh token retries, correlation IDs, and error handling.
+- Provide a responsive UI using React 18+ functional components and hooks, built with Vite and TypeScript.
+- Use React Hook Form with Zod schemas for data entry and validation.
+- Use protected route components (React Router) for protected pages.
+- Use a shared Axios instance with request/response interceptors for access tokens, refresh token retries, correlation IDs, and error handling.
 
 Recommended structure:
 
-- `core`: singleton services, auth state, guards, interceptors, layout, app-wide configuration.
-- `shared`: reusable presentational components, pipes, directives, and models.
+- `core`: auth state (Context/Zustand), the Axios API client and interceptors, protected route components, custom hooks, and layout.
+- `shared`: reusable presentational components, custom hooks, utility functions, and models/types.
 - `features`: route-level business modules such as employees, attendance, leave, departments, and dashboard.
 
 Design decision:
 
-Feature-based Angular organization keeps the UI scalable as Phase 2 and Phase 3 modules are added without turning the app into one large shared folder.
+Feature-based React organization keeps the UI scalable as Phase 2 and Phase 3 modules are added without turning the app into one large shared folder.
 
 ## 4. Authentication And Authorization Flow
 
@@ -234,19 +236,19 @@ The system should use JWT access tokens and refresh tokens as required by `AI_CO
 
 ### 4.1 Login
 
-1. User submits email or username and password from the Angular login form.
-2. Angular sends credentials to `POST /api/auth/login`.
+1. User submits email or username and password from the React login form.
+2. React sends credentials to `POST /api/auth/login`.
 3. API validates credentials against the identity store.
 4. API checks account status, role assignment, and optional MFA requirements.
 5. API issues:
    - Short-lived JWT access token.
    - Long-lived refresh token.
 6. Refresh token is stored server-side as a hashed value with expiry, revocation state, device metadata, IP address, and audit fields.
-7. Angular stores the access token in memory where possible and uses secure browser storage only when required by UX constraints.
+7. React stores the access token in memory where possible and uses secure browser storage only when required by UX constraints.
 
 ### 4.2 Authenticated Requests
 
-1. Angular HTTP interceptor attaches the JWT as a bearer token.
+1. The React app's Axios request interceptor attaches the JWT as a bearer token.
 2. API validates token signature, issuer, audience, expiry, and claims.
 3. API applies role-based and policy-based authorization.
 4. Controllers call application use cases with the current user context.
@@ -260,7 +262,7 @@ Recommended roles:
 
 ### 4.3 Refresh Token
 
-1. If an access token expires, Angular calls `POST /api/auth/refresh`.
+1. If an access token expires, the React app's Axios response interceptor calls `POST /api/auth/refresh`.
 2. API validates the refresh token against the hashed server-side record.
 3. API rotates the refresh token by revoking the old token and issuing a new one.
 4. API returns a new access token and refresh token.
@@ -268,9 +270,9 @@ Recommended roles:
 
 ### 4.4 Logout
 
-1. Angular calls `POST /api/auth/logout`.
+1. React calls `POST /api/auth/logout`.
 2. API revokes the active refresh token.
-3. Angular clears local authentication state and redirects to login.
+3. React clears local authentication state and redirects to login.
 
 ### 4.5 Forgot Password
 
@@ -404,7 +406,7 @@ Examples:
 
 ### 6.1 Recommended Azure Services
 
-- Angular frontend: Azure Static Web Apps.
+- React frontend: Azure Static Web Apps.
 - .NET 9 Web API: Azure App Service for Containers or Azure Container Apps.
 - Database: Azure SQL Database.
 - File storage: Azure Blob Storage.
@@ -438,7 +440,7 @@ Configuration should be provided through:
 
 - App Service or Container Apps environment variables.
 - Azure Key Vault references for secrets.
-- Angular environment files for non-secret public configuration such as API base URL.
+- Vite `.env` files for non-secret public configuration such as API base URL.
 
 No secrets, connection strings, signing keys, or passwords should be hardcoded.
 
@@ -450,14 +452,14 @@ Recommended pipeline stages:
 2. Run backend unit tests.
 3. Run backend architecture tests.
 4. Run frontend linting and tests.
-5. Build Angular app.
+5. Build React app.
 6. Build .NET API.
 7. Build Docker image for API.
 8. Run EF Core migration validation.
 9. Push image to Azure Container Registry.
 10. Deploy infrastructure with Bicep or Terraform.
 11. Deploy API.
-12. Deploy Angular frontend.
+12. Deploy React frontend.
 13. Run smoke tests.
 
 ### 6.5 Observability
@@ -589,7 +591,7 @@ Recommended tests:
 - Application unit tests for use cases and validators.
 - Infrastructure integration tests for EF Core mappings and repository behavior.
 - API integration tests for authentication, authorization, and key endpoints.
-- Angular tests for route guards, services, forms, and critical components.
+- React tests (Vitest + React Testing Library) for protected routes, hooks, forms, and critical components.
 - Architecture tests to enforce Clean Architecture dependency rules.
 
 ## 9. Security Strategy
@@ -640,7 +642,7 @@ Recommendations:
 ## 11. Design Decisions Summary
 
 - Use Clean Architecture to protect business rules from framework and infrastructure changes.
-- Use Angular standalone components and feature folders for scalable frontend organization.
+- Use React functional components, hooks, and feature folders for scalable frontend organization.
 - Use JWT access tokens with refresh token rotation for secure session management.
 - Use Azure SQL Database with EF Core migrations for relational HR data.
 - Use Azure Blob Storage for documents and photos.

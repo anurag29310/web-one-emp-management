@@ -8,30 +8,30 @@ namespace EMS.Application.DTOs
         public int TotalEmployees { get; set; }
         public int ActiveEmployees { get; set; }
         public int InactiveEmployees { get; set; }
-        public LeaveSummaryDto LeaveSummary { get; set; } = new LeaveSummaryDto();
-        public AttendanceSummaryDto AttendanceSummary { get; set; } = new AttendanceSummaryDto();
-        public IEnumerable<DepartmentSummaryDto> DepartmentSummaries { get; set; } = Array.Empty<DepartmentSummaryDto>();
+        public AttendanceSummaryDto Attendance { get; set; } = new AttendanceSummaryDto();
+        public LeaveSummaryDto Leave { get; set; } = new LeaveSummaryDto();
+        public IEnumerable<DepartmentSummaryDto> Departments { get; set; } = Array.Empty<DepartmentSummaryDto>();
+    }
+
+    public class AttendanceSummaryDto
+    {
+        public int Present { get; set; }
+        public int Absent { get; set; }
+        public int Late { get; set; }
+        public int OnLeave { get; set; }
     }
 
     public class LeaveSummaryDto
     {
         public int Pending { get; set; }
-        public int Approved { get; set; }
-        public int Rejected { get; set; }
-        public int Cancelled { get; set; }
-    }
-
-    public class AttendanceSummaryDto
-    {
-        // Attendance module not implemented in backend yet; keep fields nullable/zero
-        public int PresentToday { get; set; }
-        public int AbsentToday { get; set; }
+        public int ApprovedToday { get; set; }
+        public int RejectedToday { get; set; }
     }
 
     public class DepartmentSummaryDto
     {
         public Guid DepartmentId { get; set; }
         public string DepartmentName { get; set; } = string.Empty;
-        public int EmployeeCount { get; set; }
+        public int ActiveEmployees { get; set; }
     }
 }

@@ -10,7 +10,7 @@ Build a modern Employee Management System for small and medium-sized organizatio
 
 Technology Stack:
 
-* Angular
+* React
 * .NET 9 Web API
 * SQL Server
 * Azure

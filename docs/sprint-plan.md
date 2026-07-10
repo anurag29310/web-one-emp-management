@@ -25,7 +25,7 @@ The first sprint should not try to complete every MVP module end to end. Authent
 - Team size: 1 backend developer, 1 frontend developer, 1 QA/devops engineer, and product/architecture support.
 - Workdays: 10 business days.
 - Backend: .NET 9 Web API using Clean Architecture.
-- Frontend: Angular 20 standalone components with Reactive Forms.
+- Frontend: React 18+ (Vite, TypeScript) with functional components, hooks, and React Hook Form.
 - Database: SQL Server with EF Core migrations.
 - Authentication: JWT access tokens and refresh tokens.
 - Deployment target: local Docker-ready setup first, Azure deployment preparation only.
@@ -37,14 +37,14 @@ The first sprint should not try to complete every MVP module end to end. Authent
 
 - Repository and solution structure.
 - Backend Clean Architecture projects.
-- Angular application shell.
+- React application shell.
 - SQL Server database foundation.
 - Shared audit fields and soft delete support.
 - Authentication APIs for login, refresh, logout, forgot password, reset password, and current user.
 - Role model for Admin, HR, Manager, and Employee.
-- Route guards and HTTP interceptor.
+- Protected route components and Axios interceptor.
 - Department, team, designation, and office location APIs.
-- Employee CRUD APIs and Angular screens.
+- Employee CRUD APIs and React screens.
 - Employee status management.
 - Basic profile photo/document metadata design hooks.
 - Attendance, leave, and dashboard scaffolding endpoints or placeholder service structure.
@@ -66,10 +66,10 @@ The first sprint should not try to complete every MVP module end to end. Authent
 | Priority | Story | Owner | Estimate | Outcome |
 | --- | --- | --- | --- | --- |
 | P0 | Create backend Clean Architecture solution structure | Backend | 1 day | API, Application, Domain, Infrastructure, Tests projects created |
-| P0 | Create Angular 20 application shell | Frontend | 1 day | App routing, layout, core/shared/features folders created |
+| P0 | Create React 18+ application shell | Frontend | 1 day | App routing, layout, core/shared/features folders created |
 | P0 | Configure database foundation | Backend | 1 day | EF Core DbContext, migrations, audit fields, soft delete filters |
 | P0 | Implement authentication and refresh tokens | Backend | 2 days | Login, refresh, logout, forgot/reset password APIs |
-| P0 | Implement frontend auth flow | Frontend | 2 days | Login page, auth state, route guards, HTTP interceptor |
+| P0 | Implement frontend auth flow | Frontend | 2 days | Login page, auth state, protected routes, Axios interceptor |
 | P0 | Seed roles and first admin user | Backend | 0.5 day | Admin, HR, Manager, Employee roles available |
 | P1 | Implement organization master APIs | Backend | 1.5 days | Departments, teams, designations, office locations CRUD |
 | P1 | Implement organization UI screens | Frontend | 1.5 days | List/create/edit screens for master data |
@@ -97,9 +97,9 @@ Backend:
 
 Frontend:
 
-- Create Angular 20 app under `src/client/employee-management-web`.
+- Create React 18+ app (Vite + TypeScript) under `src/client/employee-management-web`.
 - Add core, shared, and feature folder structure.
-- Configure app routes, layout shell, environment files, and base API service.
+- Configure app routes (React Router), layout shell, `.env` files, and base API service.
 
 QA/Devops:
 
@@ -119,9 +119,9 @@ Backend:
 
 Frontend:
 
-- Add HTTP interceptor shell.
-- Add shared API response and paged result models.
-- Add base form and validation helpers.
+- Add Axios instance with request/response interceptor shell.
+- Add shared API response and paged result models/types.
+- Add base form and Zod validation helpers.
 
 QA/Devops:
 
@@ -153,10 +153,10 @@ Tests:
 
 Frontend:
 
-- Build login page with Reactive Forms.
-- Add auth state service.
-- Add token refresh handling in HTTP interceptor.
-- Add route guards.
+- Build login page with React Hook Form + Zod.
+- Add auth state (Context/Zustand).
+- Add token refresh handling in the Axios response interceptor.
+- Add protected route components.
 - Add logout flow.
 
 Backend:
@@ -272,7 +272,7 @@ Backend:
 Frontend:
 
 - Review form validation messages.
-- Review route guard behavior by role.
+- Review protected route behavior by role.
 - Review responsive layout on common desktop and mobile widths.
 - Fix integration issues.
 
@@ -311,7 +311,7 @@ Demo flow:
 - Refresh tokens are rotated and old refresh tokens are revoked.
 - Logout revokes the active refresh token.
 - Forgot/reset password APIs exist and validate requests.
-- Angular blocks protected routes when the user is not authenticated.
+- React blocks protected routes when the user is not authenticated (via protected route components).
 
 ### Authorization
 
@@ -367,9 +367,9 @@ A story is done when:
 - Database changes are covered by EF Core migration.
 - Audit fields and soft delete behavior are respected.
 - Unit tests or smoke tests cover the critical path.
-- Angular forms use Reactive Forms.
-- Protected Angular routes use route guards.
-- API calls use HTTP interceptors.
+- React forms use React Hook Form + Zod for validation.
+- Protected React routes use protected route components.
+- API calls use a shared Axios instance with interceptors.
 - Work is locally runnable and documented.
 
 ## 8. Risks And Mitigations

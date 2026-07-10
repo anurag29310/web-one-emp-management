@@ -20,6 +20,7 @@ builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<ILeaveRepository, LeaveRepository>();
 builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
+builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 // Payroll services
@@ -46,28 +47,29 @@ builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.DeleteSalar
 builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.DryRunPayrollQueryHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.GetPayrollRunsQueryHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.ApprovePayrollRunCommandHandler>();
-builder.Services.AddScoped<EMS.Application.Features.Departments.Handlers.CreateDepartmentCommandHandler>();
-builder.Services.AddScoped<EMS.Application.Features.Departments.Handlers.UpdateDepartmentCommandHandler>();
-builder.Services.AddScoped<EMS.Application.Features.Departments.Handlers.DeleteDepartmentCommandHandler>();
-builder.Services.AddScoped<EMS.Application.Features.Departments.Handlers.GetDepartmentsQueryHandler>();
-builder.Services.AddScoped<EMS.Application.Features.Departments.Handlers.GetDepartmentByIdQueryHandler>();
 
-// Employees handlers are registered by MediatR; repository registered above
+// Employees and Departments handlers are registered by MediatR; repositories registered above
 
 // MediatR
 builder.Services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssembly(typeof(EMS.Application.Features.Employees.Commands.CreateEmployeeCommand).Assembly);
+    cfg.AddOpenBehavior(typeof(EMS.Application.Common.Behaviors.ValidationBehavior<,>));
 });
 
 // Validators
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Employees.Commands.CreateEmployeeCommand>, EMS.Application.Features.Employees.Validators.EmployeeCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Employees.Commands.UpdateEmployeeCommand>, EMS.Application.Features.Employees.Validators.UpdateEmployeeCommandValidator>();
+// Department validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Departments.CreateDepartmentCommand>, EMS.Application.Features.Departments.Validators.CreateDepartmentCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Departments.UpdateDepartmentCommand>, EMS.Application.Features.Departments.Validators.UpdateDepartmentCommandValidator>();
 // Payroll validators
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Payroll.Commands.CreateSalaryStructureCommand>, EMS.Application.Features.Payroll.Validators.CreateSalaryStructureCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Payroll.Commands.UpdateSalaryStructureCommand>, EMS.Application.Features.Payroll.Validators.UpdateSalaryStructureCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Payroll.Commands.ApprovePayrollRunCommand>, EMS.Application.Features.Payroll.Validators.ApprovePayrollRunCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Payroll.Queries.DryRunPayrollQuery>, EMS.Application.Features.Payroll.Validators.DryRunPayrollQueryValidator>();
+// Dashboard validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Dashboard.Queries.GetDashboardSummaryQuery>, EMS.Application.Features.Dashboard.Validators.GetDashboardSummaryQueryValidator>();
 
 // Infrastructure services
 builder.Services.AddSingleton<IPasswordHashService, PasswordHashService>();
@@ -107,6 +109,9 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanManageEmployees", policy => policy.RequireRole("Admin", "HR"));
     options.AddPolicy("CanViewEmployees", policy => policy.RequireRole("Admin", "HR", "Manager"));
     options.AddPolicy("CanManageLeaves", policy => policy.RequireRole("Admin", "HR", "Manager"));
+    options.AddPolicy("CanManageDepartments", policy => policy.RequireRole("Admin", "HR"));
+    options.AddPolicy("CanApproveLeave", policy => policy.RequireRole("Admin", "HR", "Manager"));
+    options.AddPolicy("CanViewDashboard", policy => policy.RequireRole("Admin", "HR", "Manager"));
 });
 
 var app = builder.Build();
@@ -117,6 +122,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseMiddleware<EMS.API.Middleware.ExceptionHandlingMiddleware>();
 
 app.UseHttpsRedirection();
 

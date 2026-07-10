@@ -1,11 +1,13 @@
 using EMS.Application.Interfaces;
 using EMS.Domain.Entities;
+using MediatR;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace EMS.Application.Features.Departments.Handlers
 {
-    public class GetDepartmentsQueryHandler
+    public class GetDepartmentsQueryHandler : IRequestHandler<GetDepartmentsQuery, IEnumerable<Department>>
     {
         private readonly IDepartmentRepository _repo;
 
@@ -14,7 +16,7 @@ namespace EMS.Application.Features.Departments.Handlers
             _repo = repo;
         }
 
-        public async Task<IEnumerable<Department>> Handle(GetDepartmentsQuery query)
-            => await _repo.GetAllAsync();
+        public async Task<IEnumerable<Department>> Handle(GetDepartmentsQuery request, CancellationToken cancellationToken)
+            => await _repo.GetAllAsync(cancellationToken);
     }
 }

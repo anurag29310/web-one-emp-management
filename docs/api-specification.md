@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The Employee Management System API will be built with ASP.NET Core 9 Web API and exposed to the Angular 20 frontend. The API follows REST principles, Clean Architecture boundaries, JWT authentication, refresh token rotation, role-based authorization, FluentValidation, Serilog logging, and centralized exception handling.
+The Employee Management System API will be built with ASP.NET Core 9 Web API and exposed to the React frontend. The API follows REST principles, Clean Architecture boundaries, JWT authentication, refresh token rotation, role-based authorization, FluentValidation, Serilog logging, and centralized exception handling.
 
 Base URL:
 
@@ -940,7 +940,7 @@ Returns current employee profile summary, today's attendance status, leave balan
 
 ## 11. Lookup APIs
 
-Lookup APIs help Angular forms avoid hardcoded values.
+Lookup APIs help frontend forms avoid hardcoded values.
 
 | Method | Endpoint | Access | Description |
 | --- | --- | --- | --- |

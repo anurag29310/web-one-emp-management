@@ -2,7 +2,7 @@
 
 Prerequisites
 - .NET 9 SDK (or matching version used in `global.json` if present)
-- Node.js (>= 16) and npm or pnpm for the Angular frontend
+- Node.js (>= 18) and npm or pnpm for the React frontend
 - Docker & Docker Compose (for local DB and full stack)
 
 Clone
@@ -35,8 +35,8 @@ Frontend - local run
 ```powershell
 cd frontend
 npm install
-npm start
-# or: ng serve --open
+npm run dev
+# Vite dev server, opens at http://localhost:5173
 ```
 
 Running tests
