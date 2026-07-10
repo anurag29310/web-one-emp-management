@@ -199,6 +199,16 @@ Test positive and negative scenarios.
 
 ---
 
+## Division Of Testing Responsibility
+
+* Claude/the agent implements the feature and writes the automated tests required above.
+* Claude/the agent does NOT manually drive the running app in a browser (starting dev servers, clicking through flows, taking screenshots) to verify UI behavior.
+* The developer runs the app and performs manual/exploratory testing themselves.
+
+Automated tests are still required for every feature — this only removes manual verification from the agent's workflow.
+
+---
+
 ## Documentation Rules
 
 When creating new functionality:

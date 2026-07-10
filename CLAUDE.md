@@ -139,6 +139,15 @@ Always generate unit tests and integration tests. Add security and API tests whe
 
 ---
 
+## Division of Testing Responsibility
+
+- **Claude/the agent**: implements the feature and writes the automated unit/integration/API tests required above. Do not spend time manually driving the running app in a browser (starting dev servers, clicking through flows, taking screenshots) to verify UI behavior.
+- **The developer**: runs the app and performs manual/exploratory testing themselves.
+
+This does not relax the Testing Rules — automated tests are still required for every feature.
+
+---
+
 ## Documentation Rules
 
 When adding or changing functionality, update the relevant docs:
