@@ -11,16 +11,25 @@ namespace EMS.Application.Features.Leave.Handlers
     public class CreateLeaveRequestCommandHandler : IRequestHandler<Commands.CreateLeaveRequestCommand, LeaveRequest>
     {
         private readonly ILeaveRepository _repo;
+        private readonly IAuthRepository _authRepo;
         private readonly ILogger<CreateLeaveRequestCommandHandler> _logger;
 
-        public CreateLeaveRequestCommandHandler(ILeaveRepository repo, ILogger<CreateLeaveRequestCommandHandler> logger)
+        public CreateLeaveRequestCommandHandler(ILeaveRepository repo, IAuthRepository authRepo, ILogger<CreateLeaveRequestCommandHandler> logger)
         {
             _repo = repo;
+            _authRepo = authRepo;
             _logger = logger;
         }
 
         public async Task<LeaveRequest> Handle(Commands.CreateLeaveRequestCommand request, CancellationToken cancellationToken)
         {
+            if (!request.IsPrivileged)
+            {
+                var requester = await _authRepo.GetByIdAsync(request.RequestingUserId, cancellationToken);
+                if (requester?.EmployeeId == null || requester.EmployeeId != request.EmployeeId)
+                    throw new UnauthorizedAccessException("You can only apply for leave on your own behalf.");
+            }
+
             var lr = new LeaveRequest
             {
                 Id = Guid.NewGuid(),

@@ -12,6 +12,7 @@ namespace EMS.Domain.Entities
         public bool IsActive { get; set; } = true;
         public Guid? RoleId { get; set; }
         public Role? Role { get; set; }
+        public Guid? EmployeeId { get; set; }
         public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
     }
 }

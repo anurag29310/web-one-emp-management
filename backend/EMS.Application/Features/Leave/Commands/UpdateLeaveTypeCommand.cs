@@ -1,8 +1,9 @@
+using MediatR;
 using System;
 
-namespace EMS.Domain.Entities
+namespace EMS.Application.Features.Leave.Commands
 {
-    public class LeaveType
+    public class UpdateLeaveTypeCommand : IRequest<EMS.Domain.Entities.LeaveType>
     {
         public Guid Id { get; set; }
         public string Name { get; set; } = null!;
@@ -10,8 +11,5 @@ namespace EMS.Domain.Entities
         public bool IsPaid { get; set; }
         public bool RequiresApproval { get; set; }
         public decimal? AnnualEntitlementDays { get; set; }
-        public bool IsDeleted { get; set; }
-        public DateTime CreatedAtUtc { get; set; }
-        public DateTime? UpdatedAtUtc { get; set; }
     }
 }

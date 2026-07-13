@@ -21,7 +21,18 @@ namespace EMS.Application.Interfaces
         Task<IEnumerable<LeaveBalance>> GetLeaveBalancesForEmployeeAsync(Guid employeeId, CancellationToken ct = default);
         Task UpdateLeaveBalanceAsync(LeaveBalance balance, CancellationToken ct = default);
 
-        Task<IEnumerable<Holiday>> GetHolidaysAsync(int year, CancellationToken ct = default);
+        Task<Holiday?> GetHolidayByIdAsync(Guid id, CancellationToken ct = default);
+        Task<IEnumerable<Holiday>> GetHolidaysAsync(Guid? officeLocationId, int? year, bool? isOptional, CancellationToken ct = default);
+        Task AddHolidayAsync(Holiday holiday, CancellationToken ct = default);
+        Task UpdateHolidayAsync(Holiday holiday, CancellationToken ct = default);
+        Task DeleteHolidayAsync(Holiday holiday, CancellationToken ct = default);
+
+        Task<LeaveType?> GetLeaveTypeByIdAsync(Guid id, CancellationToken ct = default);
+        Task<IEnumerable<LeaveType>> GetLeaveTypesAsync(CancellationToken ct = default);
+        Task AddLeaveTypeAsync(LeaveType leaveType, CancellationToken ct = default);
+        Task UpdateLeaveTypeAsync(LeaveType leaveType, CancellationToken ct = default);
+        Task DeleteLeaveTypeAsync(LeaveType leaveType, CancellationToken ct = default);
+        Task<bool> LeaveTypeCodeExistsAsync(string code, Guid? excludeId = null, CancellationToken ct = default);
 
         Task SaveChangesAsync(CancellationToken ct = default);
     }

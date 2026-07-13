@@ -10,11 +10,13 @@ namespace EMS.Application.Features.Leave.Handlers
     public class RejectLeaveCommandHandler : IRequestHandler<Commands.RejectLeaveCommand>
     {
         private readonly ILeaveRepository _repo;
+        private readonly IAuthRepository _authRepo;
         private readonly ILogger<RejectLeaveCommandHandler> _logger;
 
-        public RejectLeaveCommandHandler(ILeaveRepository repo, ILogger<RejectLeaveCommandHandler> logger)
+        public RejectLeaveCommandHandler(ILeaveRepository repo, IAuthRepository authRepo, ILogger<RejectLeaveCommandHandler> logger)
         {
             _repo = repo;
+            _authRepo = authRepo;
             _logger = logger;
         }
 
@@ -26,7 +28,13 @@ namespace EMS.Application.Features.Leave.Handlers
             if (lr.Status != Domain.Enums.LeaveStatus.Pending)
                 throw new InvalidOperationException("Only pending leave requests can be rejected.");
 
-            lr.ApproverEmployeeId = request.ApproverId;
+            var approver = await _authRepo.GetByIdAsync(request.ApproverId, cancellationToken);
+            var approverEmployeeId = approver?.EmployeeId;
+
+            if (approverEmployeeId.HasValue && approverEmployeeId.Value == lr.EmployeeId)
+                throw new InvalidOperationException("You cannot reject your own leave request.");
+
+            lr.ApproverEmployeeId = approverEmployeeId;
             lr.DecisionComments = request.Comments;
             await _repo.RejectLeaveAsync(lr, cancellationToken);
             await _repo.SaveChangesAsync(cancellationToken);

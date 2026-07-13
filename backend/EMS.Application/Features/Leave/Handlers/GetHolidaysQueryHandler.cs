@@ -14,6 +14,6 @@ namespace EMS.Application.Features.Leave.Handlers
         public GetHolidaysQueryHandler(ILeaveRepository repo) => _repo = repo;
 
         public async Task<IEnumerable<Holiday>> Handle(Queries.GetHolidaysQuery request, CancellationToken cancellationToken) =>
-            await _repo.GetHolidaysAsync(request.Year, cancellationToken);
+            await _repo.GetHolidaysAsync(request.OfficeLocationId, request.Year, request.IsOptional, cancellationToken);
     }
 }

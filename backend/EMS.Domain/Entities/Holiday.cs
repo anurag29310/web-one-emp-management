@@ -9,5 +9,8 @@ namespace EMS.Domain.Entities
         public string Name { get; set; } = null!;
         public DateTime HolidayDate { get; set; }
         public bool IsOptional { get; set; }
+        public bool IsDeleted { get; set; }
+        public DateTime CreatedAtUtc { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
     }
 }

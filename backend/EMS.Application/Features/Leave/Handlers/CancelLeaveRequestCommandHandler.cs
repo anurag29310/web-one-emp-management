@@ -10,11 +10,13 @@ namespace EMS.Application.Features.Leave.Handlers
     public class CancelLeaveRequestCommandHandler : IRequestHandler<Commands.CancelLeaveRequestCommand>
     {
         private readonly ILeaveRepository _repo;
+        private readonly IAuthRepository _authRepo;
         private readonly ILogger<CancelLeaveRequestCommandHandler> _logger;
 
-        public CancelLeaveRequestCommandHandler(ILeaveRepository repo, ILogger<CancelLeaveRequestCommandHandler> logger)
+        public CancelLeaveRequestCommandHandler(ILeaveRepository repo, IAuthRepository authRepo, ILogger<CancelLeaveRequestCommandHandler> logger)
         {
             _repo = repo;
+            _authRepo = authRepo;
             _logger = logger;
         }
 
@@ -22,6 +24,13 @@ namespace EMS.Application.Features.Leave.Handlers
         {
             var lr = await _repo.GetLeaveByIdAsync(request.Id, cancellationToken)
                 ?? throw new InvalidOperationException($"Leave request {request.Id} not found.");
+
+            if (!request.IsPrivileged)
+            {
+                var requester = await _authRepo.GetByIdAsync(request.RequestedByUserId, cancellationToken);
+                if (requester?.EmployeeId == null || requester.EmployeeId != lr.EmployeeId)
+                    throw new UnauthorizedAccessException("You can only cancel your own leave requests.");
+            }
 
             if (lr.Status != Domain.Enums.LeaveStatus.Pending)
                 throw new InvalidOperationException("Only pending leave requests can be cancelled.");

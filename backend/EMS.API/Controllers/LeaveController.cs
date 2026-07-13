@@ -26,39 +26,49 @@ namespace EMS.API.Controllers
 
         // ─── Leave Requests ────────────────────────────────────────────────────────
 
-        /// <summary>List leave requests with filtering and pagination.</summary>
+        /// <summary>List leave requests with filtering and pagination. Employee-role callers are always scoped to their own requests.</summary>
         [HttpGet("requests")]
         [ProducesResponseType(typeof(ApiResponse<PagedResult<LeaveRequestDto>>), 200)]
         public async Task<IActionResult> GetAll([FromQuery] GetLeavesQuery query, CancellationToken ct)
         {
+            query.RequestingUserId = GetCurrentUserId();
+            query.IsPrivileged = IsPrivilegedLeaveRole();
             var result = await _mediator.Send(query, ct);
             return Ok(ApiResponse<PagedResult<LeaveRequestDto>>.Success(result));
         }
 
-        /// <summary>Get a single leave request by ID.</summary>
+        /// <summary>Get a single leave request by ID. Employee-role callers may only fetch their own request.</summary>
         [HttpGet("requests/{id:guid}")]
         [ProducesResponseType(typeof(ApiResponse<LeaveRequestDto>), 200)]
         [ProducesResponseType(404)]
         public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
         {
-            var result = await _mediator.Send(new GetLeaveByIdQuery { Id = id }, ct);
+            var query = new GetLeaveByIdQuery
+            {
+                Id = id,
+                RequestingUserId = GetCurrentUserId(),
+                IsPrivileged = IsPrivilegedLeaveRole()
+            };
+            var result = await _mediator.Send(query, ct);
             if (result == null) return NotFound();
             return Ok(ApiResponse<LeaveRequestDto>.Success(LeaveRequestDto.FromEntity(result)));
         }
 
-        /// <summary>Apply for leave.</summary>
+        /// <summary>Apply for leave. Employee-role callers may only apply on their own behalf.</summary>
         [HttpPost("requests")]
         [ProducesResponseType(typeof(ApiResponse<LeaveRequestDto>), 201)]
         [ProducesResponseType(typeof(ApiErrorResponse), 400)]
         public async Task<IActionResult> Create([FromBody] CreateLeaveRequestCommand cmd, CancellationToken ct)
         {
+            cmd.RequestingUserId = GetCurrentUserId();
+            cmd.IsPrivileged = IsPrivilegedLeaveRole();
             var result = await _mediator.Send(cmd, ct);
             var dto = LeaveRequestDto.FromEntity(result);
             return CreatedAtAction(nameof(GetById), new { id = dto.Id },
                 ApiResponse<LeaveRequestDto>.Success(dto, "Leave request submitted successfully."));
         }
 
-        /// <summary>Update a pending leave request.</summary>
+        /// <summary>Update a pending leave request. Employee-role callers may only update their own request.</summary>
         [HttpPut("requests/{id:guid}")]
         [ProducesResponseType(204)]
         [ProducesResponseType(typeof(ApiErrorResponse), 400)]
@@ -66,6 +76,8 @@ namespace EMS.API.Controllers
         public async Task<IActionResult> Update(Guid id, [FromBody] UpdateLeaveRequestCommand cmd, CancellationToken ct)
         {
             cmd.Id = id;
+            cmd.RequestingUserId = GetCurrentUserId();
+            cmd.IsPrivileged = IsPrivilegedLeaveRole();
             await _mediator.Send(cmd, ct);
             return NoContent();
         }
@@ -104,7 +116,7 @@ namespace EMS.API.Controllers
             return NoContent();
         }
 
-        /// <summary>Cancel a pending leave request.</summary>
+        /// <summary>Cancel a pending leave request. Employee-role callers may only cancel their own request.</summary>
         [HttpPost("requests/{id:guid}/cancel")]
         [ProducesResponseType(204)]
         [ProducesResponseType(typeof(ApiErrorResponse), 400)]
@@ -114,44 +126,28 @@ namespace EMS.API.Controllers
             await _mediator.Send(new CancelLeaveRequestCommand
             {
                 Id = id,
-                RequestedByUserId = GetCurrentUserId()
+                RequestedByUserId = GetCurrentUserId(),
+                IsPrivileged = IsPrivilegedLeaveRole()
             }, ct);
             return NoContent();
         }
 
         // ─── Leave Balances ────────────────────────────────────────────────────────
 
-        /// <summary>Get leave balances for an employee.</summary>
+        /// <summary>Get leave balances for an employee. Employee-role callers may only fetch their own balances.</summary>
         [HttpGet("balances")]
         [ProducesResponseType(typeof(ApiResponse<IEnumerable<LeaveBalanceDto>>), 200)]
         public async Task<IActionResult> GetBalances([FromQuery] Guid employeeId, CancellationToken ct)
         {
-            var result = await _mediator.Send(new GetLeaveBalancesQuery { EmployeeId = employeeId }, ct);
+            var query = new GetLeaveBalancesQuery
+            {
+                EmployeeId = employeeId,
+                RequestingUserId = GetCurrentUserId(),
+                IsPrivileged = IsPrivilegedLeaveRole()
+            };
+            var result = await _mediator.Send(query, ct);
             var dtos = System.Linq.Enumerable.Select(result, LeaveBalanceDto.FromEntity);
             return Ok(ApiResponse<IEnumerable<LeaveBalanceDto>>.Success(dtos));
-        }
-
-        /// <summary>Adjust a leave balance (Admin / HR only).</summary>
-        [HttpPut("balances/adjust")]
-        [Authorize(Policy = "CanManageLeaves")]
-        [ProducesResponseType(204)]
-        [ProducesResponseType(typeof(ApiErrorResponse), 400)]
-        [ProducesResponseType(404)]
-        public async Task<IActionResult> AdjustBalance([FromBody] AdjustLeaveBalanceCommand cmd, CancellationToken ct)
-        {
-            await _mediator.Send(cmd, ct);
-            return NoContent();
-        }
-
-        // ─── Holidays ─────────────────────────────────────────────────────────────
-
-        /// <summary>Get public holidays for a given year.</summary>
-        [HttpGet("holidays")]
-        [ProducesResponseType(typeof(ApiResponse<IEnumerable<Holiday>>), 200)]
-        public async Task<IActionResult> GetHolidays([FromQuery] GetHolidaysQuery query, CancellationToken ct)
-        {
-            var result = await _mediator.Send(query, ct);
-            return Ok(ApiResponse<IEnumerable<Holiday>>.Success(result));
         }
 
         // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -166,6 +162,10 @@ namespace EMS.API.Controllers
 
             return id;
         }
+
+        /// <summary>Admin/HR/Manager may act on any employee's leave requests; everyone else is scoped to their own.</summary>
+        private bool IsPrivilegedLeaveRole() =>
+            User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Manager");
     }
 
     /// <summary>Body for approve / reject decisions.</summary>

@@ -7,5 +7,6 @@ namespace EMS.Application.Features.Leave.Commands
     {
         public Guid Id { get; set; }
         public Guid RequestedByUserId { get; set; }
+        public bool IsPrivileged { get; set; }
     }
 }

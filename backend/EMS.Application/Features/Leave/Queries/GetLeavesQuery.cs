@@ -13,5 +13,8 @@ namespace EMS.Application.Features.Leave.Queries
         public Guid? LeaveTypeId { get; set; }
         public int? Year { get; set; }
         public string? Status { get; set; }
+
+        public Guid RequestingUserId { get; set; }
+        public bool IsPrivileged { get; set; }
     }
 }

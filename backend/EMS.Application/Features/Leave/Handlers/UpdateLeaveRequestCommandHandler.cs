@@ -10,11 +10,13 @@ namespace EMS.Application.Features.Leave.Handlers
     public class UpdateLeaveRequestCommandHandler : IRequestHandler<Commands.UpdateLeaveRequestCommand>
     {
         private readonly ILeaveRepository _repo;
+        private readonly IAuthRepository _authRepo;
         private readonly ILogger<UpdateLeaveRequestCommandHandler> _logger;
 
-        public UpdateLeaveRequestCommandHandler(ILeaveRepository repo, ILogger<UpdateLeaveRequestCommandHandler> logger)
+        public UpdateLeaveRequestCommandHandler(ILeaveRepository repo, IAuthRepository authRepo, ILogger<UpdateLeaveRequestCommandHandler> logger)
         {
             _repo = repo;
+            _authRepo = authRepo;
             _logger = logger;
         }
 
@@ -22,6 +24,13 @@ namespace EMS.Application.Features.Leave.Handlers
         {
             var lr = await _repo.GetLeaveByIdAsync(request.Id, cancellationToken)
                 ?? throw new InvalidOperationException($"Leave request {request.Id} not found.");
+
+            if (!request.IsPrivileged)
+            {
+                var requester = await _authRepo.GetByIdAsync(request.RequestingUserId, cancellationToken);
+                if (requester?.EmployeeId == null || requester.EmployeeId != lr.EmployeeId)
+                    throw new UnauthorizedAccessException("You can only update your own leave requests.");
+            }
 
             if (lr.Status != Domain.Enums.LeaveStatus.Pending)
                 throw new InvalidOperationException("Only pending leave requests can be updated.");

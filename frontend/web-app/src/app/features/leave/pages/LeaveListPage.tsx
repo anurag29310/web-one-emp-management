@@ -5,6 +5,7 @@ import { leaveRepository, type LeaveStatus } from '../api'
 import { KNOWN_LEAVE_TYPES, leaveTypeName } from '../api/leaveTypes'
 import { AppError } from '@/app/shared/models/appError'
 import { appConfig } from '@/app/core/config/env'
+import { Modal } from '@/app/shared/components/Modal'
 
 const STATUS_STYLES: Record<LeaveStatus, string> = {
   Pending: 'bg-warning/15 text-warning ring-warning/30',
@@ -64,7 +65,7 @@ function ApplyLeaveForm({ onApplied }: { onApplied: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-hairline bg-surface-1 p-5">
+    <form onSubmit={handleSubmit} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="mb-1 block text-sm font-medium text-ink-muted">Employee</label>
@@ -186,14 +187,14 @@ export function LeaveListPage() {
         </button>
       </div>
 
-      {isFormOpen && (
+      <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title="Apply for leave">
         <ApplyLeaveForm
           onApplied={() => {
             setIsFormOpen(false)
             refresh()
           }}
         />
-      )}
+      </Modal>
 
       {error && <p className="text-sm text-danger">{error}</p>}
 

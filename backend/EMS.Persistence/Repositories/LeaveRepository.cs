@@ -81,11 +81,60 @@ namespace EMS.Persistence.Repositories
             return Task.CompletedTask;
         }
 
-        public async Task<IEnumerable<Holiday>> GetHolidaysAsync(int year, CancellationToken ct = default) =>
-            await _db.Holidays.AsNoTracking()
-                .Where(h => h.HolidayDate.Year == year)
-                .OrderBy(h => h.HolidayDate)
-                .ToListAsync(ct);
+        public async Task<Holiday?> GetHolidayByIdAsync(Guid id, CancellationToken ct = default) =>
+            await _db.Holidays.FirstOrDefaultAsync(h => h.Id == id && !h.IsDeleted, ct);
+
+        public async Task<IEnumerable<Holiday>> GetHolidaysAsync(Guid? officeLocationId, int? year, bool? isOptional, CancellationToken ct = default)
+        {
+            var q = _db.Holidays.AsNoTracking().Where(h => !h.IsDeleted);
+
+            if (officeLocationId.HasValue) q = q.Where(h => h.OfficeLocationId == officeLocationId.Value);
+            if (year.HasValue) q = q.Where(h => h.HolidayDate.Year == year.Value);
+            if (isOptional.HasValue) q = q.Where(h => h.IsOptional == isOptional.Value);
+
+            return await q.OrderBy(h => h.HolidayDate).ToListAsync(ct);
+        }
+
+        public async Task AddHolidayAsync(Holiday holiday, CancellationToken ct = default) =>
+            await _db.Holidays.AddAsync(holiday, ct);
+
+        public Task UpdateHolidayAsync(Holiday holiday, CancellationToken ct = default)
+        {
+            _db.Holidays.Update(holiday);
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteHolidayAsync(Holiday holiday, CancellationToken ct = default)
+        {
+            holiday.IsDeleted = true;
+            _db.Holidays.Update(holiday);
+            return Task.CompletedTask;
+        }
+
+        public async Task<LeaveType?> GetLeaveTypeByIdAsync(Guid id, CancellationToken ct = default) =>
+            await _db.LeaveTypes.FirstOrDefaultAsync(lt => lt.Id == id && !lt.IsDeleted, ct);
+
+        public async Task<IEnumerable<LeaveType>> GetLeaveTypesAsync(CancellationToken ct = default) =>
+            await _db.LeaveTypes.AsNoTracking().Where(lt => !lt.IsDeleted).OrderBy(lt => lt.Name).ToListAsync(ct);
+
+        public async Task AddLeaveTypeAsync(LeaveType leaveType, CancellationToken ct = default) =>
+            await _db.LeaveTypes.AddAsync(leaveType, ct);
+
+        public Task UpdateLeaveTypeAsync(LeaveType leaveType, CancellationToken ct = default)
+        {
+            _db.LeaveTypes.Update(leaveType);
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteLeaveTypeAsync(LeaveType leaveType, CancellationToken ct = default)
+        {
+            leaveType.IsDeleted = true;
+            _db.LeaveTypes.Update(leaveType);
+            return Task.CompletedTask;
+        }
+
+        public async Task<bool> LeaveTypeCodeExistsAsync(string code, Guid? excludeId = null, CancellationToken ct = default) =>
+            await _db.LeaveTypes.AnyAsync(lt => lt.Code == code && !lt.IsDeleted && (excludeId == null || lt.Id != excludeId), ct);
 
         public async Task SaveChangesAsync(CancellationToken ct = default) =>
             await _db.SaveChangesAsync(ct);

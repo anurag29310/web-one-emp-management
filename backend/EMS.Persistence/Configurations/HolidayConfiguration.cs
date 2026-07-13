@@ -12,7 +12,7 @@ namespace EMS.Persistence.Configurations
             builder.HasKey(x => x.Id);
             builder.Property(x => x.Name).IsRequired().HasMaxLength(150);
             builder.Property(x => x.HolidayDate).IsRequired();
-            builder.HasIndex(x => x.HolidayDate);
+            builder.HasIndex(x => new { x.OfficeLocationId, x.HolidayDate });
         }
     }
 }
