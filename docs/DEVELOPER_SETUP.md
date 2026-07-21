@@ -32,11 +32,49 @@ dotnet run --project backend/EMS.API
 
 Frontend - local run
 
+### Web Application
+
 ```powershell
-cd frontend
+cd frontend/web
 npm install
 npm run dev
 # Vite dev server, opens at http://localhost:5173
+```
+
+### Mobile Application
+
+```powershell
+cd frontend/mobile
+npm install
+
+# Start the Expo dev server
+npm run start
+
+# In a separate terminal, launch an emulator or physical device:
+npm run android    # Android Emulator or connected device
+npm run ios        # iOS Simulator (macOS only)
+npm run web        # Web browser preview (http://localhost:8081)
+```
+
+### Entire Frontend Workspace
+
+```powershell
+cd frontend
+
+# Install all dependencies (monorepo setup)
+npm install
+
+# Development
+npm run dev:web                # Start web dev server
+npm run dev:mobile             # Start Expo dev server
+
+# Build
+npm run build:web              # Build web for production
+npm run build:mobile           # Build mobile for production
+
+# Validation
+npm run lint                   # Lint all packages
+npm run type-check             # Type check all packages
 ```
 
 Running tests

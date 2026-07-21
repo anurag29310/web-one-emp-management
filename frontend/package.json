@@ -1,0 +1,23 @@
+{
+  "name": "ems-frontend",
+  "version": "1.0.0",
+  "description": "Employee Management System - Frontend (Web & Mobile)",
+  "private": true,
+  "workspaces": [
+    "web",
+    "mobile",
+    "shared"
+  ],
+  "scripts": {
+    "dev:web": "cd web && npm run dev",
+    "dev:mobile": "cd mobile && npm start",
+    "build:web": "cd web && npm run build",
+    "build:mobile": "cd mobile && npm run build",
+    "lint": "cd web && npm run lint && cd ../mobile && npm run lint",
+    "type-check": "cd web && npm run typecheck && cd ../mobile && npm run type-check"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "typescript": "^5.9.3"
+  }
+}
