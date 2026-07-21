@@ -775,6 +775,7 @@ Decision request:
 | `POST` | `/leave-types` | Admin, HR | Create leave type |
 | `PUT` | `/leave-types/{id}` | Admin, HR | Update leave type |
 | `DELETE` | `/leave-types/{id}` | Admin, HR | Soft delete leave type |
+| `POST` | `/leave-types/{id}/restore` | Admin, HR | Restore a soft-deleted leave type |
 
 ### 9.2 Leave Requests
 
@@ -998,6 +999,9 @@ Export endpoints should accept the same filters as their list or dashboard endpo
 | `CanViewDashboard` | Dashboard metrics |
 | `CanManageUsers` | Users and roles |
 | `CanViewAuditLogs` | Audit log APIs |
+| `CanManagePayroll` | Process payroll, manage salary structures, view payroll runs |
+| `CanApprovePayroll` | Approve a completed payroll run |
+| `CanViewReports` | Employee, department, leave, and turnover reports |
 
 ## 16. Missing But Recommended APIs
 
@@ -1012,4 +1016,111 @@ The requirements explicitly mention the main MVP modules, but these supporting A
 - `Lookups` to keep frontend forms free from hardcoded values.
 - `Exports` to satisfy Excel and PDF reporting requirements.
 - `Health` endpoints for Azure deployment and monitoring.
+
+## 17. Payroll APIs (Phase 2)
+
+Base path: `/payroll`. All endpoints require authentication; per-endpoint access is noted below. Non-privileged (Employee-role) callers are always scoped to their own payslips regardless of any `employeeId` filter supplied.
+
+### 17.1 Payroll Runs
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `POST` | `/payroll/process` | `CanManagePayroll` | Process payroll for a period: generates payslips and PDFs for all active employees |
+| `POST` | `/payroll/dry-run` | `CanManagePayroll` | Preview payslip calculations for a period without persisting anything |
+| `GET` | `/payroll/runs` | `CanManagePayroll` | List all payroll runs |
+| `GET` | `/payroll/runs/{id}` | `CanManagePayroll` | Get a payroll run, including its payslips |
+| `POST` | `/payroll/runs/{id}/approve` | `CanApprovePayroll` | Approve a completed payroll run. Only runs in `Completed` status can be approved; already-approved runs are rejected. The approver is always the authenticated caller — never a client-supplied value |
+
+Process payroll request:
+
+```json
+{
+  "periodStart": "2026-06-01",
+  "periodEnd": "2026-06-30"
+}
+```
+
+`processedBy` is derived from the authenticated caller and is not accepted from the client. `periodEnd` must not be in the future — payroll cannot be processed for a period that has not yet ended.
+
+Payroll run response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000000901",
+  "periodStart": "2026-06-01",
+  "periodEnd": "2026-06-30",
+  "processedAtUtc": "2026-07-01T02:00:00Z",
+  "processedBy": "00000000-0000-0000-0000-000000000010",
+  "status": "Completed",
+  "payslipCount": 42,
+  "totalNetPay": 168400.00,
+  "payslips": []
+}
+```
+
+`status` is one of `Processing`, `Completed`, `Approved`.
+
+### 17.2 Salary Structures
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/payroll/salary-structures` | `CanManagePayroll` | List salary structures |
+| `GET` | `/payroll/salary-structures/{id}` | `CanManagePayroll` | Get a salary structure |
+| `POST` | `/payroll/salary-structures` | `CanManagePayroll` | Create a salary structure for an employee |
+| `PUT` | `/payroll/salary-structures/{id}` | `CanManagePayroll` | Update a salary structure |
+| `DELETE` | `/payroll/salary-structures/{id}` | `CanManagePayroll` | Delete a salary structure (404 if it does not exist) |
+
+Salary structure request:
+
+```json
+{
+  "employeeId": "00000000-0000-0000-0000-000000000101",
+  "basicSalary": 5000.00,
+  "allowances": [{ "name": "House", "amount": 500.00 }],
+  "deductions": [{ "name": "Tax", "amount": 250.00 }],
+  "effectiveFrom": "2026-01-01",
+  "effectiveTo": null
+}
+```
+
+### 17.3 Payslips
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/payroll/payslips?employeeId={id}` | Authenticated (self); `CanManagePayroll` for any employee | List payslips for an employee. `employeeId` is required for privileged callers and ignored (forced to self) for non-privileged callers |
+| `GET` | `/payroll/payslips/{payslipId}/download` | Authenticated (self); `CanManagePayroll` for any employee | Download a payslip PDF. Returns 403 if a non-privileged caller requests another employee's payslip, 404 if the payslip or its document does not exist |
+
+Payslip response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000000701",
+  "payrollRunId": "00000000-0000-0000-0000-000000000901",
+  "employeeId": "00000000-0000-0000-0000-000000000101",
+  "basic": 5000.00,
+  "totalAllowances": 500.00,
+  "totalDeductions": 250.00,
+  "grossPay": 5500.00,
+  "netPay": 5250.00,
+  "generatedAtUtc": "2026-07-01T02:00:01Z",
+  "hasDocument": true
+}
+```
+
+## 18. Reports APIs
+
+Base path: `/reports`. All endpoints require the `CanViewReports` policy (Admin, HR, Manager) — these expose aggregate, org-wide data and are never scoped to a single employee. This module is distinct from the `/exports` module described in section 13, which remains unbuilt.
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/reports/employees` | Total, active, and inactive employee counts |
+| `GET` | `/reports/departments` | Employee headcount grouped by department |
+| `GET` | `/reports/departments/export` | Department headcount report as a CSV file download |
+| `GET` | `/reports/leave-summary?from={date}&to={date}` | Leave request counts by status (Pending/Approved/Rejected) within a date range |
+| `GET` | `/reports/employee-turnover?from={date}&to={date}` | Employees who joined or exited within a date range |
+| `GET` | `/reports/employee-turnover/export?from={date}&to={date}` | Employee turnover report as a CSV file download |
+
+`from` and `to` are both required and `from` must be before or equal to `to` on every date-ranged endpoint; violations return `400 VALIDATION_ERROR`.
+
+Department counts exclude soft-deleted departments. CSV exports neutralize formula/CSV injection (CWE-1236): any field value starting with `=`, `+`, `-`, `@`, tab, or CR is prefixed with `'` before being written, so a department or employee name cannot execute as a formula when the file is opened in Excel or Sheets.
 

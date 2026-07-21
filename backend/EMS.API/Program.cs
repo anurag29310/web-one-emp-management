@@ -68,6 +68,8 @@ builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Payroll.Commands.UpdateSalaryStructureCommand>, EMS.Application.Features.Payroll.Validators.UpdateSalaryStructureCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Payroll.Commands.ApprovePayrollRunCommand>, EMS.Application.Features.Payroll.Validators.ApprovePayrollRunCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Payroll.Queries.DryRunPayrollQuery>, EMS.Application.Features.Payroll.Validators.DryRunPayrollQueryValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Payroll.Commands.ProcessPayrollCommand>, EMS.Application.Features.Payroll.Validators.ProcessPayrollCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Payroll.Queries.GetPayslipsForEmployeeQuery>, EMS.Application.Features.Payroll.Validators.GetPayslipsForEmployeeQueryValidator>();
 // Dashboard validators
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Dashboard.Queries.GetDashboardSummaryQuery>, EMS.Application.Features.Dashboard.Validators.GetDashboardSummaryQueryValidator>();
 // Leave validators
@@ -76,6 +78,10 @@ builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Leave.Commands.AdjustLeaveBalanceCommand>, EMS.Application.Features.Leave.Validators.AdjustLeaveBalanceCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Leave.Commands.CreateLeaveTypeCommand>, EMS.Application.Features.Leave.Validators.CreateLeaveTypeCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Leave.Commands.UpdateLeaveTypeCommand>, EMS.Application.Features.Leave.Validators.UpdateLeaveTypeCommandValidator>();
+// Reports validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Reports.Queries.GetLeaveSummaryQuery>, EMS.Application.Features.Reports.Validators.GetLeaveSummaryQueryValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Reports.Queries.GetEmployeeJoinExitQuery>, EMS.Application.Features.Reports.Validators.GetEmployeeJoinExitQueryValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Reports.Queries.ExportEmployeeJoinExitQuery>, EMS.Application.Features.Reports.Validators.ExportEmployeeJoinExitQueryValidator>();
 
 // Infrastructure services
 builder.Services.AddSingleton<IPasswordHashService, PasswordHashService>();
@@ -119,6 +125,9 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanApproveLeave", policy => policy.RequireRole("Admin", "HR", "Manager"));
     options.AddPolicy("CanManageLeaveTypes", policy => policy.RequireRole("Admin", "HR"));
     options.AddPolicy("CanViewDashboard", policy => policy.RequireRole("Admin", "HR", "Manager"));
+    options.AddPolicy("CanManagePayroll", policy => policy.RequireRole("Admin", "HR"));
+    options.AddPolicy("CanApprovePayroll", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("CanViewReports", policy => policy.RequireRole("Admin", "HR", "Manager"));
 });
 
 var app = builder.Build();

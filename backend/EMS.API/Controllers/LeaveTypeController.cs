@@ -81,5 +81,17 @@ namespace EMS.API.Controllers
             await _mediator.Send(new DeleteLeaveTypeCommand { Id = id }, ct);
             return NoContent();
         }
+
+        /// <summary>Restore a soft-deleted leave type.</summary>
+        [HttpPost("{id:guid}/restore")]
+        [Authorize(Policy = "CanManageLeaveTypes")]
+        [ProducesResponseType(204)]
+        [ProducesResponseType(typeof(ApiErrorResponse), 400)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> Restore(Guid id, CancellationToken ct)
+        {
+            await _mediator.Send(new RestoreLeaveTypeCommand { Id = id }, ct);
+            return NoContent();
+        }
     }
 }

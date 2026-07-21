@@ -38,6 +38,10 @@ namespace EMS.Application.Features.Payroll.Handlers
 
             await _repo.CreatePayrollRunAsync(run);
 
+            _logger.LogInformation(
+                "Payroll run {PayrollRunId} started for period {PeriodStart:yyyy-MM-dd} to {PeriodEnd:yyyy-MM-dd} by user {ProcessedBy}.",
+                run.Id, request.PeriodStart, request.PeriodEnd, request.ProcessedBy);
+
             var employees = await _repo.GetAllEmployeesAsync();
             foreach (var emp in employees)
             {
@@ -83,6 +87,8 @@ namespace EMS.Application.Features.Payroll.Handlers
 
             run.Status = "Completed";
             await _repo.SaveChangesAsync();
+
+            _logger.LogInformation("Payroll run {PayrollRunId} completed for {EmployeeCount} employees.", run.Id, employees.Count());
 
             return run.Id;
         }

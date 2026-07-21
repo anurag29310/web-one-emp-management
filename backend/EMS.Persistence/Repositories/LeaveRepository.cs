@@ -114,6 +114,9 @@ namespace EMS.Persistence.Repositories
         public async Task<LeaveType?> GetLeaveTypeByIdAsync(Guid id, CancellationToken ct = default) =>
             await _db.LeaveTypes.FirstOrDefaultAsync(lt => lt.Id == id && !lt.IsDeleted, ct);
 
+        public async Task<LeaveType?> GetLeaveTypeByIdIncludingDeletedAsync(Guid id, CancellationToken ct = default) =>
+            await _db.LeaveTypes.FirstOrDefaultAsync(lt => lt.Id == id, ct);
+
         public async Task<IEnumerable<LeaveType>> GetLeaveTypesAsync(CancellationToken ct = default) =>
             await _db.LeaveTypes.AsNoTracking().Where(lt => !lt.IsDeleted).OrderBy(lt => lt.Name).ToListAsync(ct);
 
@@ -129,6 +132,13 @@ namespace EMS.Persistence.Repositories
         public Task DeleteLeaveTypeAsync(LeaveType leaveType, CancellationToken ct = default)
         {
             leaveType.IsDeleted = true;
+            _db.LeaveTypes.Update(leaveType);
+            return Task.CompletedTask;
+        }
+
+        public Task RestoreLeaveTypeAsync(LeaveType leaveType, CancellationToken ct = default)
+        {
+            leaveType.IsDeleted = false;
             _db.LeaveTypes.Update(leaveType);
             return Task.CompletedTask;
         }

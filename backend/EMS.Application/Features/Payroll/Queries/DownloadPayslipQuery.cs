@@ -6,6 +6,8 @@ namespace EMS.Application.Features.Payroll.Queries
     public class DownloadPayslipQuery : IRequest<DownloadPayslipResult>
     {
         public Guid PayslipId { get; set; }
+        public Guid RequestingUserId { get; set; }
+        public bool IsPrivileged { get; set; }
     }
 
     public class DownloadPayslipResult

@@ -18,7 +18,7 @@ namespace EMS.Application.Features.Reports.Handlers
 
         public async Task<IEnumerable<DepartmentCountDto>> Handle(Queries.GetDepartmentCountsQuery request, CancellationToken cancellationToken)
         {
-            return await _repo.GetDepartmentCountsAsync();
+            return await _repo.GetDepartmentCountsAsync(cancellationToken);
         }
     }
 }

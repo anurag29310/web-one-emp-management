@@ -1,13 +1,15 @@
+using EMS.Application.Features.Payroll.Dtos;
 using EMS.Application.Features.Payroll.Queries;
 using EMS.Application.Interfaces;
 using MediatR;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace EMS.Application.Features.Payroll.Handlers
 {
-    public class GetPayrollRunsQueryHandler : IRequestHandler<GetPayrollRunsQuery, IEnumerable<Domain.Entities.PayrollRun>>
+    public class GetPayrollRunsQueryHandler : IRequestHandler<GetPayrollRunsQuery, IEnumerable<PayrollRunDto>>
     {
         private readonly IPayrollRepository _repo;
 
@@ -16,9 +18,10 @@ namespace EMS.Application.Features.Payroll.Handlers
             _repo = repo;
         }
 
-        public async Task<IEnumerable<Domain.Entities.PayrollRun>> Handle(GetPayrollRunsQuery request, CancellationToken cancellationToken)
+        public async Task<IEnumerable<PayrollRunDto>> Handle(GetPayrollRunsQuery request, CancellationToken cancellationToken)
         {
-            return await _repo.GetPayrollRunsAsync();
+            var runs = await _repo.GetPayrollRunsAsync();
+            return runs.Select(PayrollRunDto.FromEntity).ToList();
         }
     }
 }

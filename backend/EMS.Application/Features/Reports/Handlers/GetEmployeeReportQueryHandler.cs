@@ -17,7 +17,7 @@ namespace EMS.Application.Features.Reports.Handlers
 
         public async Task<EmployeeReportDto> Handle(Queries.GetEmployeeReportQuery request, CancellationToken cancellationToken)
         {
-            return await _repo.GetEmployeeReportAsync();
+            return await _repo.GetEmployeeReportAsync(cancellationToken);
         }
     }
 }

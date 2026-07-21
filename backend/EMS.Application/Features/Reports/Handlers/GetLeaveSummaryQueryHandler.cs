@@ -17,7 +17,7 @@ namespace EMS.Application.Features.Reports.Handlers
 
         public async Task<LeaveSummaryReportDto> Handle(Queries.GetLeaveSummaryQuery request, CancellationToken cancellationToken)
         {
-            return await _repo.GetLeaveSummaryAsync(request.From, request.To);
+            return await _repo.GetLeaveSummaryAsync(request.From, request.To, cancellationToken);
         }
     }
 }

@@ -57,10 +57,12 @@ namespace EMS.Persistence.Repositories
             await Task.CompletedTask;
         }
 
-        public async Task DeleteSalaryStructureAsync(Guid id)
+        public async Task<bool> DeleteSalaryStructureAsync(Guid id)
         {
             var s = await _db.SalaryStructures.FindAsync(id);
-            if (s != null) _db.SalaryStructures.Remove(s);
+            if (s == null) return false;
+            _db.SalaryStructures.Remove(s);
+            return true;
         }
 
         public async Task SavePayslipAsync(Payslip payslip)

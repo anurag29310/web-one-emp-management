@@ -1,6 +1,7 @@
 using EMS.Application.Features.Payroll.Commands;
 using EMS.Application.Interfaces;
 using MediatR;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,7 +18,9 @@ namespace EMS.Application.Features.Payroll.Handlers
 
         public async Task<Unit> Handle(DeleteSalaryStructureCommand request, CancellationToken cancellationToken)
         {
-            await _repo.DeleteSalaryStructureAsync(request.Id);
+            var deleted = await _repo.DeleteSalaryStructureAsync(request.Id);
+            if (!deleted) throw new InvalidOperationException("Salary structure not found.");
+
             await _repo.SaveChangesAsync();
             return Unit.Value;
         }
