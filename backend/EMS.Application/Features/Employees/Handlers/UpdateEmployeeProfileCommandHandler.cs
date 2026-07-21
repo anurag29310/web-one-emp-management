@@ -11,11 +11,13 @@ namespace EMS.Application.Features.Employees.Handlers
     public class UpdateEmployeeProfileCommandHandler : IRequestHandler<UpdateEmployeeProfileCommand>
     {
         private readonly IEmployeeRepository _repo;
+        private readonly IAuditLogger _auditLogger;
         private readonly ILogger<UpdateEmployeeProfileCommandHandler> _logger;
 
-        public UpdateEmployeeProfileCommandHandler(IEmployeeRepository repo, ILogger<UpdateEmployeeProfileCommandHandler> logger)
+        public UpdateEmployeeProfileCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ILogger<UpdateEmployeeProfileCommandHandler> logger)
         {
             _repo = repo;
+            _auditLogger = auditLogger;
             _logger = logger;
         }
 
@@ -23,6 +25,14 @@ namespace EMS.Application.Features.Employees.Handlers
         {
             var emp = await _repo.GetByIdAsync(request.Id, cancellationToken)
                 ?? throw new InvalidOperationException($"Employee {request.Id} not found.");
+
+            var oldValues = new
+            {
+                emp.PhoneNumber,
+                emp.Address,
+                emp.EmergencyContactName,
+                emp.EmergencyContactNumber
+            };
 
             emp.PhoneNumber = request.PhoneNumber;
             emp.Address = request.Address;
@@ -33,6 +43,14 @@ namespace EMS.Application.Features.Employees.Handlers
             await _repo.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Employee {EmployeeId} self-service profile updated", emp.Id);
+
+            await _auditLogger.LogAsync("Employee", emp.Id, "Updated", oldValues: oldValues, newValues: new
+            {
+                emp.PhoneNumber,
+                emp.Address,
+                emp.EmergencyContactName,
+                emp.EmergencyContactNumber
+            }, ct: cancellationToken);
         }
     }
 }

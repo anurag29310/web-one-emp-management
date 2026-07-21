@@ -22,11 +22,11 @@ namespace EMS.Persistence.Repositories
 
         public async Task<User?> GetByUsernameOrEmailAsync(string userNameOrEmail, CancellationToken ct = default) =>
             await _db.Users.Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.UserName == userNameOrEmail || u.Email == userNameOrEmail, ct);
+                .FirstOrDefaultAsync(u => !u.IsDeleted && (u.UserName == userNameOrEmail || u.Email == userNameOrEmail), ct);
 
         public async Task<User?> GetByIdAsync(Guid userId, CancellationToken ct = default) =>
             await _db.Users.Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Id == userId, ct);
+                .FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted, ct);
 
         public async Task AddUserAsync(User user, CancellationToken ct = default) =>
             await _db.Users.AddAsync(user, ct);
@@ -42,7 +42,7 @@ namespace EMS.Persistence.Repositories
 
         public async Task<RefreshToken?> GetRefreshTokenAsync(string token, CancellationToken ct = default) =>
             await _db.RefreshTokens.Include(r => r.User).ThenInclude(u => u!.Role)
-                .FirstOrDefaultAsync(r => r.Token == token, ct);
+                .FirstOrDefaultAsync(r => r.Token == token && r.User != null && !r.User.IsDeleted, ct);
 
         public Task RevokeRefreshTokenAsync(RefreshToken token, CancellationToken ct = default)
         {

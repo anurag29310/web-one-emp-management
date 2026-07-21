@@ -50,6 +50,16 @@ namespace EMS.Persistence.Repositories
                 .Skip((page - 1) * pageSize).Take(pageSize)
                 .ToListAsync(ct);
 
+        public async Task<IEnumerable<Guid>> GetDirectReportIdsAsync(Guid managerId, CancellationToken ct = default) =>
+            await _db.Employees.AsNoTracking()
+                .Where(e => e.ManagerId == managerId && e.IsActive)
+                .Select(e => e.Id)
+                .ToListAsync(ct);
+
+        public async Task<bool> IsDirectReportAsync(Guid managerId, Guid employeeId, CancellationToken ct = default) =>
+            await _db.Employees.AsNoTracking()
+                .AnyAsync(e => e.Id == employeeId && e.ManagerId == managerId && e.IsActive, ct);
+
         public async Task<IEnumerable<Employee>> GetManagerChainAsync(Guid employeeId, CancellationToken ct = default)
         {
             var chain = new List<Employee>();

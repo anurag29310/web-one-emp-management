@@ -11,11 +11,13 @@ namespace EMS.Application.Features.Employees.Handlers
     public class CreateEmployeeCommandHandler : IRequestHandler<Commands.CreateEmployeeCommand, Employee>
     {
         private readonly IEmployeeRepository _repo;
+        private readonly IAuditLogger _auditLogger;
         private readonly ILogger<CreateEmployeeCommandHandler> _logger;
 
-        public CreateEmployeeCommandHandler(IEmployeeRepository repo, ILogger<CreateEmployeeCommandHandler> logger)
+        public CreateEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ILogger<CreateEmployeeCommandHandler> logger)
         {
             _repo = repo;
+            _auditLogger = auditLogger;
             _logger = logger;
         }
 
@@ -51,6 +53,17 @@ namespace EMS.Application.Features.Employees.Handlers
             await _repo.AddAsync(emp, cancellationToken);
             await _repo.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Created employee {EmployeeCode}", emp.EmployeeCode);
+
+            await _auditLogger.LogAsync("Employee", emp.Id, "Created", newValues: new
+            {
+                emp.EmployeeCode,
+                emp.FirstName,
+                emp.LastName,
+                emp.Email,
+                emp.DepartmentId,
+                emp.EmploymentStatus
+            }, ct: cancellationToken);
+
             return emp;
         }
     }

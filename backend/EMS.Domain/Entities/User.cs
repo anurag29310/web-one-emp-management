@@ -13,6 +13,9 @@ namespace EMS.Domain.Entities
         public Guid? RoleId { get; set; }
         public Role? Role { get; set; }
         public Guid? EmployeeId { get; set; }
+        public bool IsDeleted { get; set; }
+        public DateTime CreatedAtUtc { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
         public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
     }
 }

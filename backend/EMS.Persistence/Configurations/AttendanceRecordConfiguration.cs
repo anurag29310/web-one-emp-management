@@ -21,6 +21,11 @@ namespace EMS.Persistence.Configurations
                 .HasForeignKey(x => x.EmployeeId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            builder.HasOne(x => x.Shift)
+                .WithMany()
+                .HasForeignKey(x => x.ShiftId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             builder.HasIndex(x => new { x.EmployeeId, x.AttendanceDate })
                 .IsUnique()
                 .HasFilter("[IsDeleted] = 0")
@@ -28,6 +33,9 @@ namespace EMS.Persistence.Configurations
 
             builder.HasIndex(x => new { x.AttendanceDate, x.Status })
                 .HasDatabaseName("IX_AttendanceRecords_AttendanceDate_Status");
+
+            builder.HasIndex(x => new { x.EmployeeId, x.AttendanceDate, x.Status })
+                .HasDatabaseName("IX_AttendanceRecords_EmployeeId_AttendanceDate_Status");
         }
     }
 }

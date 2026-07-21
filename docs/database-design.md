@@ -44,6 +44,21 @@ Identity and security tables may use a smaller audit set where appropriate, but 
 
 ## 4. Core Tables
 
+> **Implementation note (Users/Roles):** the tables below describe the target design —
+> a many-to-many `Users`↔`Roles` relationship via `UserRoles`, with the full audit set
+> (`CreatedBy`, `UpdatedBy`, `DeletedBy`, `DeletedAtUtc`, `RowVersion`) on every entity.
+> The Users/Roles admin API currently implemented (see
+> [api-specification.md §4](api-specification.md#4-user-and-role-administration-apis))
+> instead uses the pre-existing single-role-per-user model (`User.RoleId`, a nullable FK,
+> no `UserRoles` join table), with a reduced audit set (`IsDeleted`, `CreatedAtUtc`,
+> `UpdatedAtUtc` only — no `CreatedBy`/`UpdatedBy`/`DeletedBy`/`RowVersion`) and no
+> `IsMfaEnabled`/`LastLoginAtUtc` columns. This was a deliberate scope decision to ship a
+> minimal admin API without rewriting the login/JWT/current-user code paths, which assume a
+> single role today. Migrating to the full design below — the many-to-many `UserRoles` table,
+> full audit columns, MFA/last-login tracking — remains open follow-up work and would require
+> updating `AuthRepository`, `JwtTokenService`, and `GetCurrentUserQueryHandler` alongside the
+> schema change.
+
 ### 4.1 Users
 
 Stores application login accounts.

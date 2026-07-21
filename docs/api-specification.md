@@ -308,20 +308,60 @@ Access: Authenticated
 
 Returns the current authenticated user's account, employee link, roles, and permissions.
 
+### 3.10 Register
+
+```text
+POST /auth/register
+```
+
+Access: Public
+
+Request:
+
+```json
+{
+  "userName": "jsmith",
+  "email": "jsmith@example.com",
+  "password": "Password@123"
+}
+```
+
+Response: same token response as login.
+
+There is no `roleId` field on this request, and none is accepted even if supplied — a
+self-registered account can never choose its own role. Every account is created with no role
+(the lowest-privilege `Employee` claim is issued by default) **except** the very first account
+ever created on a fresh deployment, which is automatically granted `Admin`. This bootstrap exists
+because there is otherwise no way to reach the `Admin`-only [Users API](#4-user-and-role-administration-apis)
+at all on a brand-new system. Every registration after the first gets no role, regardless of
+input — an existing Admin must assign one afterward via `PUT /users/{id}`.
+
 ## 4. User And Role Administration APIs
 
 These APIs support RBAC management and are required for a complete administration experience.
+
+> **Implementation note:** the current implementation uses a single-role-per-user model
+> (`User.RoleId`), not the many-to-many `UserRoles` join table described in
+> [database-design.md §4.1–4.3](database-design.md). This is a deliberate, minimal-scope
+> decision — see the note at the top of database-design.md §4 for the full rationale and
+> what would be required to close the gap. Because of this, request/response bodies below
+> use a singular `roleId` rather than `roleIds`, and there is no `PUT /users/{id}/roles`
+> endpoint — role assignment happens via `POST /users` and `PUT /users/{id}`. Audit/soft-delete
+> fields are also a reduced set (`isDeleted`, `createdAtUtc`, `updatedAtUtc`) rather than the
+> full audit set (`createdBy`, `updatedBy`, `deletedBy`, `deletedAtUtc`, `rowVersion`) used
+> elsewhere in the schema.
 
 ### 4.1 Users
 
 | Method | Endpoint | Access | Description |
 | --- | --- | --- | --- |
-| `GET` | `/users` | Admin | List users |
+| `GET` | `/users` | Admin | List users. Query params: `includeDeleted` (bool, default `false`), `roleId` (guid), `isActive` (bool) |
 | `GET` | `/users/{id}` | Admin | Get user details |
 | `POST` | `/users` | Admin | Create user account |
-| `PUT` | `/users/{id}` | Admin | Update user account |
-| `PATCH` | `/users/{id}/status` | Admin | Activate or deactivate user |
-| `DELETE` | `/users/{id}` | Admin | Soft delete user |
+| `PUT` | `/users/{id}` | Admin | Update user account (username, email, roleId, employeeId) |
+| `PATCH` | `/users/{id}/status` | Admin | Activate or deactivate user. Deactivating revokes all of the user's active refresh tokens |
+| `DELETE` | `/users/{id}` | Admin | Soft delete user. Revokes all of the user's active refresh tokens |
+| `POST` | `/users/{id}/restore` | Admin | Restore a soft-deleted user account |
 
 Create user request:
 
@@ -331,22 +371,51 @@ Create user request:
   "userName": "jsmith",
   "email": "jsmith@example.com",
   "temporaryPassword": "Password@123",
-  "roleIds": ["00000000-0000-0000-0000-000000000201"],
-  "isActive": true,
-  "isMfaEnabled": false
+  "roleId": "00000000-0000-0000-0000-000000000201",
+  "isActive": true
 }
 ```
+
+User response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000000301",
+  "userName": "jsmith",
+  "email": "jsmith@example.com",
+  "isActive": true,
+  "roleId": "00000000-0000-0000-0000-000000000201",
+  "roleName": "HR",
+  "employeeId": "00000000-0000-0000-0000-000000000101",
+  "isDeleted": false,
+  "createdAtUtc": "2026-07-22T10:00:00Z",
+  "updatedAtUtc": null
+}
+```
+
+`temporaryPassword` must be at least 8 characters and include an uppercase letter, a
+lowercase letter, a digit, and a special character (same rule as `POST /auth/change-password`).
+The password is never returned in any response.
 
 ### 4.2 Roles
 
 | Method | Endpoint | Access | Description |
 | --- | --- | --- | --- |
-| `GET` | `/roles` | Admin, HR | List roles |
+| `GET` | `/roles` | Admin, HR | List roles. Query param: `includeDeleted` (bool, default `false`) |
 | `GET` | `/roles/{id}` | Admin | Get role details |
 | `POST` | `/roles` | Admin | Create role |
 | `PUT` | `/roles/{id}` | Admin | Update role |
-| `DELETE` | `/roles/{id}` | Admin | Soft delete role |
-| `PUT` | `/users/{id}/roles` | Admin | Replace roles for a user |
+| `DELETE` | `/roles/{id}` | Admin | Soft delete role. Fails with `409 Conflict` if any active (non-deleted) user is still assigned to the role |
+| `POST` | `/roles/{id}/restore` | Admin | Restore a soft-deleted role |
+
+Create/update role request:
+
+```json
+{
+  "name": "Auditor",
+  "description": "Read-only compliance access"
+}
+```
 
 ## 5. Employee APIs
 
@@ -997,7 +1066,8 @@ Export endpoints should accept the same filters as their list or dashboard endpo
 | `CanApplyLeave` | Create leave requests |
 | `CanApproveLeave` | Approve or reject leave requests |
 | `CanViewDashboard` | Dashboard metrics |
-| `CanManageUsers` | Users and roles |
+| `CanManageUsers` | Create, update, activate/deactivate, delete, restore users; create, update, delete, restore roles; get role details |
+| `CanViewRoles` | List roles (read-only) |
 | `CanViewAuditLogs` | Audit log APIs |
 | `CanManagePayroll` | Process payroll, manage salary structures, view payroll runs |
 | `CanApprovePayroll` | Approve a completed payroll run |
@@ -1007,7 +1077,6 @@ Export endpoints should accept the same filters as their list or dashboard endpo
 
 The requirements explicitly mention the main MVP modules, but these supporting APIs are recommended because the architecture and database design require them:
 
-- `Users` and `Roles` for role-based access control.
 - `Teams`, `Designations`, and `OfficeLocations` for department management.
 - `EmployeeDocuments` and `ProfilePhoto` for employee files.
 - `Shifts` and `EmployeeShifts` for shift attendance.

@@ -11,11 +11,13 @@ namespace EMS.Application.Features.Employees.Handlers
     public class UpdateEmployeeCommandHandler : IRequestHandler<Commands.UpdateEmployeeCommand, Employee>
     {
         private readonly IEmployeeRepository _repo;
+        private readonly IAuditLogger _auditLogger;
         private readonly ILogger<UpdateEmployeeCommandHandler> _logger;
 
-        public UpdateEmployeeCommandHandler(IEmployeeRepository repo, ILogger<UpdateEmployeeCommandHandler> logger)
+        public UpdateEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ILogger<UpdateEmployeeCommandHandler> logger)
         {
             _repo = repo;
+            _auditLogger = auditLogger;
             _logger = logger;
         }
 
@@ -28,6 +30,16 @@ namespace EMS.Application.Features.Employees.Handlers
                 throw new InvalidOperationException("Email already exists.");
             if (await _repo.EmployeeCodeExistsAsync(request.EmployeeCode, request.Id, cancellationToken))
                 throw new InvalidOperationException("Employee code already exists.");
+
+            var oldValues = new
+            {
+                emp.EmployeeCode,
+                emp.FirstName,
+                emp.LastName,
+                emp.Email,
+                emp.DepartmentId,
+                emp.EmploymentStatus
+            };
 
             emp.EmployeeCode = request.EmployeeCode;
             emp.FirstName = request.FirstName;
@@ -49,6 +61,17 @@ namespace EMS.Application.Features.Employees.Handlers
             await _repo.UpdateAsync(emp, cancellationToken);
             await _repo.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Updated employee {EmployeeId}", emp.Id);
+
+            await _auditLogger.LogAsync("Employee", emp.Id, "Updated", oldValues: oldValues, newValues: new
+            {
+                emp.EmployeeCode,
+                emp.FirstName,
+                emp.LastName,
+                emp.Email,
+                emp.DepartmentId,
+                emp.EmploymentStatus
+            }, ct: cancellationToken);
+
             return emp;
         }
     }

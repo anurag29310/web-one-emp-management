@@ -8,11 +8,13 @@ namespace EMS.Application.Features.Employees.Handlers
     public class DeactivateEmployeeCommandHandler : IRequestHandler<Commands.DeactivateEmployeeCommand>
     {
         private readonly IEmployeeRepository _repo;
+        private readonly IAuditLogger _auditLogger;
         private readonly ILogger<DeactivateEmployeeCommandHandler> _logger;
 
-        public DeactivateEmployeeCommandHandler(IEmployeeRepository repo, ILogger<DeactivateEmployeeCommandHandler> logger)
+        public DeactivateEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ILogger<DeactivateEmployeeCommandHandler> logger)
         {
             _repo = repo;
+            _auditLogger = auditLogger;
             _logger = logger;
         }
 
@@ -24,6 +26,9 @@ namespace EMS.Application.Features.Employees.Handlers
             await _repo.UpdateAsync(emp, cancellationToken);
             await _repo.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Deactivated employee {EmployeeId}", emp.Id);
+
+            await _auditLogger.LogAsync("Employee", emp.Id, "Deactivated", ct: cancellationToken);
+
             return Unit.Value;
         }
 

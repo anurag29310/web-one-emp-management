@@ -10,11 +10,13 @@ namespace EMS.Application.Features.Employees.Handlers
     public class DeleteEmployeeCommandHandler : IRequestHandler<Commands.DeleteEmployeeCommand>
     {
         private readonly IEmployeeRepository _repo;
+        private readonly IAuditLogger _auditLogger;
         private readonly ILogger<DeleteEmployeeCommandHandler> _logger;
 
-        public DeleteEmployeeCommandHandler(IEmployeeRepository repo, ILogger<DeleteEmployeeCommandHandler> logger)
+        public DeleteEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ILogger<DeleteEmployeeCommandHandler> logger)
         {
             _repo = repo;
+            _auditLogger = auditLogger;
             _logger = logger;
         }
 
@@ -25,6 +27,9 @@ namespace EMS.Application.Features.Employees.Handlers
             await _repo.DeleteAsync(emp, cancellationToken);
             await _repo.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Deleted (deactivated) employee {EmployeeId}", emp.Id);
+
+            await _auditLogger.LogAsync("Employee", emp.Id, "Deleted", oldValues: new { emp.EmployeeCode, emp.FirstName, emp.LastName }, ct: cancellationToken);
+
             return Unit.Value;
         }
 

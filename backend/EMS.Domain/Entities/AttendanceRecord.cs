@@ -21,5 +21,6 @@ namespace EMS.Domain.Entities
         public DateTime? UpdatedAtUtc { get; set; }
 
         public Employee? Employee { get; set; }
+        public Shift? Shift { get; set; }
     }
 }

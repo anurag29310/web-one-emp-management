@@ -16,6 +16,8 @@ builder.Services.AddDbContext<ApplicationDbContext>(opt => opt.UseInMemoryDataba
 
 // Repositories
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
+builder.Services.AddScoped<IUserRepository, EMS.Persistence.Repositories.UserRepository>();
+builder.Services.AddScoped<IRoleRepository, EMS.Persistence.Repositories.RoleRepository>();
 builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<ILeaveRepository, LeaveRepository>();
@@ -23,6 +25,7 @@ builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
 builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<EMS.Application.Interfaces.IAuditLogRepository, EMS.Persistence.Repositories.AuditLogRepository>();
 // Payroll services
 builder.Services.AddScoped<EMS.Application.Interfaces.IPayrollRepository, EMS.Persistence.Repositories.PayrollRepository>();
 builder.Services.AddSingleton<EMS.Application.Interfaces.IPdfService, EMS.Infrastructure.Pdf.SimplePdfService>();
@@ -78,15 +81,36 @@ builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Leave.Commands.AdjustLeaveBalanceCommand>, EMS.Application.Features.Leave.Validators.AdjustLeaveBalanceCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Leave.Commands.CreateLeaveTypeCommand>, EMS.Application.Features.Leave.Validators.CreateLeaveTypeCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Leave.Commands.UpdateLeaveTypeCommand>, EMS.Application.Features.Leave.Validators.UpdateLeaveTypeCommandValidator>();
+// Attendance validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Attendance.Commands.CheckInCommand>, EMS.Application.Features.Attendance.Validators.CheckInCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Attendance.Commands.CheckOutCommand>, EMS.Application.Features.Attendance.Validators.CheckOutCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Attendance.Commands.CreateAttendanceRecordCommand>, EMS.Application.Features.Attendance.Validators.CreateAttendanceRecordCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Attendance.Commands.UpdateAttendanceRecordCommand>, EMS.Application.Features.Attendance.Validators.UpdateAttendanceRecordCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Attendance.Commands.CreateAttendanceCorrectionCommand>, EMS.Application.Features.Attendance.Validators.CreateAttendanceCorrectionCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Attendance.Commands.CreateShiftCommand>, EMS.Application.Features.Attendance.Validators.CreateShiftCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Attendance.Commands.UpdateShiftCommand>, EMS.Application.Features.Attendance.Validators.UpdateShiftCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Attendance.Commands.AssignEmployeeShiftCommand>, EMS.Application.Features.Attendance.Validators.AssignEmployeeShiftCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Attendance.Commands.UpdateEmployeeShiftCommand>, EMS.Application.Features.Attendance.Validators.UpdateEmployeeShiftCommandValidator>();
 // Reports validators
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Reports.Queries.GetLeaveSummaryQuery>, EMS.Application.Features.Reports.Validators.GetLeaveSummaryQueryValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Reports.Queries.GetEmployeeJoinExitQuery>, EMS.Application.Features.Reports.Validators.GetEmployeeJoinExitQueryValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Reports.Queries.ExportEmployeeJoinExitQuery>, EMS.Application.Features.Reports.Validators.ExportEmployeeJoinExitQueryValidator>();
+// Audit log validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.AuditLogs.Queries.GetAuditLogsQuery>, EMS.Application.Features.AuditLogs.Validators.GetAuditLogsQueryValidator>();
+// User validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Users.Commands.CreateUserCommand>, EMS.Application.Features.Users.Validators.CreateUserCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Users.Commands.UpdateUserCommand>, EMS.Application.Features.Users.Validators.UpdateUserCommandValidator>();
+// Role validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Roles.Commands.CreateRoleCommand>, EMS.Application.Features.Roles.Validators.CreateRoleCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Roles.Commands.UpdateRoleCommand>, EMS.Application.Features.Roles.Validators.UpdateRoleCommandValidator>();
 
 // Infrastructure services
 builder.Services.AddSingleton<IPasswordHashService, PasswordHashService>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 builder.Services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<EMS.Application.Interfaces.ICurrentUserService, EMS.Infrastructure.Services.CurrentUserService>();
+builder.Services.AddScoped<EMS.Application.Interfaces.IAuditLogger, EMS.Infrastructure.Services.AuditLogger>();
 // File storage - local implementation for development
 builder.Services.AddSingleton<EMS.Application.Interfaces.IFileStorageService>(sp => new EMS.Infrastructure.Storage.LocalFileStorageService(builder.Environment.ContentRootPath));
 builder.Services.AddSingleton<EMS.Application.Interfaces.IEmailSender>(sp => new EMS.Infrastructure.Email.LocalEmailSender(builder.Environment.ContentRootPath, sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<EMS.Infrastructure.Email.LocalEmailSender>>()));
@@ -124,13 +148,29 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanManageDepartments", policy => policy.RequireRole("Admin", "HR"));
     options.AddPolicy("CanApproveLeave", policy => policy.RequireRole("Admin", "HR", "Manager"));
     options.AddPolicy("CanManageLeaveTypes", policy => policy.RequireRole("Admin", "HR"));
+    options.AddPolicy("CanManageHolidays", policy => policy.RequireRole("Admin", "HR"));
+    options.AddPolicy("CanManageAttendanceRecords", policy => policy.RequireRole("Admin", "HR"));
+    options.AddPolicy("CanReviewAttendanceCorrections", policy => policy.RequireRole("Admin", "HR", "Manager"));
+    options.AddPolicy("CanManageShifts", policy => policy.RequireRole("Admin", "HR"));
     options.AddPolicy("CanViewDashboard", policy => policy.RequireRole("Admin", "HR", "Manager"));
     options.AddPolicy("CanManagePayroll", policy => policy.RequireRole("Admin", "HR"));
     options.AddPolicy("CanApprovePayroll", policy => policy.RequireRole("Admin"));
     options.AddPolicy("CanViewReports", policy => policy.RequireRole("Admin", "HR", "Manager"));
+    options.AddPolicy("CanViewAuditLogs", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("CanManageUsers", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("CanViewRoles", policy => policy.RequireRole("Admin", "HR"));
 });
 
 var app = builder.Build();
+
+// The in-memory provider never creates its store (or applies HasData seeds, e.g. the RBAC
+// roles) on its own — it has no migrations to run. EnsureCreated() triggers both. This must be
+// replaced with a real Database.Migrate() call once a persistent provider is configured.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.EnsureCreated();
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

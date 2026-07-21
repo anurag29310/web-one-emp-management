@@ -14,6 +14,8 @@ namespace EMS.Application.Interfaces
         Task<int> CountAsync(string? search, Guid? departmentId, string? status, CancellationToken ct = default);
         Task<IEnumerable<Employee>> GetByDepartmentAsync(Guid departmentId, int page, int pageSize, CancellationToken ct = default);
         Task<IEnumerable<Employee>> GetDirectReportsAsync(Guid managerId, int page, int pageSize, CancellationToken ct = default);
+        Task<IEnumerable<Guid>> GetDirectReportIdsAsync(Guid managerId, CancellationToken ct = default);
+        Task<bool> IsDirectReportAsync(Guid managerId, Guid employeeId, CancellationToken ct = default);
         Task<IEnumerable<Employee>> GetManagerChainAsync(Guid employeeId, CancellationToken ct = default);
         Task AddAsync(Employee employee, CancellationToken ct = default);
         Task UpdateAsync(Employee employee, CancellationToken ct = default);

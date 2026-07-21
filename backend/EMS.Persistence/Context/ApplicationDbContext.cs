@@ -26,6 +26,10 @@ namespace EMS.Persistence.Context
         public DbSet<EMS.Domain.Entities.PayrollRun> PayrollRuns => Set<EMS.Domain.Entities.PayrollRun>();
         public DbSet<EMS.Domain.Entities.Payslip> Payslips => Set<EMS.Domain.Entities.Payslip>();
         public DbSet<EMS.Domain.Entities.AttendanceRecord> AttendanceRecords => Set<EMS.Domain.Entities.AttendanceRecord>();
+        public DbSet<EMS.Domain.Entities.AuditLog> AuditLogs => Set<EMS.Domain.Entities.AuditLog>();
+        public DbSet<EMS.Domain.Entities.Shift> Shifts => Set<EMS.Domain.Entities.Shift>();
+        public DbSet<EMS.Domain.Entities.EmployeeShift> EmployeeShifts => Set<EMS.Domain.Entities.EmployeeShift>();
+        public DbSet<EMS.Domain.Entities.AttendanceCorrection> AttendanceCorrections => Set<EMS.Domain.Entities.AttendanceCorrection>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -47,6 +51,10 @@ namespace EMS.Persistence.Context
             modelBuilder.ApplyConfiguration(new Configurations.PayrollRunConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.PayslipConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.AttendanceRecordConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.AuditLogConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.ShiftConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.EmployeeShiftConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.AttendanceCorrectionConfiguration());
         }
     }
 }
