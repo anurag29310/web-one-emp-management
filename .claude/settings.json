@@ -19,7 +19,12 @@
       "Bash(xxd Pdf/Fonts/PTSans-Regular.ttf)",
       "Bash(xxd Pdf/Fonts/PTSans-Bold.ttf)",
       "Bash(dotnet remove *)",
-      "Bash(tee /c/tmp/full_test_run.log)"
+      "Bash(tee /c/tmp/full_test_run.log)",
+      "Bash(awk '/### 3\\\\.|^## 3\\\\./{f=1} f{print} /^## 4\\\\./{if\\(f\\)exit}' docs/api-specification.md)",
+      "Bash(npm ci *)",
+      "Bash(echo \"--- exit code: $? ---\")",
+      "Bash(gh pr *)",
+      "Bash(grep -n *)"
     ]
   }
 }

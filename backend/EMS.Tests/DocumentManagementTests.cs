@@ -49,7 +49,7 @@ namespace EMS.Tests
             var doc = db.EmployeeDocuments.FirstOrDefault(d => d.Id == id);
             Assert.NotNull(doc);
 
-            var expectedPath = Path.Combine(tempBase, "employee-documents", doc.BlobPath.Replace('/', Path.DirectorySeparatorChar));
+            var expectedPath = Path.Combine(tempBase, "Storage", "employee-documents", doc.BlobPath.Replace('/', Path.DirectorySeparatorChar));
             Assert.True(File.Exists(expectedPath));
 
             // cleanup

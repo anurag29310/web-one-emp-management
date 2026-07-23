@@ -5,10 +5,10 @@ import type { EmployeeRepository } from './employeeRepository'
 
 export const apiEmployeeRepository: EmployeeRepository = {
   async list(filters?: EmployeeListFilters): Promise<PagedResult<Employee>> {
-    const response = await httpClient.get<PagedResult<Employee>>('/employees', {
+    const response = await httpClient.get<{ data: PagedResult<Employee> }>('/employees', {
       params: filters,
     })
-    return response.data
+    return unwrap(response)
   },
 
   async getById(id: string): Promise<Employee> {
