@@ -115,6 +115,25 @@ const ShiftAssignmentsPage = lazy(() =>
     default: m.ShiftAssignmentsPage,
   })),
 )
+const UserListPage = lazy(() =>
+  import('@/app/features/administration/pages/UserListPage').then((m) => ({ default: m.UserListPage })),
+)
+const UserCreatePage = lazy(() =>
+  import('@/app/features/administration/pages/UserCreatePage').then((m) => ({
+    default: m.UserCreatePage,
+  })),
+)
+const UserEditPage = lazy(() =>
+  import('@/app/features/administration/pages/UserEditPage').then((m) => ({ default: m.UserEditPage })),
+)
+const RoleListPage = lazy(() =>
+  import('@/app/features/administration/pages/RoleListPage').then((m) => ({ default: m.RoleListPage })),
+)
+const RoleDetailPage = lazy(() =>
+  import('@/app/features/administration/pages/RoleDetailPage').then((m) => ({
+    default: m.RoleDetailPage,
+  })),
+)
 
 function PageFallback() {
   return <div className="min-h-screen bg-canvas p-6 text-sm text-ink-subtle">Loading…</div>
@@ -153,6 +172,11 @@ export function AppRouter() {
               <Route path="/attendance/corrections" element={<AttendanceCorrectionsPage />} />
               <Route path="/shifts" element={<ShiftListPage />} />
               <Route path="/shifts/assignments" element={<ShiftAssignmentsPage />} />
+              <Route path="/admin/users" element={<UserListPage />} />
+              <Route path="/admin/users/new" element={<UserCreatePage />} />
+              <Route path="/admin/users/:id/edit" element={<UserEditPage />} />
+              <Route path="/admin/roles" element={<RoleListPage />} />
+              <Route path="/admin/roles/:id" element={<RoleDetailPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>
           </Route>
