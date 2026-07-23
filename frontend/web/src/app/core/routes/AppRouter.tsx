@@ -6,6 +6,25 @@ import { AppLayout } from '@/app/core/layout/AppLayout'
 const LoginPage = lazy(() =>
   import('@/app/features/auth/pages/LoginPage').then((m) => ({ default: m.LoginPage })),
 )
+const MfaChallengePage = lazy(() =>
+  import('@/app/features/auth/pages/MfaChallengePage').then((m) => ({ default: m.MfaChallengePage })),
+)
+const RegisterPage = lazy(() =>
+  import('@/app/features/auth/pages/RegisterPage').then((m) => ({ default: m.RegisterPage })),
+)
+const ForgotPasswordPage = lazy(() =>
+  import('@/app/features/auth/pages/ForgotPasswordPage').then((m) => ({
+    default: m.ForgotPasswordPage,
+  })),
+)
+const ResetPasswordPage = lazy(() =>
+  import('@/app/features/auth/pages/ResetPasswordPage').then((m) => ({
+    default: m.ResetPasswordPage,
+  })),
+)
+const ProfilePage = lazy(() =>
+  import('@/app/features/auth/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })),
+)
 const DashboardPage = lazy(() =>
   import('@/app/features/dashboard/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })),
 )
@@ -43,6 +62,10 @@ export function AppRouter() {
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/login/mfa" element={<MfaChallengePage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
@@ -52,6 +75,7 @@ export function AppRouter() {
               <Route path="/departments" element={<DepartmentListPage />} />
               <Route path="/departments/:id" element={<DepartmentDetailPage />} />
               <Route path="/leave" element={<LeaveListPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
             </Route>
           </Route>
 
