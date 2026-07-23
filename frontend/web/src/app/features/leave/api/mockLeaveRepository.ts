@@ -1,10 +1,18 @@
 import { delay } from '@/app/shared/utils/delay'
 import { AppError } from '@/app/shared/models/appError'
 import type { PagedResult } from '@/app/shared/models/apiEnvelope'
-import type { ApplyLeaveInput, LeaveListFilters, LeaveRepository, LeaveRequest } from './leaveRepository'
-import { mockLeaveRequests } from './mockData'
+import type {
+  AdjustLeaveBalanceInput,
+  ApplyLeaveInput,
+  LeaveBalance,
+  LeaveListFilters,
+  LeaveRepository,
+  LeaveRequest,
+} from './leaveRepository'
+import { mockLeaveBalances, mockLeaveRequests } from './mockData'
 
 let leaveRequests = [...mockLeaveRequests]
+let leaveBalances = [...mockLeaveBalances]
 
 function nextId(): string {
   return `40000000-0000-0000-0000-${Date.now().toString().padStart(12, '0')}`
@@ -85,5 +93,41 @@ export const mockLeaveRepository: LeaveRepository = {
   async cancel(id: string): Promise<void> {
     await delay(200)
     leaveRequests = leaveRequests.map((r) => (r.id === id ? { ...r, status: 'Cancelled' } : r))
+  },
+
+  async getBalances(employeeId: string): Promise<LeaveBalance[]> {
+    await delay(250)
+    return leaveBalances.filter((b) => b.employeeId === employeeId)
+  },
+
+  async adjustBalance(input: AdjustLeaveBalanceInput): Promise<LeaveBalance> {
+    await delay(300)
+    const existing = leaveBalances.find(
+      (b) => b.employeeId === input.employeeId && b.leaveTypeId === input.leaveTypeId && b.year === input.year,
+    )
+
+    if (existing) {
+      const updated: LeaveBalance = {
+        ...existing,
+        adjusted: input.adjusted,
+        available: existing.openingBalance + existing.accrued - existing.used + input.adjusted,
+      }
+      leaveBalances = leaveBalances.map((b) => (b.id === existing.id ? updated : b))
+      return updated
+    }
+
+    const created: LeaveBalance = {
+      id: `50000000-0000-0000-0000-${Date.now().toString().padStart(12, '0')}`,
+      employeeId: input.employeeId,
+      leaveTypeId: input.leaveTypeId,
+      year: input.year,
+      openingBalance: 0,
+      accrued: 0,
+      used: 0,
+      adjusted: input.adjusted,
+      available: input.adjusted,
+    }
+    leaveBalances = [...leaveBalances, created]
+    return created
   },
 }

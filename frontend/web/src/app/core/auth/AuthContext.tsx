@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { authRepository, type LoginCredentials } from '@/app/features/auth/api'
+import {
+  authRepository,
+  type LoginCredentials,
+  type LoginOutcome,
+  type RegisterInput,
+  type VerifyMfaCredentials,
+} from '@/app/features/auth/api'
 import type { AuthenticatedUser } from '@/app/shared/models/user'
 import { sessionEvents } from './sessionEvents'
 import { AuthContext, type AuthContextValue } from './authContextType'
@@ -27,8 +33,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionEvents.onSessionExpired(() => setUser(null))
   }, [])
 
-  const login = useCallback(async (credentials: LoginCredentials) => {
-    const session = await authRepository.login(credentials)
+  const login = useCallback(async (credentials: LoginCredentials): Promise<LoginOutcome> => {
+    const outcome = await authRepository.login(credentials)
+    if (!outcome.requiresMfa) {
+      setUser(outcome.session.user)
+    }
+    return outcome
+  }, [])
+
+  const completeMfaLogin = useCallback(async (credentials: VerifyMfaCredentials): Promise<void> => {
+    const session = await authRepository.verifyMfa(credentials)
+    setUser(session.user)
+  }, [])
+
+  const register = useCallback(async (input: RegisterInput): Promise<void> => {
+    const session = await authRepository.register(input)
     setUser(session.user)
   }, [])
 
@@ -38,8 +57,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, isAuthenticated: user !== null, isInitializing, login, logout }),
-    [user, isInitializing, login, logout],
+    () => ({
+      user,
+      isAuthenticated: user !== null,
+      isInitializing,
+      login,
+      completeMfaLogin,
+      register,
+      logout,
+    }),
+    [user, isInitializing, login, completeMfaLogin, register, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

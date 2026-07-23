@@ -1,8 +1,19 @@
 import type { AuthenticatedUser } from '@/app/shared/models/user'
 
+export interface MockAccountMfaState {
+  enabled: boolean
+  /** Confirmed TOTP secret once MFA is enabled — cleared on disable. */
+  secret: string | null
+  /** Secret from setupMfa() awaiting confirmation via enableMfa() — cleared once confirmed. */
+  pendingSecret: string | null
+  /** Unused recovery codes still valid for login (mock-only; the real backend stores hashes). */
+  recoveryCodes: string[]
+}
+
 export interface MockAccount {
   password: string
   user: AuthenticatedUser
+  mfa: MockAccountMfaState
 }
 
 export const mockAccounts: MockAccount[] = [
@@ -14,7 +25,9 @@ export const mockAccounts: MockAccount[] = [
       email: 'admin@ems.local',
       role: 'Admin',
       isActive: true,
+      isMfaEnabled: false,
     },
+    mfa: { enabled: false, secret: null, pendingSecret: null, recoveryCodes: [] },
   },
   {
     password: 'Hr@12345',
@@ -24,7 +37,9 @@ export const mockAccounts: MockAccount[] = [
       email: 'hr@ems.local',
       role: 'HR',
       isActive: true,
+      isMfaEnabled: false,
     },
+    mfa: { enabled: false, secret: null, pendingSecret: null, recoveryCodes: [] },
   },
   {
     password: 'Manager@123',
@@ -34,6 +49,16 @@ export const mockAccounts: MockAccount[] = [
       email: 'manager@ems.local',
       role: 'Manager',
       isActive: true,
+      // Seeded with MFA already on so the login-challenge screen is exercisable in mock mode
+      // without an enrollment step first. Any 6-digit code is accepted (see mockAuthRepository),
+      // and the recovery code below also works and is consumed on use.
+      isMfaEnabled: true,
+    },
+    mfa: {
+      enabled: true,
+      secret: 'MOCKMFASECRETKEY',
+      pendingSecret: null,
+      recoveryCodes: ['K7M9X-4RT2W', 'Q4XN8-7WKPT'],
     },
   },
   {
@@ -44,6 +69,8 @@ export const mockAccounts: MockAccount[] = [
       email: 'employee@ems.local',
       role: 'Employee',
       isActive: true,
+      isMfaEnabled: false,
     },
+    mfa: { enabled: false, secret: null, pendingSecret: null, recoveryCodes: [] },
   },
 ]

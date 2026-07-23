@@ -1,8 +1,10 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import type { ReactNode } from 'react'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/app/core/auth/useAuth'
 import { Avatar } from '@/app/shared/components/Avatar'
+import type { Role } from '@/app/shared/models/user'
 
-const navItems = [
+const navItems: { to: string; label: string; icon: ReactNode; roles?: Role[] }[] = [
   {
     to: '/dashboard',
     label: 'Dashboard',
@@ -48,6 +50,52 @@ const navItems = [
     ),
   },
   {
+    to: '/attendance',
+    label: 'Attendance',
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 6v6l4 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+      />
+    ),
+  },
+  {
+    to: '/shifts',
+    label: 'Shifts',
+    roles: ['Admin', 'HR'],
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4.5 3.75h15A.75.75 0 0 1 20.25 4.5v3.75a.75.75 0 0 1-.75.75h-15a.75.75 0 0 1-.75-.75V4.5a.75.75 0 0 1 .75-.75Zm0 8.25h9a.75.75 0 0 1 .75.75v6.75a.75.75 0 0 1-.75.75h-9a.75.75 0 0 1-.75-.75v-6.75a.75.75 0 0 1 .75-.75Zm12.75 1.5v6"
+      />
+    ),
+  },
+  {
+    to: '/leave-types',
+    label: 'Leave Types',
+    roles: ['Admin', 'HR'],
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 12h3.75M9 15h3.75M9 18h3.75M3.75 3.75h16.5v16.5H3.75V3.75Zm5.25 4.5v-1.5m0 1.5h6m-6 0h-2.25"
+      />
+    ),
+  },
+  {
+    to: '/holidays',
+    label: 'Holidays',
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0V11.25A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5M8.25 12.75h1.5v1.5h-1.5v-1.5Zm3 0h1.5v1.5h-1.5v-1.5Zm3 0h1.5v1.5h-1.5v-1.5Z"
+      />
+    ),
+  },
+  {
     to: '/payslips',
     label: 'My Payslips',
     icon: (
@@ -58,12 +106,10 @@ const navItems = [
       />
     ),
   },
-]
-
-const payrollManagementNavItems = [
   {
     to: '/payroll/salary-structures',
     label: 'Salary Structures',
+    roles: ['Admin', 'HR'],
     icon: (
       <path
         strokeLinecap="round"
@@ -75,6 +121,7 @@ const payrollManagementNavItems = [
   {
     to: '/payroll/runs',
     label: 'Payroll Runs',
+    roles: ['Admin', 'HR'],
     icon: (
       <path
         strokeLinecap="round"
@@ -83,12 +130,22 @@ const payrollManagementNavItems = [
       />
     ),
   },
+  {
+    to: '/profile',
+    label: 'Profile',
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.964 0a9 9 0 1 0-11.964 0m11.964 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+      />
+    ),
+  },
 ]
 
 export function AppLayout() {
   const { user, logout } = useAuth()
-  const canManagePayroll = user?.role === 'Admin' || user?.role === 'HR'
-  const items = canManagePayroll ? [...navItems, ...payrollManagementNavItems] : navItems
+  const visibleNavItems = navItems.filter((item) => !item.roles || (user?.role && item.roles.includes(user.role)))
 
   return (
     <div className="flex min-h-screen bg-canvas">
@@ -101,7 +158,7 @@ export function AppLayout() {
         </div>
 
         <nav className="flex-1 space-y-1 px-3">
-          {items.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -130,13 +187,16 @@ export function AppLayout() {
         </nav>
 
         <div className="border-t border-hairline p-3">
-          <div className="flex items-center gap-2 rounded-md px-2 py-2">
+          <Link
+            to="/profile"
+            className="flex items-center gap-2 rounded-md px-2 py-2 transition hover:bg-surface-2"
+          >
             <Avatar name={user?.email ?? '?'} size="sm" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium text-ink">{user?.email}</p>
               <p className="truncate text-xs text-ink-subtle">{user?.role}</p>
             </div>
-          </div>
+          </Link>
           <button
             type="button"
             onClick={() => void logout()}

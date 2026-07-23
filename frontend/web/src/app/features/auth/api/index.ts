@@ -8,4 +8,17 @@ export const authRepository: AuthRepository = selectRepository({
   api: apiAuthRepository,
 })
 
-export type { AuthRepository, LoginCredentials } from './authRepository'
+export type {
+  AuthRepository,
+  ChangePasswordInput,
+  DisableMfaInput,
+  ForgotPasswordInput,
+  LoginCredentials,
+  LoginOutcome,
+  MfaRecoveryCodes,
+  MfaSetupInfo,
+  RegenerateRecoveryCodesInput,
+  RegisterInput,
+  ResetPasswordInput,
+  VerifyMfaCredentials,
+} from './authRepository'

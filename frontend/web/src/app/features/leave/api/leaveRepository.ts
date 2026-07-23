@@ -35,6 +35,26 @@ export interface ApplyLeaveInput {
   reason?: string
 }
 
+export interface LeaveBalance {
+  id: string
+  employeeId: string
+  leaveTypeId: string
+  year: number
+  openingBalance: number
+  accrued: number
+  used: number
+  adjusted: number
+  available: number
+}
+
+export interface AdjustLeaveBalanceInput {
+  employeeId: string
+  leaveTypeId: string
+  year: number
+  adjusted: number
+  reason?: string
+}
+
 export interface LeaveRepository {
   list(filters?: LeaveListFilters): Promise<PagedResult<LeaveRequest>>
   getById(id: string): Promise<LeaveRequest>
@@ -42,4 +62,6 @@ export interface LeaveRepository {
   approve(id: string, comments?: string): Promise<void>
   reject(id: string, comments?: string): Promise<void>
   cancel(id: string): Promise<void>
+  getBalances(employeeId: string): Promise<LeaveBalance[]>
+  adjustBalance(input: AdjustLeaveBalanceInput): Promise<LeaveBalance>
 }

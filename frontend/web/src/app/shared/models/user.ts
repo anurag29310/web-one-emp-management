@@ -6,6 +6,7 @@ export interface AuthenticatedUser {
   email: string
   role: Role | null
   isActive: boolean
+  isMfaEnabled: boolean
 }
 
 export interface AuthSession {
