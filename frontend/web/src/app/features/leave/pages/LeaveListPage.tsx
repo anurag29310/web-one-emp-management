@@ -1,78 +1,65 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useEmployees } from '@/app/features/employees/hooks/useEmployees'
+import { useLeaveTypes } from '@/app/features/leave-types/hooks/useLeaveTypes'
 import { useLeaveRequests } from '../hooks/useLeaveRequests'
-import { leaveRepository, type LeaveStatus } from '../api'
-import { KNOWN_LEAVE_TYPES, leaveTypeName } from '../api/leaveTypes'
+import { leaveRepository } from '../api'
+import { applyLeaveFormSchema, type ApplyLeaveFormValues } from '../types/leaveSchema'
+import { LeaveStatusBadge } from '../components/LeaveStatusBadge'
 import { AppError } from '@/app/shared/models/appError'
-import { appConfig } from '@/app/core/config/env'
+import { useAuth } from '@/app/core/auth/useAuth'
 import { Modal } from '@/app/shared/components/Modal'
-
-const STATUS_STYLES: Record<LeaveStatus, string> = {
-  Pending: 'bg-warning/15 text-warning ring-warning/30',
-  Approved: 'bg-success/15 text-success ring-success/30',
-  Rejected: 'bg-danger/15 text-danger ring-danger/30',
-  Cancelled: 'bg-surface-2 text-ink-subtle ring-hairline-strong',
-}
-
-function LeaveStatusBadge({ status }: { status: LeaveStatus }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${STATUS_STYLES[status]}`}
-    >
-      {status}
-    </span>
-  )
-}
 
 function ApplyLeaveForm({ onApplied }: { onApplied: () => void }) {
   const { result: employeesResult } = useEmployees({ pageSize: 100 })
-  const [employeeId, setEmployeeId] = useState('')
-  const [leaveTypeId, setLeaveTypeId] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [reason, setReason] = useState('')
+  const { leaveTypes } = useLeaveTypes()
   const [formError, setFormError] = useState<string | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<ApplyLeaveFormValues>({
+    resolver: zodResolver(applyLeaveFormSchema),
+    defaultValues: { employeeId: '', leaveTypeId: '', startDate: '', endDate: '', reason: '' },
+  })
+
+  async function onSubmit(values: ApplyLeaveFormValues) {
     setFormError(null)
-    if (!employeeId || !leaveTypeId || !startDate || !endDate) {
-      setFormError('Employee, leave type, and dates are required.')
-      return
-    }
     const totalDays =
-      Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86_400_000) + 1
-    if (totalDays < 1) {
-      setFormError('End date must be on or after the start date.')
-      return
-    }
+      Math.round((new Date(values.endDate).getTime() - new Date(values.startDate).getTime()) / 86_400_000) + 1
 
-    setIsSaving(true)
     try {
-      await leaveRepository.apply({ employeeId, leaveTypeId, startDate, endDate, totalDays, reason })
-      setEmployeeId('')
-      setLeaveTypeId('')
-      setStartDate('')
-      setEndDate('')
-      setReason('')
+      await leaveRepository.apply({
+        employeeId: values.employeeId,
+        leaveTypeId: values.leaveTypeId,
+        startDate: values.startDate,
+        endDate: values.endDate,
+        totalDays,
+        reason: values.reason?.trim() || undefined,
+      })
+      reset()
       onApplied()
     } catch (err) {
       setFormError(err instanceof AppError ? err.message : 'Failed to submit leave request.')
-    } finally {
-      setIsSaving(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="mb-1 block text-sm font-medium text-ink-muted">Employee</label>
+          <label htmlFor="apply-employee" className="mb-1 block text-sm font-medium text-ink-muted">
+            Employee
+          </label>
           <select
-            value={employeeId}
-            onChange={(e) => setEmployeeId(e.target.value)}
+            id="apply-employee"
+            aria-invalid={Boolean(errors.employeeId)}
             className="w-full rounded-md border border-hairline-strong bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/50"
+            {...register('employeeId')}
           >
             <option value="">Select employee…</option>
             {employeesResult?.data.map((employee) => (
@@ -81,73 +68,84 @@ function ApplyLeaveForm({ onApplied }: { onApplied: () => void }) {
               </option>
             ))}
           </select>
+          {errors.employeeId && <p className="mt-1 text-xs text-danger">{errors.employeeId.message}</p>}
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-ink-muted">Leave type ID</label>
-          <input
-            value={leaveTypeId}
-            onChange={(e) => setLeaveTypeId(e.target.value)}
-            placeholder="Paste a leave type guid…"
-            className="w-full rounded-md border border-hairline-strong bg-surface-2 px-3 py-2 text-sm text-ink outline-none placeholder:text-ink-tertiary focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/50"
-          />
+          <label htmlFor="apply-leave-type" className="mb-1 block text-sm font-medium text-ink-muted">
+            Leave type
+          </label>
+          <select
+            id="apply-leave-type"
+            aria-invalid={Boolean(errors.leaveTypeId)}
+            className="w-full rounded-md border border-hairline-strong bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/50"
+            {...register('leaveTypeId')}
+          >
+            <option value="">Select leave type…</option>
+            {leaveTypes.map((leaveType) => (
+              <option key={leaveType.id} value={leaveType.id}>
+                {leaveType.name}
+              </option>
+            ))}
+          </select>
+          {errors.leaveTypeId && <p className="mt-1 text-xs text-danger">{errors.leaveTypeId.message}</p>}
         </div>
       </div>
 
-      {appConfig.dataSource === 'mock' && (
-        <p className="text-xs text-ink-subtle">
-          Mock leave type IDs:{' '}
-          {KNOWN_LEAVE_TYPES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setLeaveTypeId(t.id)}
-              className="mr-2 font-mono text-primary-hover hover:underline"
-            >
-              {t.name}
-            </button>
-          ))}
-        </p>
-      )}
-
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="mb-1 block text-sm font-medium text-ink-muted">Start date</label>
+          <label htmlFor="apply-start" className="mb-1 block text-sm font-medium text-ink-muted">
+            Start date
+          </label>
           <input
+            id="apply-start"
             type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            aria-invalid={Boolean(errors.startDate)}
             className="w-full rounded-md border border-hairline-strong bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/50"
+            {...register('startDate')}
           />
+          {errors.startDate && <p className="mt-1 text-xs text-danger">{errors.startDate.message}</p>}
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-ink-muted">End date</label>
+          <label htmlFor="apply-end" className="mb-1 block text-sm font-medium text-ink-muted">
+            End date
+          </label>
           <input
+            id="apply-end"
             type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            aria-invalid={Boolean(errors.endDate)}
             className="w-full rounded-md border border-hairline-strong bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/50"
+            {...register('endDate')}
           />
+          {errors.endDate && <p className="mt-1 text-xs text-danger">{errors.endDate.message}</p>}
         </div>
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-ink-muted">Reason</label>
+        <label htmlFor="apply-reason" className="mb-1 block text-sm font-medium text-ink-muted">
+          Reason
+        </label>
         <textarea
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
+          id="apply-reason"
           rows={2}
+          aria-invalid={Boolean(errors.reason)}
           className="w-full rounded-md border border-hairline-strong bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/50"
+          {...register('reason')}
         />
+        {errors.reason && <p className="mt-1 text-xs text-danger">{errors.reason.message}</p>}
       </div>
 
-      {formError && <p className="text-sm text-danger">{formError}</p>}
+      {formError && (
+        <p role="alert" className="text-sm text-danger">
+          {formError}
+        </p>
+      )}
 
       <button
         type="submit"
-        disabled={isSaving}
-        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition hover:bg-primary-hover disabled:opacity-60"
+        disabled={isSubmitting}
+        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isSaving ? 'Submitting…' : 'Apply for leave'}
+        {isSubmitting ? 'Submitting…' : 'Apply for leave'}
       </button>
     </form>
   )
@@ -156,19 +154,19 @@ function ApplyLeaveForm({ onApplied }: { onApplied: () => void }) {
 export function LeaveListPage() {
   const { result, isLoading, error, refresh } = useLeaveRequests({ pageSize: 50 })
   const { result: employeesResult } = useEmployees({ pageSize: 100 })
+  const { leaveTypes } = useLeaveTypes()
+  const { user } = useAuth()
   const [isFormOpen, setIsFormOpen] = useState(false)
+
+  const canApproveLeave = user?.role === 'Admin' || user?.role === 'HR' || user?.role === 'Manager'
+  const canManageLeaves = user?.role === 'Admin' || user?.role === 'HR'
 
   function employeeName(employeeId: string): string {
     return employeesResult?.data.find((e) => e.id === employeeId)?.fullName ?? employeeId
   }
 
-  async function handleDecision(id: string, decision: 'approve' | 'reject') {
-    if (decision === 'approve') {
-      await leaveRepository.approve(id)
-    } else {
-      await leaveRepository.reject(id)
-    }
-    refresh()
+  function leaveTypeName(leaveTypeId: string): string {
+    return leaveTypes.find((t) => t.id === leaveTypeId)?.name ?? leaveTypeId
   }
 
   return (
@@ -178,13 +176,31 @@ export function LeaveListPage() {
           <h1 className="text-[28px] font-semibold leading-[1.2] tracking-[-0.6px] text-ink">Leave Requests</h1>
           <p className="text-sm text-ink-subtle">{result ? `${result.totalCount} total` : ' '}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsFormOpen((open) => !open)}
-          className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition hover:bg-primary-hover"
-        >
-          {isFormOpen ? 'Cancel' : 'Apply for leave'}
-        </button>
+        <div className="flex items-center gap-2">
+          {canApproveLeave && (
+            <Link
+              to="/leave/approvals"
+              className="rounded-md bg-surface-2 px-3 py-2 text-sm font-medium text-ink transition hover:bg-surface-3"
+            >
+              Approval queue
+            </Link>
+          )}
+          {canManageLeaves && (
+            <Link
+              to="/leave/balances"
+              className="rounded-md bg-surface-2 px-3 py-2 text-sm font-medium text-ink transition hover:bg-surface-3"
+            >
+              Leave balances
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsFormOpen((open) => !open)}
+            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition hover:bg-primary-hover"
+          >
+            {isFormOpen ? 'Cancel' : 'Apply for leave'}
+          </button>
+        </div>
       </div>
 
       <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title="Apply for leave">
@@ -207,14 +223,13 @@ export function LeaveListPage() {
               <th className="px-4 py-3">Dates</th>
               <th className="px-4 py-3">Days</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-hairline">
             {isLoading &&
               Array.from({ length: 3 }).map((_, i) => (
                 <tr key={i}>
-                  <td className="px-4 py-3" colSpan={6}>
+                  <td className="px-4 py-3" colSpan={5}>
                     <div className="h-5 animate-pulse rounded bg-surface-2" />
                   </td>
                 </tr>
@@ -222,7 +237,7 @@ export function LeaveListPage() {
 
             {!isLoading && result?.data.length === 0 && (
               <tr>
-                <td className="px-4 py-8 text-center text-ink-subtle" colSpan={6}>
+                <td className="px-4 py-8 text-center text-ink-subtle" colSpan={5}>
                   No leave requests yet.
                 </td>
               </tr>
@@ -231,7 +246,11 @@ export function LeaveListPage() {
             {!isLoading &&
               result?.data.map((request) => (
                 <tr key={request.id} className="transition hover:bg-surface-2">
-                  <td className="px-4 py-3 font-medium text-ink">{employeeName(request.employeeId)}</td>
+                  <td className="px-4 py-3">
+                    <Link to={`/leave/${request.id}`} className="font-medium text-ink hover:text-primary-hover">
+                      {employeeName(request.employeeId)}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3 text-ink-muted">{leaveTypeName(request.leaveTypeId)}</td>
                   <td className="px-4 py-3 text-ink-muted">
                     {request.startDate} → {request.endDate}
@@ -239,26 +258,6 @@ export function LeaveListPage() {
                   <td className="px-4 py-3 text-ink-muted">{request.totalDays}</td>
                   <td className="px-4 py-3">
                     <LeaveStatusBadge status={request.status} />
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {request.status === 'Pending' && (
-                      <div className="flex justify-end gap-3">
-                        <button
-                          type="button"
-                          onClick={() => void handleDecision(request.id, 'approve')}
-                          className="text-xs font-medium text-success hover:underline"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleDecision(request.id, 'reject')}
-                          className="text-xs font-medium text-danger hover:underline"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    )}
                   </td>
                 </tr>
               ))}

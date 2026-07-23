@@ -1,7 +1,7 @@
-import type { LeaveRequest } from './leaveRepository'
-import { KNOWN_LEAVE_TYPES } from './leaveTypes'
+import type { LeaveBalance, LeaveRequest } from './leaveRepository'
+import { mockLeaveTypes } from '@/app/features/leave-types/api/mockData'
 
-const [casual, sick, earned] = KNOWN_LEAVE_TYPES
+const [casual, sick, earned] = mockLeaveTypes
 
 export const mockLeaveRequests: LeaveRequest[] = [
   {
@@ -45,5 +45,63 @@ export const mockLeaveRequests: LeaveRequest[] = [
     createdAtUtc: '2026-05-20T12:00:00Z',
     decisionAtUtc: '2026-05-21T09:00:00Z',
     decisionComments: 'Team is short-staffed that week — please pick different dates.',
+  },
+]
+
+export const mockLeaveBalances: LeaveBalance[] = [
+  {
+    id: '50000000-0000-0000-0000-000000000001',
+    employeeId: '10000000-0000-0000-0000-000000000001',
+    leaveTypeId: casual.id,
+    year: 2026,
+    openingBalance: 12,
+    accrued: 6,
+    used: 2,
+    adjusted: 0,
+    available: 16,
+  },
+  {
+    id: '50000000-0000-0000-0000-000000000002',
+    employeeId: '10000000-0000-0000-0000-000000000001',
+    leaveTypeId: sick.id,
+    year: 2026,
+    openingBalance: 10,
+    accrued: 5,
+    used: 0,
+    adjusted: 0,
+    available: 15,
+  },
+  {
+    id: '50000000-0000-0000-0000-000000000003',
+    employeeId: '10000000-0000-0000-0000-000000000001',
+    leaveTypeId: earned.id,
+    year: 2026,
+    openingBalance: 15,
+    accrued: 7.5,
+    used: 0,
+    adjusted: 1.5,
+    available: 24,
+  },
+  {
+    id: '50000000-0000-0000-0000-000000000004',
+    employeeId: '10000000-0000-0000-0000-000000000002',
+    leaveTypeId: casual.id,
+    year: 2026,
+    openingBalance: 12,
+    accrued: 6,
+    used: 5,
+    adjusted: 0,
+    available: 13,
+  },
+  {
+    id: '50000000-0000-0000-0000-000000000005',
+    employeeId: '10000000-0000-0000-0000-000000000003',
+    leaveTypeId: sick.id,
+    year: 2026,
+    openingBalance: 10,
+    accrued: 5,
+    used: 2,
+    adjusted: 0,
+    available: 13,
   },
 ]
