@@ -24,7 +24,8 @@
       "Bash(npm ci *)",
       "Bash(echo \"--- exit code: $? ---\")",
       "Bash(gh pr *)",
-      "Bash(grep -n *)"
+      "Bash(grep -n *)",
+      "Bash(git merge *)"
     ]
   }
 }
