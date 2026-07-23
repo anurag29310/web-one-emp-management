@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/app/core/auth/useAuth'
 import { AppError } from '@/app/shared/models/appError'
 import { appConfig } from '@/app/core/config/env'
@@ -31,7 +31,14 @@ export function LoginPage() {
   async function onSubmit(values: LoginFormValues) {
     setFormError(null)
     try {
-      await login(values)
+      const outcome = await login(values)
+      if (outcome.requiresMfa) {
+        navigate('/login/mfa', {
+          replace: true,
+          state: { mfaChallengeId: outcome.mfaChallengeId, from: redirectTo },
+        })
+        return
+      }
       navigate(redirectTo, { replace: true })
     } catch (err) {
       setFormError(err instanceof AppError ? err.message : 'Unable to sign in. Please try again.')
@@ -73,9 +80,14 @@ export function LoginPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-ink-muted">
-                Password
-              </label>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label htmlFor="password" className="block text-sm font-medium text-ink-muted">
+                  Password
+                </label>
+                <Link to="/forgot-password" className="text-xs text-ink-subtle hover:text-primary-hover">
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 id="password"
                 type="password"
@@ -103,12 +115,18 @@ export function LoginPage() {
           </form>
         </div>
 
+        <p className="mt-4 text-center text-sm text-ink-subtle">
+          Don&apos;t have an account?{' '}
+          <Link to="/register" className="font-medium text-primary-hover hover:underline">
+            Create one
+          </Link>
+        </p>
+
         {appConfig.dataSource === 'mock' && (
           <div className="mt-4 rounded-lg border border-hairline bg-surface-1 px-4 py-3 text-xs text-ink-subtle">
             <p className="mb-1 font-medium text-ink-muted">Mock data source active — try:</p>
-            <p className="font-mono">
-              admin / Admin@123
-            </p>
+            <p className="font-mono">admin / Admin@123</p>
+            <p className="mt-1 font-mono">manager / Manager@123 (MFA enabled — any 6-digit code works)</p>
           </div>
         )}
       </div>
