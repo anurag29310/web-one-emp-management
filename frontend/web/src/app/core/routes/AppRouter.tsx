@@ -45,7 +45,32 @@ const PayrollRunsPage = lazy(() =>
 )
 const PayrollRunDetailPage = lazy(() =>
   import('@/app/features/payroll/pages/PayrollRunDetailPage').then((m) => ({
-    default: m.PayrollRunDetailPage,
+    default: m.PayrollRunDetailPage})),
+)
+
+const LeaveRequestDetailPage = lazy(() =>
+  import('@/app/features/leave/pages/LeaveRequestDetailPage').then((m) => ({
+    default: m.LeaveRequestDetailPage,
+  })),
+)
+const LeaveApprovalQueuePage = lazy(() =>
+  import('@/app/features/leave/pages/LeaveApprovalQueuePage').then((m) => ({
+    default: m.LeaveApprovalQueuePage,
+  })),
+)
+const LeaveBalancesPage = lazy(() =>
+  import('@/app/features/leave/pages/LeaveBalancesPage').then((m) => ({
+    default: m.LeaveBalancesPage,
+  })),
+)
+const LeaveTypeListPage = lazy(() =>
+  import('@/app/features/leave-types/pages/LeaveTypeListPage').then((m) => ({
+    default: m.LeaveTypeListPage,
+  })),
+)
+const HolidayListPage = lazy(() =>
+  import('@/app/features/holidays/pages/HolidayListPage').then((m) => ({
+    default: m.HolidayListPage,
   })),
 )
 
@@ -72,6 +97,11 @@ export function AppRouter() {
               <Route path="/payroll/salary-structures" element={<SalaryStructuresPage />} />
               <Route path="/payroll/runs" element={<PayrollRunsPage />} />
               <Route path="/payroll/runs/:id" element={<PayrollRunDetailPage />} />
+              <Route path="/leave/approvals" element={<LeaveApprovalQueuePage />} />
+              <Route path="/leave/balances" element={<LeaveBalancesPage />} />
+              <Route path="/leave/:id" element={<LeaveRequestDetailPage />} />
+              <Route path="/leave-types" element={<LeaveTypeListPage />} />
+              <Route path="/holidays" element={<HolidayListPage />} />
             </Route>
           </Route>
 

@@ -1,6 +1,13 @@
 import { httpClient, unwrap } from '@/app/core/api/httpClient'
 import type { PagedResult } from '@/app/shared/models/apiEnvelope'
-import type { ApplyLeaveInput, LeaveListFilters, LeaveRepository, LeaveRequest } from './leaveRepository'
+import type {
+  AdjustLeaveBalanceInput,
+  ApplyLeaveInput,
+  LeaveBalance,
+  LeaveListFilters,
+  LeaveRepository,
+  LeaveRequest,
+} from './leaveRepository'
 
 export const apiLeaveRepository: LeaveRepository = {
   async list(filters?: LeaveListFilters): Promise<PagedResult<LeaveRequest>> {
@@ -30,5 +37,20 @@ export const apiLeaveRepository: LeaveRepository = {
 
   async cancel(id: string): Promise<void> {
     await httpClient.post(`/leave/requests/${id}/cancel`)
+  },
+
+  async getBalances(employeeId: string): Promise<LeaveBalance[]> {
+    const response = await httpClient.get<{ data: LeaveBalance[] }>('/leave/balances', {
+      params: { employeeId },
+    })
+    return unwrap(response)
+  },
+
+  async adjustBalance(input: AdjustLeaveBalanceInput): Promise<LeaveBalance> {
+    const response = await httpClient.put<{ data: LeaveBalance }>(
+      `/employees/${input.employeeId}/leave-balances/${input.leaveTypeId}`,
+      { year: input.year, adjusted: input.adjusted, reason: input.reason },
+    )
+    return unwrap(response)
   },
 }

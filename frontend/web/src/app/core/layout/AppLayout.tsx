@@ -1,8 +1,10 @@
+import type { ReactNode } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/app/core/auth/useAuth'
 import { Avatar } from '@/app/shared/components/Avatar'
+import type { Role } from '@/app/shared/models/user'
 
-const navItems = [
+const navItems: { to: string; label: string; icon: ReactNode; roles?: Role[] }[] = [
   {
     to: '/dashboard',
     label: 'Dashboard',
@@ -48,6 +50,29 @@ const navItems = [
     ),
   },
   {
+    to: '/leave-types',
+    label: 'Leave Types',
+    roles: ['Admin', 'HR'],
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 12h3.75M9 15h3.75M9 18h3.75M3.75 3.75h16.5v16.5H3.75V3.75Zm5.25 4.5v-1.5m0 1.5h6m-6 0h-2.25"
+      />
+    ),
+  },
+  {
+    to: '/holidays',
+    label: 'Holidays',
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0V11.25A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5M8.25 12.75h1.5v1.5h-1.5v-1.5Zm3 0h1.5v1.5h-1.5v-1.5Zm3 0h1.5v1.5h-1.5v-1.5Z"
+      />
+    ),
+  },
+  {
     to: '/payslips',
     label: 'My Payslips',
     icon: (
@@ -58,12 +83,10 @@ const navItems = [
       />
     ),
   },
-]
-
-const payrollManagementNavItems = [
   {
     to: '/payroll/salary-structures',
     label: 'Salary Structures',
+    roles: ['Admin', 'HR'],
     icon: (
       <path
         strokeLinecap="round"
@@ -75,6 +98,7 @@ const payrollManagementNavItems = [
   {
     to: '/payroll/runs',
     label: 'Payroll Runs',
+    roles: ['Admin', 'HR'],
     icon: (
       <path
         strokeLinecap="round"
@@ -87,8 +111,7 @@ const payrollManagementNavItems = [
 
 export function AppLayout() {
   const { user, logout } = useAuth()
-  const canManagePayroll = user?.role === 'Admin' || user?.role === 'HR'
-  const items = canManagePayroll ? [...navItems, ...payrollManagementNavItems] : navItems
+  const visibleNavItems = navItems.filter((item) => !item.roles || (user?.role && item.roles.includes(user.role)))
 
   return (
     <div className="flex min-h-screen bg-canvas">
@@ -101,7 +124,7 @@ export function AppLayout() {
         </div>
 
         <nav className="flex-1 space-y-1 px-3">
-          {items.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

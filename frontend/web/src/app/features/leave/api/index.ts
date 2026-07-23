@@ -14,4 +14,6 @@ export type {
   LeaveStatus,
   LeaveListFilters,
   ApplyLeaveInput,
+  LeaveBalance,
+  AdjustLeaveBalanceInput,
 } from './leaveRepository'
