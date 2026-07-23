@@ -68,6 +68,11 @@ builder.Services.AddScoped<EMS.Application.Features.Auth.ForgotPasswordCommandHa
 builder.Services.AddScoped<EMS.Application.Features.Auth.ResetPasswordCommandHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Auth.ChangePasswordCommandHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Auth.GetCurrentUserQueryHandler>();
+builder.Services.AddScoped<EMS.Application.Features.Auth.MfaSetupCommandHandler>();
+builder.Services.AddScoped<EMS.Application.Features.Auth.EnableMfaCommandHandler>();
+builder.Services.AddScoped<EMS.Application.Features.Auth.DisableMfaCommandHandler>();
+builder.Services.AddScoped<EMS.Application.Features.Auth.RegenerateMfaRecoveryCodesCommandHandler>();
+builder.Services.AddScoped<EMS.Application.Features.Auth.VerifyMfaCommandHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.CreateSalaryStructureCommandHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.GetSalaryStructuresQueryHandler>();
 builder.Services.AddScoped<EMS.Application.Features.Payroll.Handlers.GetSalaryStructureByIdQueryHandler>();
@@ -139,6 +144,13 @@ builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.
 builder.Services.AddSingleton<IPasswordHashService, PasswordHashService>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 builder.Services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
+builder.Services.AddSingleton<EMS.Application.Interfaces.ITotpService, EMS.Infrastructure.Services.TotpService>();
+// Backs the TOTP secret's encryption-at-rest. The default key ring is written to the local
+// filesystem (see the ASP.NET Core Data Protection docs for the OS-specific path) — fine for a
+// single instance, but a real multi-instance deployment needs it persisted to shared storage
+// (e.g. Azure Key Vault / Blob) so every instance can decrypt secrets written by any other.
+builder.Services.AddDataProtection();
+builder.Services.AddSingleton<EMS.Application.Interfaces.IMfaSecretProtector, EMS.Infrastructure.Services.DataProtectionMfaSecretProtector>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<EMS.Application.Interfaces.ICurrentUserService, EMS.Infrastructure.Services.CurrentUserService>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IAuditLogger, EMS.Infrastructure.Services.AuditLogger>();
@@ -223,6 +235,10 @@ builder.Services.AddRateLimiter(options =>
 
     AddFixedWindowIpPolicy(options, "LoginPolicy", "Login", defaultPermitLimit: 5, defaultWindowSeconds: 60);
     AddFixedWindowIpPolicy(options, "RegisterPolicy", "Register", defaultPermitLimit: 5, defaultWindowSeconds: 60);
+    // A TOTP code is only 6 digits (1,000,000 possibilities) and valid for ~30-90s, so this
+    // endpoint needs its own tighter budget — without one, brute-forcing a single challenge
+    // within its validity window is a realistic attack, not just a theoretical one.
+    AddFixedWindowIpPolicy(options, "MfaVerifyPolicy", "MfaVerify", defaultPermitLimit: 10, defaultWindowSeconds: 60);
 
     options.OnRejected = async (context, cancellationToken) =>
     {

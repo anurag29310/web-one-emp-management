@@ -44,6 +44,8 @@ namespace EMS.Tests
                         ["RateLimiting:Login:WindowSeconds"] = windowSeconds.ToString(),
                         ["RateLimiting:Register:PermitLimit"] = permitLimit.ToString(),
                         ["RateLimiting:Register:WindowSeconds"] = windowSeconds.ToString(),
+                        ["RateLimiting:MfaVerify:PermitLimit"] = permitLimit.ToString(),
+                        ["RateLimiting:MfaVerify:WindowSeconds"] = windowSeconds.ToString(),
                     });
                 });
 
@@ -70,6 +72,15 @@ namespace EMS.Tests
                     email = Guid.NewGuid().ToString("N") + "@example.com",
                     password = "Password@123"
                 })
+            };
+
+        // No challenge with this id will ever exist against a fresh in-memory database, so every
+        // call resolves to a 401 — irrelevant for a rate-limit test, which only cares whether the
+        // Nth request becomes 429, exactly like the bad-credentials LoginRequest() above.
+        private static HttpRequestMessage MfaVerifyRequest() =>
+            new(HttpMethod.Post, "/api/v1/auth/mfa/verify")
+            {
+                Content = JsonContent.Create(new { mfaChallengeId = Guid.NewGuid(), code = "000000" })
             };
 
         [Fact]
@@ -139,6 +150,46 @@ namespace EMS.Tests
 
             // Login's budget is exhausted, but register has never been called on this client, so it
             // must still be allowed — the two endpoints must not share a single IP-wide bucket.
+            using var registerStillAllowed = await client.SendAsync(RegisterRequest());
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, registerStillAllowed.StatusCode);
+        }
+
+        [Fact]
+        public async Task MfaVerify_ExceedingPermitLimit_Returns429()
+        {
+            // A 6-digit TOTP code is only 1,000,000 possibilities, so this endpoint needs its own
+            // tighter budget than password-based endpoints — verified independently here.
+            using var factory = CreateFactory(permitLimit: 3);
+            using var client = factory.CreateClient();
+
+            for (var i = 0; i < 3; i++)
+            {
+                using var response = await client.SendAsync(MfaVerifyRequest());
+                Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
+            }
+
+            using var blocked = await client.SendAsync(MfaVerifyRequest());
+            Assert.Equal(HttpStatusCode.TooManyRequests, blocked.StatusCode);
+        }
+
+        [Fact]
+        public async Task MfaVerify_RateLimitBudget_IsIndependentOfLoginAndRegister()
+        {
+            using var factory = CreateFactory(permitLimit: 2);
+            using var client = factory.CreateClient();
+
+            for (var i = 0; i < 2; i++)
+            {
+                using var response = await client.SendAsync(MfaVerifyRequest());
+                Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
+            }
+
+            using var mfaBlocked = await client.SendAsync(MfaVerifyRequest());
+            Assert.Equal(HttpStatusCode.TooManyRequests, mfaBlocked.StatusCode);
+
+            using var loginStillAllowed = await client.SendAsync(LoginRequest());
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, loginStillAllowed.StatusCode);
+
             using var registerStillAllowed = await client.SendAsync(RegisterRequest());
             Assert.NotEqual(HttpStatusCode.TooManyRequests, registerStillAllowed.StatusCode);
         }

@@ -37,6 +37,12 @@ namespace EMS.Persistence.Repositories
             return Task.CompletedTask;
         }
 
+        public Task UpdateUserAsync(User user, CancellationToken ct = default)
+        {
+            _db.Users.Update(user);
+            return Task.CompletedTask;
+        }
+
         public async Task AddRefreshTokenAsync(RefreshToken token, CancellationToken ct = default) =>
             await _db.RefreshTokens.AddAsync(token, ct);
 
@@ -82,6 +88,42 @@ namespace EMS.Persistence.Repositories
         {
             _resetTokens.TryRemove(token, out _);
             return Task.CompletedTask;
+        }
+
+        public async Task AddMfaChallengeAsync(MfaChallenge challenge, CancellationToken ct = default) =>
+            await _db.MfaChallenges.AddAsync(challenge, ct);
+
+        public async Task<MfaChallenge?> GetMfaChallengeAsync(Guid id, CancellationToken ct = default) =>
+            await _db.MfaChallenges.Include(c => c.User).ThenInclude(u => u!.Role)
+                .FirstOrDefaultAsync(c => c.Id == id, ct);
+
+        public Task ConsumeMfaChallengeAsync(MfaChallenge challenge, CancellationToken ct = default)
+        {
+            challenge.IsConsumed = true;
+            _db.MfaChallenges.Update(challenge);
+            return Task.CompletedTask;
+        }
+
+        public async Task AddMfaRecoveryCodesAsync(IEnumerable<MfaRecoveryCode> codes, CancellationToken ct = default) =>
+            await _db.MfaRecoveryCodes.AddRangeAsync(codes, ct);
+
+        public async Task<IReadOnlyList<MfaRecoveryCode>> GetUnusedMfaRecoveryCodesAsync(Guid userId, CancellationToken ct = default) =>
+            await _db.MfaRecoveryCodes
+                .Where(c => c.UserId == userId && c.UsedAtUtc == null)
+                .ToListAsync(ct);
+
+        public Task MarkMfaRecoveryCodeUsedAsync(MfaRecoveryCode code, CancellationToken ct = default)
+        {
+            code.UsedAtUtc = DateTime.UtcNow;
+            _db.MfaRecoveryCodes.Update(code);
+            return Task.CompletedTask;
+        }
+
+        public async Task ReplaceMfaRecoveryCodesAsync(Guid userId, IEnumerable<MfaRecoveryCode> newCodes, CancellationToken ct = default)
+        {
+            var existing = await _db.MfaRecoveryCodes.Where(c => c.UserId == userId).ToListAsync(ct);
+            _db.MfaRecoveryCodes.RemoveRange(existing);
+            await _db.MfaRecoveryCodes.AddRangeAsync(newCodes, ct);
         }
 
         public async Task SaveChangesAsync(CancellationToken ct = default) =>

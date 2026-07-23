@@ -9,5 +9,6 @@ namespace EMS.Application.Features.Auth
         public string Email { get; set; } = null!;
         public string? Role { get; set; }
         public bool IsActive { get; set; }
+        public bool IsMfaEnabled { get; set; }
     }
 }

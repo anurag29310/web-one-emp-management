@@ -23,6 +23,11 @@ namespace EMS.API.Controllers
         private readonly ResetPasswordCommandHandler _resetPasswordHandler;
         private readonly ChangePasswordCommandHandler _changePasswordHandler;
         private readonly GetCurrentUserQueryHandler _getCurrentUserHandler;
+        private readonly MfaSetupCommandHandler _mfaSetupHandler;
+        private readonly EnableMfaCommandHandler _enableMfaHandler;
+        private readonly DisableMfaCommandHandler _disableMfaHandler;
+        private readonly RegenerateMfaRecoveryCodesCommandHandler _regenerateMfaRecoveryCodesHandler;
+        private readonly VerifyMfaCommandHandler _verifyMfaHandler;
 
         public AuthController(
             LoginCommandHandler loginHandler,
@@ -33,7 +38,12 @@ namespace EMS.API.Controllers
             ForgotPasswordCommandHandler forgotPasswordHandler,
             ResetPasswordCommandHandler resetPasswordHandler,
             ChangePasswordCommandHandler changePasswordHandler,
-            GetCurrentUserQueryHandler getCurrentUserHandler)
+            GetCurrentUserQueryHandler getCurrentUserHandler,
+            MfaSetupCommandHandler mfaSetupHandler,
+            EnableMfaCommandHandler enableMfaHandler,
+            DisableMfaCommandHandler disableMfaHandler,
+            RegenerateMfaRecoveryCodesCommandHandler regenerateMfaRecoveryCodesHandler,
+            VerifyMfaCommandHandler verifyMfaHandler)
         {
             _loginHandler = loginHandler;
             _registerHandler = registerHandler;
@@ -44,6 +54,11 @@ namespace EMS.API.Controllers
             _resetPasswordHandler = resetPasswordHandler;
             _changePasswordHandler = changePasswordHandler;
             _getCurrentUserHandler = getCurrentUserHandler;
+            _mfaSetupHandler = mfaSetupHandler;
+            _enableMfaHandler = enableMfaHandler;
+            _disableMfaHandler = disableMfaHandler;
+            _regenerateMfaRecoveryCodesHandler = regenerateMfaRecoveryCodesHandler;
+            _verifyMfaHandler = verifyMfaHandler;
         }
 
         /// <summary>Authenticate with username/email and password.</summary>
@@ -56,6 +71,19 @@ namespace EMS.API.Controllers
         public async Task<IActionResult> Login([FromBody] LoginCommand cmd, CancellationToken ct)
         {
             var result = await _loginHandler.Handle(cmd, ct);
+            return Ok(ApiResponse<LoginResult>.Success(result));
+        }
+
+        /// <summary>Complete login for an account with MFA enabled, using the mfaChallengeId from POST /auth/login.</summary>
+        [AllowAnonymous]
+        [EnableRateLimiting("MfaVerifyPolicy")]
+        [HttpPost("mfa/verify")]
+        [ProducesResponseType(typeof(ApiResponse<LoginResult>), 200)]
+        [ProducesResponseType(typeof(ApiErrorResponse), 401)]
+        [ProducesResponseType(typeof(ApiErrorResponse), 429)]
+        public async Task<IActionResult> VerifyMfa([FromBody] VerifyMfaCommand cmd, CancellationToken ct)
+        {
+            var result = await _verifyMfaHandler.Handle(cmd, ct);
             return Ok(ApiResponse<LoginResult>.Success(result));
         }
 
@@ -136,6 +164,55 @@ namespace EMS.API.Controllers
             cmd.UserId = GetCurrentUserId();
             await _changePasswordHandler.Handle(cmd, ct);
             return NoContent();
+        }
+
+        /// <summary>Start MFA enrollment: generates a new TOTP secret and returns it as a manual-entry key and an otpauth:// URI for a client-rendered QR code. MFA is not enabled until a code is confirmed via POST /auth/mfa/enable.</summary>
+        [Authorize]
+        [HttpPost("mfa/setup")]
+        [ProducesResponseType(typeof(ApiResponse<MfaSetupResult>), 200)]
+        [ProducesResponseType(typeof(ApiErrorResponse), 409)]
+        public async Task<IActionResult> SetupMfa(CancellationToken ct)
+        {
+            var result = await _mfaSetupHandler.Handle(new MfaSetupCommand { UserId = GetCurrentUserId() }, ct);
+            return Ok(ApiResponse<MfaSetupResult>.Success(result));
+        }
+
+        /// <summary>Confirm MFA enrollment with a code from the authenticator app. Turns MFA on and returns 10 one-time recovery codes — shown only in this response, never retrievable again.</summary>
+        [Authorize]
+        [HttpPost("mfa/enable")]
+        [ProducesResponseType(typeof(ApiResponse<EnableMfaResult>), 200)]
+        [ProducesResponseType(typeof(ApiErrorResponse), 401)]
+        [ProducesResponseType(typeof(ApiErrorResponse), 409)]
+        public async Task<IActionResult> EnableMfa([FromBody] EnableMfaCommand cmd, CancellationToken ct)
+        {
+            cmd.UserId = GetCurrentUserId();
+            var result = await _enableMfaHandler.Handle(cmd, ct);
+            return Ok(ApiResponse<EnableMfaResult>.Success(result, "MFA enabled. Store these recovery codes securely — they will not be shown again."));
+        }
+
+        /// <summary>Disable MFA for the current account. Requires the account password as confirmation.</summary>
+        [Authorize]
+        [HttpPost("mfa/disable")]
+        [ProducesResponseType(204)]
+        [ProducesResponseType(typeof(ApiErrorResponse), 401)]
+        public async Task<IActionResult> DisableMfa([FromBody] DisableMfaCommand cmd, CancellationToken ct)
+        {
+            cmd.UserId = GetCurrentUserId();
+            await _disableMfaHandler.Handle(cmd, ct);
+            return NoContent();
+        }
+
+        /// <summary>Invalidate all existing recovery codes and issue 10 new ones. Requires the account password as confirmation.</summary>
+        [Authorize]
+        [HttpPost("mfa/recovery-codes/regenerate")]
+        [ProducesResponseType(typeof(ApiResponse<RegenerateMfaRecoveryCodesResult>), 200)]
+        [ProducesResponseType(typeof(ApiErrorResponse), 401)]
+        [ProducesResponseType(typeof(ApiErrorResponse), 409)]
+        public async Task<IActionResult> RegenerateMfaRecoveryCodes([FromBody] RegenerateMfaRecoveryCodesCommand cmd, CancellationToken ct)
+        {
+            cmd.UserId = GetCurrentUserId();
+            var result = await _regenerateMfaRecoveryCodesHandler.Handle(cmd, ct);
+            return Ok(ApiResponse<RegenerateMfaRecoveryCodesResult>.Success(result, "New recovery codes issued. Store them securely — they will not be shown again."));
         }
 
         /// <summary>Get the profile of the currently authenticated user.</summary>

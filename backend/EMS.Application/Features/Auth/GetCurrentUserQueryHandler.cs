@@ -23,7 +23,8 @@ namespace EMS.Application.Features.Auth
                 UserName = user.UserName,
                 Email = user.Email,
                 Role = user.Role?.Name,
-                IsActive = user.IsActive
+                IsActive = user.IsActive,
+                IsMfaEnabled = user.IsMfaEnabled
             };
         }
     }

@@ -20,6 +20,11 @@ namespace EMS.Application.Features.Auth
             _refreshService = refreshService;
         }
 
+        // How long a login can sit pending on its second factor before the client has to
+        // restart from POST /auth/login. Kept short since a challenge is only useful to whoever
+        // just proved they hold the password.
+        private static readonly TimeSpan MfaChallengeLifetime = TimeSpan.FromMinutes(5);
+
         public async Task<LoginResult> Handle(LoginCommand cmd, CancellationToken ct = default)
         {
             var user = await _repo.GetByUsernameOrEmailAsync(cmd.UserNameOrEmail, ct);
@@ -28,6 +33,27 @@ namespace EMS.Application.Features.Auth
 
             if (!user.IsActive)
                 throw new UnauthorizedAccessException("Account is disabled.");
+
+            if (user.IsMfaEnabled)
+            {
+                var challenge = new MfaChallenge
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = user.Id,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    ExpiresAtUtc = DateTime.UtcNow.Add(MfaChallengeLifetime),
+                    IsConsumed = false
+                };
+
+                await _repo.AddMfaChallengeAsync(challenge, ct);
+                await _repo.SaveChangesAsync(ct);
+
+                return new LoginResult
+                {
+                    RequiresMfa = true,
+                    MfaChallengeId = challenge.Id
+                };
+            }
 
             var access = _jwtService.GenerateAccessToken(user);
             var refresh = _refreshService.CreateRefreshToken(user.Id);

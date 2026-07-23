@@ -52,12 +52,19 @@ Identity and security tables may use a smaller audit set where appropriate, but 
 > instead uses the pre-existing single-role-per-user model (`User.RoleId`, a nullable FK,
 > no `UserRoles` join table), with a reduced audit set (`IsDeleted`, `CreatedAtUtc`,
 > `UpdatedAtUtc` only — no `CreatedBy`/`UpdatedBy`/`DeletedBy`/`RowVersion`) and no
-> `IsMfaEnabled`/`LastLoginAtUtc` columns. This was a deliberate scope decision to ship a
+> `LastLoginAtUtc` column. This was a deliberate scope decision to ship a
 > minimal admin API without rewriting the login/JWT/current-user code paths, which assume a
 > single role today. Migrating to the full design below — the many-to-many `UserRoles` table,
-> full audit columns, MFA/last-login tracking — remains open follow-up work and would require
+> full audit columns, last-login tracking — remains open follow-up work and would require
 > updating `AuthRepository`, `JwtTokenService`, and `GetCurrentUserQueryHandler` alongside the
 > schema change.
+>
+> **Implementation note (MFA):** `IsMfaEnabled` below is implemented as-is. Two columns beyond
+> what's listed also exist on the real `Users` table: `MfaSecretProtected` (`nvarchar(max)`,
+> nullable) — the TOTP secret, encrypted at rest via ASP.NET Core Data Protection, never stored
+> or transmitted in plaintext after enrollment — and `MfaEnabledAtUtc` (`datetime2`, nullable).
+> They're omitted from the table below because they're an implementation detail of how
+> `IsMfaEnabled` is realized, not part of the target ERD shape.
 
 ### 4.1 Users
 
@@ -132,6 +139,38 @@ Stores password reset requests.
 | `UsedAtUtc` | `datetime2` | Nullable |
 | `CreatedAtUtc` | `datetime2` | Required |
 | `IpAddress` | `nvarchar(64)` | Nullable |
+
+### 4.6 MfaChallenges
+
+Short-lived server-side record backing the `mfaChallengeId` a client receives from `POST
+/auth/login` when `requiresMfa: true`. Exists so the pending-second-factor state survives past a
+single request/process (unlike an in-memory cache) and works correctly behind a load balancer.
+Rows are cheap to accumulate since each is single-use and short-lived; a periodic cleanup of
+expired rows is a reasonable operational follow-up but not required for correctness.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uniqueidentifier` | Primary key; this is the `mfaChallengeId` |
+| `UserId` | `uniqueidentifier` | FK to `Users` |
+| `CreatedAtUtc` | `datetime2` | Required |
+| `ExpiresAtUtc` | `datetime2` | Required — 5 minutes from creation |
+| `IsConsumed` | `bit` | Required — set once a code has been successfully verified against this challenge |
+
+### 4.7 MfaRecoveryCodes
+
+One-time backup codes issued when a user enables MFA (10 per enrollment), so losing the
+authenticator device doesn't permanently lock the account out. Each code is shown to the user
+exactly once at generation time and stored only as a hash — same treatment as `PasswordHash` on
+`Users`, not reversible. Regenerating (`POST /auth/mfa/recovery-codes/regenerate`) invalidates
+every prior code for the user, used or not, and issues 10 fresh ones.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uniqueidentifier` | Primary key |
+| `UserId` | `uniqueidentifier` | FK to `Users` |
+| `CodeHash` | `nvarchar(max)` | Required — same PBKDF2 hashing as `Users.PasswordHash` |
+| `CreatedAtUtc` | `datetime2` | Required |
+| `UsedAtUtc` | `datetime2` | Nullable — set on first (and only) successful use |
 
 ## 5. Employee And Organization Tables
 

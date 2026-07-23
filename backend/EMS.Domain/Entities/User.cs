@@ -17,5 +17,11 @@ namespace EMS.Domain.Entities
         public DateTime CreatedAtUtc { get; set; }
         public DateTime? UpdatedAtUtc { get; set; }
         public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+
+        public bool IsMfaEnabled { get; set; }
+        // TOTP secret, encrypted at rest (ASP.NET Core Data Protection) — never stored or
+        // transmitted in plaintext once enrollment completes.
+        public string? MfaSecretProtected { get; set; }
+        public DateTime? MfaEnabledAtUtc { get; set; }
     }
 }

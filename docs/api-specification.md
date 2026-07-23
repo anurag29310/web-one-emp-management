@@ -188,6 +188,11 @@ POST /auth/mfa/verify
 
 Access: Public
 
+Completes a login that returned `requiresMfa: true`. `code` accepts either a 6-digit TOTP code
+from the authenticator app, or one of the account's recovery codes (`XXXXX-XXXXX` format) as a
+fallback — either satisfies the request. A recovery code is consumed (single-use) the moment it's
+accepted.
+
 Request:
 
 ```json
@@ -197,7 +202,29 @@ Request:
 }
 ```
 
-Response: same token response as login.
+Response `200 OK`:
+
+```json
+{
+  "data": {
+    "accessToken": "jwt",
+    "refreshToken": "refresh-token",
+    "expiresInSeconds": 900
+  }
+}
+```
+
+The challenge expires 5 minutes after `POST /auth/login` issued it, and is single-use — a second
+`POST /auth/mfa/verify` against the same `mfaChallengeId` (successful or not) returns `401`. An
+unknown, expired, already-consumed challenge ID, or a wrong code all return the same generic `401`
+(`"Invalid or expired verification code."`) — the response never reveals which of those it was, the
+same way `POST /auth/login` never reveals whether the username or the password was wrong.
+
+Rate limited per client IP (default: 10 requests / 60 seconds, configurable via
+`RateLimiting:MfaVerify`), independently of the [Login](#31-login)/[Register](#310-register)
+budgets — a 6-digit TOTP code is only 1,000,000 possibilities, so this endpoint needs a tighter
+budget than password-based endpoints to resist brute-forcing a single challenge within its
+validity window.
 
 ### 3.3 Refresh Token
 
@@ -312,7 +339,8 @@ GET /auth/me
 
 Access: Authenticated
 
-Returns the current authenticated user's account, employee link, roles, and permissions.
+Returns the current authenticated user's account, employee link, roles, and permissions,
+including `isMfaEnabled`.
 
 ### 3.10 Register
 
@@ -345,6 +373,117 @@ input — an existing Admin must assign one afterward via `PUT /users/{id}`.
 Rate limited per client IP (default: 5 requests / 60 seconds, configurable via `RateLimiting:Register`
 in app configuration), independently of the [Login](#31-login) endpoint's budget. Exceeding the limit
 returns `429 Too Many Requests` with a `Retry-After` header, same error body shape as login.
+
+### 3.11 MFA Setup
+
+```text
+POST /auth/mfa/setup
+```
+
+Access: Authenticated
+
+Starts enrollment: generates a new TOTP secret for the caller and returns it as a manual-entry
+key plus an `otpauth://` provisioning URI. The frontend renders that URI as a QR code
+client-side (e.g. with a JS QR library) for scanning into an authenticator app — no QR image is
+generated server-side. MFA is **not** enabled by this call; it only takes effect once a code is
+confirmed via [3.12](#312-enable-mfa). Calling this again before confirming replaces the pending
+secret. Returns `409 Conflict` if MFA is already enabled.
+
+Response `200 OK`:
+
+```json
+{
+  "data": {
+    "manualEntryKey": "JBSWY3DPEHPK3PXP",
+    "otpAuthUri": "otpauth://totp/EMS:hr@example.com?secret=JBSWY3DPEHPK3PXP&issuer=EMS&algorithm=SHA1&digits=6&period=30"
+  }
+}
+```
+
+### 3.12 Enable MFA
+
+```text
+POST /auth/mfa/enable
+```
+
+Access: Authenticated
+
+Confirms enrollment with a code from the authenticator app. On success, turns MFA on and returns
+10 one-time recovery codes — **shown only in this response, never retrievable again**. Returns
+`401` for a wrong code, `409` if MFA is already enabled or [3.11](#311-mfa-setup) hasn't been
+called yet.
+
+Request:
+
+```json
+{
+  "code": "123456"
+}
+```
+
+Response `200 OK`:
+
+```json
+{
+  "data": {
+    "recoveryCodes": ["K7M9X-4RT2W", "..."]
+  },
+  "message": "MFA enabled. Store these recovery codes securely — they will not be shown again."
+}
+```
+
+### 3.13 Disable MFA
+
+```text
+POST /auth/mfa/disable
+```
+
+Access: Authenticated
+
+Turns MFA off and permanently invalidates all recovery codes. Requires the account password as
+confirmation — an authenticated session alone (e.g. a stolen or left-open access token) is not
+enough to disable MFA. Returns `401` for an incorrect password.
+
+Request:
+
+```json
+{
+  "password": "Password@123"
+}
+```
+
+Response: `204 No Content`
+
+### 3.14 Regenerate MFA Recovery Codes
+
+```text
+POST /auth/mfa/recovery-codes/regenerate
+```
+
+Access: Authenticated
+
+Invalidates every existing recovery code (used or not) and issues 10 new ones. Requires the
+account password as confirmation, same as [3.13](#313-disable-mfa). Returns `401` for an
+incorrect password, `409` if MFA is not enabled.
+
+Request:
+
+```json
+{
+  "password": "Password@123"
+}
+```
+
+Response `200 OK`:
+
+```json
+{
+  "data": {
+    "recoveryCodes": ["Q4XN8-7WKPT", "..."]
+  },
+  "message": "New recovery codes issued. Store them securely — they will not be shown again."
+}
+```
 
 ## 4. User And Role Administration APIs
 

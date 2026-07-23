@@ -284,12 +284,26 @@ Recommended roles:
 
 ### 4.6 MFA Support
 
-MFA can be implemented after the base login flow by adding a pending authentication state:
+**Implemented.** TOTP (RFC 6238, the standard "authenticator app" 6-digit code — Google
+Authenticator, Authy, etc.), added as a pending authentication state on top of the base login
+flow:
 
-1. User credentials are validated.
-2. API returns an MFA challenge instead of tokens.
-3. User submits the MFA code.
-4. API issues JWT and refresh token after successful MFA verification.
+1. User credentials are validated (`POST /auth/login`).
+2. If `User.IsMfaEnabled`, the API persists a short-lived, single-use `MfaChallenge` row (5 minute
+   expiry) and returns `requiresMfa: true` + `mfaChallengeId` instead of tokens. The challenge is
+   DB-backed rather than an in-memory cache so it survives process restarts and works correctly
+   behind a load balancer.
+3. User submits the code to `POST /auth/mfa/verify` along with the `mfaChallengeId`.
+4. The API validates the code against the account's TOTP secret — or, as a fallback, against one
+   of 10 hashed one-time recovery codes issued at enrollment — and issues the JWT and refresh
+   token on success. The endpoint has its own IP-based rate limit
+   (`RateLimiting:MfaVerify`, stricter than login's) since a 6-digit code is brute-forceable within
+   its validity window without one.
+
+Enrollment (`POST /auth/mfa/setup` → `POST /auth/mfa/enable`), disable, and recovery-code
+regeneration are documented in [api-specification.md §3.11–3.14](api-specification.md#311-mfa-setup).
+The TOTP secret is encrypted at rest via ASP.NET Core Data Protection (`IMfaSecretProtector`) —
+never stored or logged in plaintext after enrollment completes.
 
 ## 5. Database Strategy
 
@@ -604,7 +618,7 @@ Security requirements:
 
 - JWT authentication.
 - Refresh token rotation.
-- MFA-ready authentication flow.
+- MFA (TOTP) — implemented, see [§4.6](#46-mfa-support).
 - Role-based authorization.
 - Policy-based authorization for ownership and manager approval scenarios.
 - Audit logs for sensitive business operations.
