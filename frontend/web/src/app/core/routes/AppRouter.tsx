@@ -32,22 +32,6 @@ const DepartmentDetailPage = lazy(() =>
 const LeaveListPage = lazy(() =>
   import('@/app/features/leave/pages/LeaveListPage').then((m) => ({ default: m.LeaveListPage })),
 )
-const MyPayslipsPage = lazy(() =>
-  import('@/app/features/payroll/pages/MyPayslipsPage').then((m) => ({ default: m.MyPayslipsPage })),
-)
-const SalaryStructuresPage = lazy(() =>
-  import('@/app/features/payroll/pages/SalaryStructuresPage').then((m) => ({
-    default: m.SalaryStructuresPage,
-  })),
-)
-const PayrollRunsPage = lazy(() =>
-  import('@/app/features/payroll/pages/PayrollRunsPage').then((m) => ({ default: m.PayrollRunsPage })),
-)
-const PayrollRunDetailPage = lazy(() =>
-  import('@/app/features/payroll/pages/PayrollRunDetailPage').then((m) => ({
-    default: m.PayrollRunDetailPage})),
-)
-
 const LeaveRequestDetailPage = lazy(() =>
   import('@/app/features/leave/pages/LeaveRequestDetailPage').then((m) => ({
     default: m.LeaveRequestDetailPage,
@@ -73,6 +57,45 @@ const HolidayListPage = lazy(() =>
     default: m.HolidayListPage,
   })),
 )
+const MyPayslipsPage = lazy(() =>
+  import('@/app/features/payroll/pages/MyPayslipsPage').then((m) => ({ default: m.MyPayslipsPage })),
+)
+const SalaryStructuresPage = lazy(() =>
+  import('@/app/features/payroll/pages/SalaryStructuresPage').then((m) => ({
+    default: m.SalaryStructuresPage,
+  })),
+)
+const PayrollRunsPage = lazy(() =>
+  import('@/app/features/payroll/pages/PayrollRunsPage').then((m) => ({ default: m.PayrollRunsPage })),
+)
+const PayrollRunDetailPage = lazy(() =>
+  import('@/app/features/payroll/pages/PayrollRunDetailPage').then((m) => ({
+    default: m.PayrollRunDetailPage,
+  })),
+)
+const MyAttendancePage = lazy(() =>
+  import('@/app/features/attendance/pages/MyAttendancePage').then((m) => ({
+    default: m.MyAttendancePage,
+  })),
+)
+const AttendanceRecordsPage = lazy(() =>
+  import('@/app/features/attendance/pages/AttendanceRecordsPage').then((m) => ({
+    default: m.AttendanceRecordsPage,
+  })),
+)
+const AttendanceCorrectionsPage = lazy(() =>
+  import('@/app/features/attendance/pages/AttendanceCorrectionsPage').then((m) => ({
+    default: m.AttendanceCorrectionsPage,
+  })),
+)
+const ShiftListPage = lazy(() =>
+  import('@/app/features/shifts/pages/ShiftListPage').then((m) => ({ default: m.ShiftListPage })),
+)
+const ShiftAssignmentsPage = lazy(() =>
+  import('@/app/features/shifts/pages/ShiftAssignmentsPage').then((m) => ({
+    default: m.ShiftAssignmentsPage,
+  })),
+)
 
 function PageFallback() {
   return <div className="min-h-screen bg-canvas p-6 text-sm text-ink-subtle">Loading…</div>
@@ -93,15 +116,20 @@ export function AppRouter() {
               <Route path="/departments" element={<DepartmentListPage />} />
               <Route path="/departments/:id" element={<DepartmentDetailPage />} />
               <Route path="/leave" element={<LeaveListPage />} />
-              <Route path="/payslips" element={<MyPayslipsPage />} />
-              <Route path="/payroll/salary-structures" element={<SalaryStructuresPage />} />
-              <Route path="/payroll/runs" element={<PayrollRunsPage />} />
-              <Route path="/payroll/runs/:id" element={<PayrollRunDetailPage />} />
               <Route path="/leave/approvals" element={<LeaveApprovalQueuePage />} />
               <Route path="/leave/balances" element={<LeaveBalancesPage />} />
               <Route path="/leave/:id" element={<LeaveRequestDetailPage />} />
               <Route path="/leave-types" element={<LeaveTypeListPage />} />
               <Route path="/holidays" element={<HolidayListPage />} />
+              <Route path="/payslips" element={<MyPayslipsPage />} />
+              <Route path="/payroll/salary-structures" element={<SalaryStructuresPage />} />
+              <Route path="/payroll/runs" element={<PayrollRunsPage />} />
+              <Route path="/payroll/runs/:id" element={<PayrollRunDetailPage />} />
+              <Route path="/attendance" element={<MyAttendancePage />} />
+              <Route path="/attendance/records" element={<AttendanceRecordsPage />} />
+              <Route path="/attendance/corrections" element={<AttendanceCorrectionsPage />} />
+              <Route path="/shifts" element={<ShiftListPage />} />
+              <Route path="/shifts/assignments" element={<ShiftAssignmentsPage />} />
             </Route>
           </Route>
 

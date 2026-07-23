@@ -50,6 +50,29 @@ const navItems: { to: string; label: string; icon: ReactNode; roles?: Role[] }[]
     ),
   },
   {
+    to: '/attendance',
+    label: 'Attendance',
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 6v6l4 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+      />
+    ),
+  },
+  {
+    to: '/shifts',
+    label: 'Shifts',
+    roles: ['Admin', 'HR'],
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4.5 3.75h15A.75.75 0 0 1 20.25 4.5v3.75a.75.75 0 0 1-.75.75h-15a.75.75 0 0 1-.75-.75V4.5a.75.75 0 0 1 .75-.75Zm0 8.25h9a.75.75 0 0 1 .75.75v6.75a.75.75 0 0 1-.75.75h-9a.75.75 0 0 1-.75-.75v-6.75a.75.75 0 0 1 .75-.75Zm12.75 1.5v6"
+      />
+    ),
+  },
+  {
     to: '/leave-types',
     label: 'Leave Types',
     roles: ['Admin', 'HR'],
