@@ -115,6 +115,16 @@ const ShiftAssignmentsPage = lazy(() =>
     default: m.ShiftAssignmentsPage,
   })),
 )
+const AnnouncementListPage = lazy(() =>
+  import('@/app/features/announcements/pages/AnnouncementListPage').then((m) => ({
+    default: m.AnnouncementListPage,
+  })),
+)
+const NotificationsPage = lazy(() =>
+  import('@/app/features/notifications/pages/NotificationsPage').then((m) => ({
+    default: m.NotificationsPage,
+  })),
+)
 
 function PageFallback() {
   return <div className="min-h-screen bg-canvas p-6 text-sm text-ink-subtle">Loading…</div>
@@ -153,6 +163,8 @@ export function AppRouter() {
               <Route path="/attendance/corrections" element={<AttendanceCorrectionsPage />} />
               <Route path="/shifts" element={<ShiftListPage />} />
               <Route path="/shifts/assignments" element={<ShiftAssignmentsPage />} />
+              <Route path="/announcements" element={<AnnouncementListPage />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>
           </Route>
