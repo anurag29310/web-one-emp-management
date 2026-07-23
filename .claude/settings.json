@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.questpdf.com)",
+      "WebFetch(domain:www.nuget.org)",
+      "WebFetch(domain:docs.pdfsharp.net)",
+      "WebSearch",
+      "Bash(mkdir -p Pdf/Fonts)",
+      "Bash(curl -sL -o Pdf/Fonts/OpenSans-Regular.ttf \"https://raw.githubusercontent.com/google/fonts/main/apache/opensans/static/OpenSans-Regular.ttf\")",
+      "Bash(curl -sL -o Pdf/Fonts/OpenSans-Bold.ttf \"https://raw.githubusercontent.com/google/fonts/main/apache/opensans/static/OpenSans-Bold.ttf\")",
+      "Bash(curl -sL -o Pdf/Fonts/OFL.txt \"https://raw.githubusercontent.com/google/fonts/main/apache/opensans/LICENSE.txt\")",
+      "Bash(file Pdf/Fonts/*.ttf)",
+      "Bash(curl -sL \"https://api.github.com/repos/google/fonts/contents/apache/opensans\")",
+      "Bash(curl -sL \"https://api.github.com/repos/google/fonts/contents\")",
+      "Bash(curl -sL \"https://api.github.com/search/code?q=OpenSans-Regular.ttf+repo:google/fonts\")",
+      "Bash(curl -sL \"https://api.github.com/repos/google/fonts/contents/apache\")",
+      "Bash(curl -sL \"https://api.github.com/repos/google/fonts/contents/ofl\")",
+      "Bash(curl -sL \"https://api.github.com/repos/google/fonts/contents/ofl/opensans\")",
+      "Bash(xxd Pdf/Fonts/PTSans-Regular.ttf)",
+      "Bash(xxd Pdf/Fonts/PTSans-Bold.ttf)",
+      "Bash(dotnet remove *)"
+    ]
+  }
+}

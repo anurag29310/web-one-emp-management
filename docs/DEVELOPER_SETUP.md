@@ -21,7 +21,17 @@ Backend - local run
 docker compose up -d db
 ```
 
-3. Run migrations and start the API:
+3. Set a JWT signing key. The API fails fast at startup if `Jwt:Key` is missing or shorter than
+   32 bytes (256 bits) — there is no built-in default. When running via `docker compose`, this
+   comes from `JWT__KEY` in `.env` (see `.env.example`). When running the API directly with
+   `dotnet run`, set it as a user secret instead of putting it in `appsettings.json`:
+
+```powershell
+dotnet user-secrets init --project backend/EMS.API
+dotnet user-secrets set "Jwt:Key" "<a random string of at least 32 bytes>" --project backend/EMS.API
+```
+
+4. Run migrations and start the API:
 
 ```powershell
 dotnet restore

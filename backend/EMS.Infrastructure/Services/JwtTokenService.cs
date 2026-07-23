@@ -15,12 +15,13 @@ namespace EMS.Infrastructure.Services
 
         public JwtTokenService(IConfiguration config)
         {
+            JwtKeyValidator.EnsureValid(config["Jwt:Key"]);
             _config = config;
         }
 
         public string GenerateAccessToken(User user)
         {
-            var key = _config["Jwt:Key"] ?? "dev-secret-key-please-change";
+            var key = _config["Jwt:Key"]!;
             var issuer = _config["Jwt:Issuer"] ?? "ems";
             var expires = DateTime.UtcNow.AddMinutes(15);
 

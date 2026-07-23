@@ -26,7 +26,7 @@ docker compose -f docker-compose.prod.yml up -d
 6) Production recommendations
 - Use blob storage (S3/Azure Blob) instead of local file storage for document/payslip assets.
 - Use a reliable email provider (SendGrid, SES) instead of local outbox.
-- Use a robust PDF library (QuestPDF, wkhtmltopdf) for payslip generation.
+- PDF generation (payslips, dashboard summary) already uses PDFsharp (`EMS.Infrastructure/Pdf/PdfSharpDocumentService.cs`), MIT licensed with no revenue/company-size restrictions — no license review needed before scaling. It renders with an embedded PT Sans font (`EMS.Infrastructure/Pdf/Fonts/`, SIL OFL 1.1) since PDFsharp 6.x has no OS font access on any platform, including in the Linux Docker image.
 - Store `Jwt:Key` and DB credentials in a secrets manager.
 - Hash and rotate refresh tokens; do not store plaintext tokens.
 - Configure monitoring, logging and healthchecks; set resource limits.

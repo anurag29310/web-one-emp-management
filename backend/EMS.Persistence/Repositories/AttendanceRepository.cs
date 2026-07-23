@@ -70,6 +70,9 @@ namespace EMS.Persistence.Repositories
         public async Task<int> CountRecordsAsync(AttendanceRecordFilter filter, CancellationToken ct = default) =>
             await BuildRecordFilter(filter).CountAsync(ct);
 
+        public async Task<IEnumerable<AttendanceRecord>> GetAllRecordsAsync(AttendanceRecordFilter filter, CancellationToken ct = default) =>
+            await BuildRecordFilter(filter).OrderByDescending(a => a.AttendanceDate).ToListAsync(ct);
+
         public async Task AddRecordAsync(AttendanceRecord record, CancellationToken ct = default) =>
             await _db.AttendanceRecords.AddAsync(record, ct);
 

@@ -33,7 +33,7 @@ namespace EMS.Tests
             var repo = new AuthRepository(db);
 
             var inMemorySettings = new Dictionary<string, string> {
-                { "Jwt:Key", "test-key-which-is-long-enough" },
+                { "Jwt:Key", "this-test-signing-key-is-at-least-32-bytes-long!" },
                 { "Jwt:Issuer", "ems-test" }
             };
             IConfiguration config = new ConfigurationBuilder().AddInMemoryCollection(inMemorySettings).Build();
@@ -56,8 +56,8 @@ namespace EMS.Tests
             var roleRepo = new RoleRepository(db);
             var passwordService = new PasswordHashService();
 
-            // A key long enough for HS256 so these tests exercise the real signing path independent
-            // of the unrelated short-test-key issue affecting Login_Returns_Tokens.
+            // JwtTokenService now requires a key of at least 32 bytes (JwtKeyValidator) — anything
+            // shorter throws at construction.
             var inMemorySettings = new Dictionary<string, string> {
                 { "Jwt:Key", "this-test-signing-key-is-at-least-32-bytes-long!" },
                 { "Jwt:Issuer", "ems-test" }

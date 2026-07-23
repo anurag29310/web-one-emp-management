@@ -377,16 +377,72 @@ Stores immutable audit events for security-sensitive and HR-sensitive operations
 
 Audit logs should be append-only. They should not use normal soft delete.
 
-## 9. Relationships
+## 9. Notifications And Announcement Tables
 
-### 9.1 Identity Relationships
+### 9.1 Notifications
+
+Stores personal, per-user in-app/email notifications (e.g. leave decisions, attendance alerts). Already implemented in code; documented here to close a gap between the shipped schema and this design doc.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uniqueidentifier` | Primary key |
+| `UserId` | `uniqueidentifier` | Nullable FK to `Users`; recipient |
+| `Title` | `nvarchar(250)` | Required |
+| `Message` | `nvarchar(2000)` | Required |
+| `Channel` | `nvarchar(50)` | `InApp` or `Email` |
+| `IsRead` | `bit` | Required |
+| `CreatedAtUtc` | `datetime2` | Required |
+| `ReadAtUtc` | `datetime2` | Nullable |
+| `ExpiresAtUtc` | `datetime2` | Nullable |
+| `IsDeleted` | `bit` | Required |
+| `DeletedAtUtc` | `datetime2` | Nullable |
+
+> **Implementation note:** this table predates this section and uses a reduced audit set (`IsDeleted`/`CreatedAtUtc`/`DeletedAtUtc` only — no `CreatedBy`/`UpdatedAtUtc`/`UpdatedBy`/`RowVersion`), consistent with §3's allowance for a smaller audit set where appropriate. It does not follow the full Shared Audit Fields table.
+
+### 9.2 Announcements
+
+Stores company-wide broadcast announcements created by Admin/HR, distinct from personal `Notifications`. Default audience is the whole company; an announcement can optionally be scoped to one department or one role.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uniqueidentifier` | Primary key |
+| `Title` | `nvarchar(250)` | Required |
+| `Message` | `nvarchar(2000)` | Required |
+| `Priority` | `nvarchar(50)` | `Normal`, `Important`, `Critical` |
+| `AudienceType` | `nvarchar(50)` | `All`, `Department`, `Role` |
+| `DepartmentId` | `uniqueidentifier` | Nullable FK to `Departments`; set when `AudienceType = Department` |
+| `TargetRole` | `nvarchar(50)` | Nullable; set when `AudienceType = Role` (matches `Roles.Name`) |
+| `CreatedByUserId` | `uniqueidentifier` | FK to `Users`; author |
+| `CreatedAtUtc` | `datetime2` | Required |
+| `ExpiresAtUtc` | `datetime2` | Nullable |
+| `IsDeleted` | `bit` | Required; retracting an announcement soft-deletes it |
+| `DeletedAtUtc` | `datetime2` | Nullable |
+
+> **Implementation note:** follows the same reduced audit set as `Notifications` (`IsDeleted`/`CreatedAtUtc`/`DeletedAtUtc` only), for consistency with the sibling table it was built alongside, rather than the full Shared Audit Fields table.
+
+### 9.3 AnnouncementReads
+
+Per-user read receipts for `Announcements`, since a single announcement row is shared across every recipient (unlike `Notifications`, where `IsRead` lives directly on the per-user row).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uniqueidentifier` | Primary key |
+| `AnnouncementId` | `uniqueidentifier` | FK to `Announcements` |
+| `UserId` | `uniqueidentifier` | FK to `Users` |
+| `ReadAtUtc` | `datetime2` | Required |
+
+Unique constraint: `AnnouncementId`, `UserId`.
+
+## 10. Relationships
+
+### 10.1 Identity Relationships
 
 - `Users` one-to-one optional `Employees`.
 - `Users` many-to-many `Roles` through `UserRoles`.
 - `Users` one-to-many `RefreshTokens`.
 - `Users` one-to-many `PasswordResetTokens`.
 
-### 9.2 Organization Relationships
+### 10.2 Organization Relationships
 
 - `Departments` one-to-many `Teams`.
 - `Departments` one-to-many `Employees`.
@@ -397,7 +453,7 @@ Audit logs should be append-only. They should not use normal soft delete.
 - `Employees` one-to-many `EmployeeDocuments`.
 - `Employees` optional one-to-one profile photo through `ProfilePhotoDocumentId`.
 
-### 9.3 Attendance Relationships
+### 10.3 Attendance Relationships
 
 - `Employees` one-to-many `AttendanceRecords`.
 - `Shifts` one-to-many `AttendanceRecords`.
@@ -406,7 +462,7 @@ Audit logs should be append-only. They should not use normal soft delete.
 - `Employees` one-to-many requested attendance corrections.
 - `Employees` one-to-many approved attendance corrections.
 
-### 9.4 Leave Relationships
+### 10.4 Leave Relationships
 
 - `Employees` one-to-many `LeaveRequests`.
 - `LeaveTypes` one-to-many `LeaveRequests`.
@@ -415,9 +471,17 @@ Audit logs should be append-only. They should not use normal soft delete.
 - `LeaveTypes` one-to-many `LeaveBalances`.
 - `OfficeLocations` one-to-many `Holidays`.
 
-## 10. Index Strategy
+### 10.5 Notification And Announcement Relationships
 
-### 10.1 Identity Indexes
+- `Users` one-to-many `Notifications`.
+- `Departments` optional one-to-many `Announcements` (via `DepartmentId`, when `AudienceType = Department`).
+- `Users` one-to-many `Announcements` authored, through `CreatedByUserId`.
+- `Announcements` one-to-many `AnnouncementReads`.
+- `Users` one-to-many `AnnouncementReads`.
+
+## 11. Index Strategy
+
+### 11.1 Identity Indexes
 
 | Table | Index | Type | Purpose |
 | --- | --- | --- | --- |
@@ -428,7 +492,7 @@ Audit logs should be append-only. They should not use normal soft delete.
 | `RefreshTokens` | `IX_RefreshTokens_TokenHash` | Unique | Token validation |
 | `PasswordResetTokens` | `IX_PasswordResetTokens_UserId_ExpiresAtUtc` | Non-unique | Reset token cleanup |
 
-### 10.2 Employee And Organization Indexes
+### 11.2 Employee And Organization Indexes
 
 | Table | Index | Type | Purpose |
 | --- | --- | --- | --- |
@@ -444,7 +508,7 @@ Audit logs should be append-only. They should not use normal soft delete.
 | `OfficeLocations` | `IX_OfficeLocations_Code` | Unique, filtered by `IsDeleted = 0` | Location lookup |
 | `EmployeeDocuments` | `IX_EmployeeDocuments_EmployeeId_DocumentType` | Non-unique | Document list screens |
 
-### 10.3 Attendance Indexes
+### 11.3 Attendance Indexes
 
 | Table | Index | Type | Purpose |
 | --- | --- | --- | --- |
@@ -454,7 +518,7 @@ Audit logs should be append-only. They should not use normal soft delete.
 | `AttendanceCorrections` | `IX_AttendanceCorrections_Status` | Non-unique | Pending approvals |
 | `EmployeeShifts` | `IX_EmployeeShifts_EmployeeId_EffectiveFrom` | Non-unique | Shift lookup by date |
 
-### 10.4 Leave Indexes
+### 11.4 Leave Indexes
 
 | Table | Index | Type | Purpose |
 | --- | --- | --- | --- |
@@ -465,7 +529,7 @@ Audit logs should be append-only. They should not use normal soft delete.
 | `LeaveRequests` | `IX_LeaveRequests_Status_StartDate` | Non-unique | Leave dashboard |
 | `Holidays` | `IX_Holidays_OfficeLocationId_HolidayDate` | Non-unique | Holiday calendar |
 
-### 10.5 Audit Indexes
+### 11.5 Audit Indexes
 
 | Table | Index | Type | Purpose |
 | --- | --- | --- | --- |
@@ -473,7 +537,18 @@ Audit logs should be append-only. They should not use normal soft delete.
 | `AuditLogs` | `IX_AuditLogs_UserId_CreatedAtUtc` | Non-unique | User activity lookup |
 | `AuditLogs` | `IX_AuditLogs_Action_CreatedAtUtc` | Non-unique | Security reporting |
 
-## 11. Soft Delete Strategy
+### 11.6 Notification And Announcement Indexes
+
+| Table | Index | Type | Purpose |
+| --- | --- | --- | --- |
+| `Notifications` | `IX_Notifications_UserId` | Non-unique | Personal notification list |
+| `Notifications` | `IX_Notifications_CreatedAtUtc` | Non-unique | Recency ordering |
+| `Announcements` | `IX_Announcements_AudienceType_DepartmentId` | Non-unique | Department-scoped visibility filter |
+| `Announcements` | `IX_Announcements_AudienceType_TargetRole` | Non-unique | Role-scoped visibility filter |
+| `Announcements` | `IX_Announcements_CreatedAtUtc` | Non-unique | Recency ordering |
+| `AnnouncementReads` | `IX_AnnouncementReads_AnnouncementId_UserId` | Unique | Read-receipt lookup and idempotency |
+
+## 12. Soft Delete Strategy
 
 Soft delete should be implemented for business data where historical traceability matters.
 
@@ -495,6 +570,8 @@ Soft-deleted tables:
 - `LeaveBalances`
 - `LeaveRequests`
 - `Holidays`
+- `Notifications`
+- `Announcements`
 
 Not normally soft-deleted:
 
@@ -502,6 +579,7 @@ Not normally soft-deleted:
 - `RefreshTokens`: revoke first, then purge after retention.
 - `PasswordResetTokens`: purge after expiry and retention.
 - `AuditLogs`: append-only, no soft delete.
+- `AnnouncementReads`: append-only read receipts — a row is inserted once per `(AnnouncementId, UserId)` and never updated or soft-deleted.
 
 Implementation rules:
 
@@ -511,7 +589,7 @@ Implementation rules:
 - Administrative restore operations should be restricted to authorized roles.
 - Hard delete should be allowed only for expired temporary security records or controlled data retention jobs.
 
-## 12. Delete Behavior
+## 13. Delete Behavior
 
 Recommended foreign key delete behavior:
 
@@ -521,13 +599,13 @@ Recommended foreign key delete behavior:
 - When a department is retired, soft delete or mark inactive only after employees are reassigned.
 - Use explicit application workflows for deletion so audit logs are created consistently.
 
-## 13. Future Module Extension Points
+## 14. Future Module Extension Points
 
 Phase 2 and Phase 3 modules should be added in separate bounded table groups:
 
 - Payroll: `SalaryStructures`, `Allowances`, `Deductions`, `Payslips`, `Bonuses`, `OvertimeRecords`.
 - Tasks: `Tasks`, `TaskAssignments`, `TaskComments`.
-- Announcements: `Announcements`, `Notifications`, `EmailLogs`.
+- Announcements: `Announcements` and `Notifications` are implemented — see §9. `EmailLogs` remains a future extension point.
 - Recruitment: `Candidates`, `Interviews`, `Offers`, `OnboardingChecklists`.
 - Assets: `Assets`, `AssetAssignments`, `AssetReturns`.
 - Performance: `Goals`, `Kpis`, `PerformanceReviews`, `Promotions`.

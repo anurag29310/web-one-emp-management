@@ -20,6 +20,8 @@ namespace EMS.Persistence.Context
         public DbSet<EMS.Domain.Entities.Holiday> Holidays => Set<EMS.Domain.Entities.Holiday>();
         public DbSet<EMS.Domain.Entities.EmployeeDocument> EmployeeDocuments => Set<EMS.Domain.Entities.EmployeeDocument>();
         public DbSet<EMS.Domain.Entities.Notification> Notifications => Set<EMS.Domain.Entities.Notification>();
+        public DbSet<EMS.Domain.Entities.Announcement> Announcements => Set<EMS.Domain.Entities.Announcement>();
+        public DbSet<EMS.Domain.Entities.AnnouncementRead> AnnouncementReads => Set<EMS.Domain.Entities.AnnouncementRead>();
         public DbSet<EMS.Domain.Entities.SalaryStructure> SalaryStructures => Set<EMS.Domain.Entities.SalaryStructure>();
         public DbSet<EMS.Domain.Entities.Allowance> Allowances => Set<EMS.Domain.Entities.Allowance>();
         public DbSet<EMS.Domain.Entities.Deduction> Deductions => Set<EMS.Domain.Entities.Deduction>();
@@ -45,6 +47,8 @@ namespace EMS.Persistence.Context
             modelBuilder.ApplyConfiguration(new Configurations.HolidayConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.EmployeeDocumentConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.NotificationConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.AnnouncementConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.AnnouncementReadConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.SalaryStructureConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.AllowanceConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.DeductionConfiguration());

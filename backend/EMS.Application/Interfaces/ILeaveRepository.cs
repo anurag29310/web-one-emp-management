@@ -11,6 +11,7 @@ namespace EMS.Application.Interfaces
         Task<LeaveRequest?> GetLeaveByIdAsync(Guid id, CancellationToken ct = default);
         Task<IEnumerable<LeaveRequest>> GetLeavesAsync(int page, int pageSize, Guid? employeeId, Guid? leaveTypeId, int? year, string? status, CancellationToken ct = default);
         Task<int> CountLeavesAsync(Guid? employeeId, Guid? leaveTypeId, int? year, string? status, CancellationToken ct = default);
+        Task<IEnumerable<LeaveRequest>> GetAllLeavesAsync(Guid? employeeId, Guid? leaveTypeId, int? year, string? status, CancellationToken ct = default);
         Task AddLeaveRequestAsync(LeaveRequest request, CancellationToken ct = default);
         Task UpdateLeaveRequestAsync(LeaveRequest request, CancellationToken ct = default);
         Task ApproveLeaveAsync(LeaveRequest request, CancellationToken ct = default);

@@ -12,6 +12,8 @@ namespace EMS.Application.Interfaces
         Task<Employee?> GetByIdIncludingDeletedAsync(Guid id, CancellationToken ct = default);
         Task<IEnumerable<Employee>> GetAllAsync(int page, int pageSize, string? search, string? sortBy, string? sortDir, Guid? departmentId, string? status, CancellationToken ct = default);
         Task<int> CountAsync(string? search, Guid? departmentId, string? status, CancellationToken ct = default);
+        Task<IEnumerable<Employee>> GetAllForExportAsync(string? search, string? sortBy, string? sortDir, Guid? departmentId, string? status, CancellationToken ct = default);
+        Task<IEnumerable<Employee>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken ct = default);
         Task<IEnumerable<Employee>> GetByDepartmentAsync(Guid departmentId, int page, int pageSize, CancellationToken ct = default);
         Task<IEnumerable<Employee>> GetDirectReportsAsync(Guid managerId, int page, int pageSize, CancellationToken ct = default);
         Task<IEnumerable<Guid>> GetDirectReportIdsAsync(Guid managerId, CancellationToken ct = default);

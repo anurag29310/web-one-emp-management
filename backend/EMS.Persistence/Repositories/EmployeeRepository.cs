@@ -36,6 +36,20 @@ namespace EMS.Persistence.Repositories
         public async Task<int> CountAsync(string? search, Guid? departmentId, string? status, CancellationToken ct = default) =>
             await BuildFilterQuery(search, departmentId, status).CountAsync(ct);
 
+        public async Task<IEnumerable<Employee>> GetAllForExportAsync(
+            string? search, string? sortBy, string? sortDir, Guid? departmentId, string? status, CancellationToken ct = default)
+        {
+            IQueryable<Employee> q = BuildFilterQuery(search, departmentId, status).Include(e => e.Department);
+            q = ApplySort(q, sortBy, sortDir);
+            return await q.ToListAsync(ct);
+        }
+
+        public async Task<IEnumerable<Employee>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken ct = default)
+        {
+            var idList = ids.ToList();
+            return await _db.Employees.AsNoTracking().Where(e => idList.Contains(e.Id)).ToListAsync(ct);
+        }
+
         public async Task<IEnumerable<Employee>> GetByDepartmentAsync(Guid departmentId, int page, int pageSize, CancellationToken ct = default) =>
             await _db.Employees.AsNoTracking()
                 .Where(e => e.DepartmentId == departmentId && e.IsActive)

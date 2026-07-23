@@ -50,7 +50,7 @@ npm run android    # or ios
 ```
 
 Notes and recommended production hardening
-- Replace local file/email/pdf services with production providers (Azure Blob/S3, SendGrid, QuestPDF, etc.)
+- Replace local file/email services with production providers (Azure Blob/S3, SendGrid, etc.); payslip PDFs already use PDFsharp (MIT, no licensing cost)
 - Secure `Jwt:Key` in a secrets manager and rotate refresh tokens (see security review in the repo).
 - Run database migrations before first run: see [docs/DEVELOPER_SETUP.md](docs/DEVELOPER_SETUP.md).
 

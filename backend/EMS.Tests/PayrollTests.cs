@@ -94,7 +94,7 @@ namespace EMS.Tests
             await db.SaveChangesAsync();
 
             var repo = new PayrollRepository(db);
-            var pdf = new SimplePdfService();
+            var pdf = new PdfSharpDocumentService();
             var storage = new LocalFileStorageService(tempBase);
             var logger = new NullLogger<EMS.Application.Features.Payroll.Handlers.ProcessPayrollCommandHandler>();
 

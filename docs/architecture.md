@@ -594,6 +594,10 @@ Recommended tests:
 - React tests (Vitest + React Testing Library) for protected routes, hooks, forms, and critical components.
 - Architecture tests to enforce Clean Architecture dependency rules.
 
+### 8.6 Notification And Announcement Delivery
+
+Personal `Notifications` and company-wide `Announcements` (see [api-specification.md §19](api-specification.md#19-notification-and-announcement-apis-phase-2) and [database-design.md §9](database-design.md#9-notifications-and-announcement-tables)) are delivered poll-based: the frontend calls `GET /notifications/user/{userId}` and `GET /announcements` on page load and on a client-side interval. There is no SignalR, WebSocket, or other push infrastructure in this system today. If real-time delivery becomes a requirement, introduce it as a deliberate addition here rather than assuming it already exists.
+
 ## 9. Security Strategy
 
 Security requirements:
@@ -608,7 +612,12 @@ Security requirements:
 - Secure password hashing.
 - Secrets stored in Azure Key Vault.
 - CORS restricted to approved frontend origins.
-- Rate limiting for login, refresh, and forgot password endpoints.
+- Rate limiting for login, refresh, and forgot password endpoints. **Implemented:** per-client-IP
+  fixed-window rate limiting on `POST /auth/login` and `POST /auth/register` (independent budgets,
+  each configurable via `RateLimiting:Login` / `RateLimiting:Register`, defaulting to 5 requests per
+  60 seconds — see [api-specification.md §3.1](api-specification.md#31-login) and
+  [§3.10](api-specification.md#310-register)). `refresh` and `forgot-password` are not yet covered
+  and remain future work.
 
 Recommended authorization policies:
 

@@ -3,6 +3,7 @@ using EMS.Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -72,7 +73,27 @@ namespace EMS.Application.Features.Payroll.Handlers
                 // generate PDF and store
                 try
                 {
-                    var pdfBytes = await _pdf.GeneratePayslipPdfAsync(payslip);
+                    var document = new PayslipDocument
+                    {
+                        EmployeeName = $"{emp.FirstName} {emp.LastName}".Trim(),
+                        EmployeeCode = emp.EmployeeCode,
+                        Designation = emp.Designation,
+                        Department = emp.Department?.Name,
+                        PeriodStart = run.PeriodStart,
+                        PeriodEnd = run.PeriodEnd,
+                        GeneratedAtUtc = payslip.GeneratedAtUtc,
+                        Basic = payslip.Basic,
+                        Allowances = (structure.Allowances ?? new List<Allowance>())
+                            .Select(a => new PayslipLineItem { Name = a.Name, Amount = a.Amount })
+                            .ToList(),
+                        Deductions = (structure.Deductions ?? new List<Deduction>())
+                            .Select(d => new PayslipLineItem { Name = d.Name, Amount = d.Amount })
+                            .ToList(),
+                        GrossPay = payslip.GrossPay,
+                        NetPay = payslip.NetPay
+                    };
+
+                    var pdfBytes = await _pdf.GeneratePayslipPdfAsync(document);
                     var container = "payslips";
                     var path = $"{run.Id}/{payslip.Id}.pdf";
                     await _storage.SaveFileAsync(container, path, pdfBytes, "application/pdf");

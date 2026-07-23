@@ -4,13 +4,36 @@ using EMS.Persistence.Repositories;
 using EMS.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Hosting;
+using Serilog;
 using System.Text;
+using System.Threading.RateLimiting;
 
-var builder = WebApplication.CreateBuilder(args);
+// Bootstrap logger: captures anything that happens before the host's own
+// Serilog pipeline (built from appsettings) is available, including failures
+// during configuration/DI setup.
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
-// Add services to the container.
-builder.Services.AddControllers();
+try
+{
+    Log.Information("Starting EMS API host");
+
+    var builder = WebApplication.CreateBuilder(args);
+
+    builder.Host.UseSerilog((context, services, configuration) => configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Application", "EMS.API")
+        .Enrich.WithProperty("MachineName", Environment.MachineName)
+        .Enrich.WithProperty("EnvironmentName", context.HostingEnvironment.EnvironmentName));
+
+    // Add services to the container.
+    builder.Services.AddControllers();
 // DbContext (in-memory for dev)
 builder.Services.AddDbContext<ApplicationDbContext>(opt => opt.UseInMemoryDatabase("EMS"));
 
@@ -25,12 +48,15 @@ builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
 builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<EMS.Application.Interfaces.IAnnouncementRepository, EMS.Persistence.Repositories.AnnouncementRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IAuditLogRepository, EMS.Persistence.Repositories.AuditLogRepository>();
+builder.Services.AddScoped<EMS.Application.Interfaces.IHealthCheckRepository, EMS.Persistence.Repositories.HealthCheckRepository>();
 // Payroll services
 builder.Services.AddScoped<EMS.Application.Interfaces.IPayrollRepository, EMS.Persistence.Repositories.PayrollRepository>();
-builder.Services.AddSingleton<EMS.Application.Interfaces.IPdfService, EMS.Infrastructure.Pdf.SimplePdfService>();
+builder.Services.AddSingleton<EMS.Application.Interfaces.IPdfService, EMS.Infrastructure.Pdf.PdfSharpDocumentService>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IReportRepository, EMS.Persistence.Repositories.ReportRepository>();
 builder.Services.AddSingleton<EMS.Application.Interfaces.IExportService, EMS.Infrastructure.Export.CsvExportService>();
+builder.Services.AddSingleton<EMS.Application.Interfaces.IExcelExportService, EMS.Infrastructure.Export.ClosedXmlExportService>();
 
 // Application handlers — Auth
 builder.Services.AddScoped<EMS.Application.Features.Auth.LoginCommandHandler>();
@@ -75,6 +101,11 @@ builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Payroll.Queries.GetPayslipsForEmployeeQuery>, EMS.Application.Features.Payroll.Validators.GetPayslipsForEmployeeQueryValidator>();
 // Dashboard validators
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Dashboard.Queries.GetDashboardSummaryQuery>, EMS.Application.Features.Dashboard.Validators.GetDashboardSummaryQueryValidator>();
+// Announcement validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Announcements.Commands.CreateAnnouncementCommand>, EMS.Application.Features.Announcements.Validators.CreateAnnouncementCommandValidator>();
+// Export validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Exports.Queries.ExportAttendanceQuery>, EMS.Application.Features.Exports.Validators.ExportAttendanceQueryValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Exports.Queries.ExportDashboardSummaryQuery>, EMS.Application.Features.Exports.Validators.ExportDashboardSummaryQueryValidator>();
 // Leave validators
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Leave.Commands.CreateLeaveRequestCommand>, EMS.Application.Features.Leave.Validators.CreateLeaveRequestCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Leave.Commands.UpdateLeaveRequestCommand>, EMS.Application.Features.Leave.Validators.UpdateLeaveRequestCommandValidator>();
@@ -117,8 +148,28 @@ builder.Services.AddSingleton<EMS.Application.Interfaces.IEmailSender>(sp => new
 
 builder.Services.AddSwaggerGen();
 
+// CORS: the frontend (a React SPA on a different origin) authenticates with a Bearer token in
+// the Authorization header, not cookies, so credentials are never needed here. Falls back to
+// Vite's default dev server ports if Cors:AllowedOrigins isn't configured; production must set
+// it explicitly (e.g. via the Cors__AllowedOrigins__0 environment variable) to its real domain.
+const string CorsPolicyName = "Frontend";
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+if (corsOrigins == null || corsOrigins.Length == 0)
+{
+    corsOrigins = new[] { "http://localhost:5173", "https://localhost:5173" };
+}
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(CorsPolicyName, policy =>
+        policy.WithOrigins(corsOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod());
+});
+
 // Authentication
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "dev-secret-key-please-change";
+var jwtKey = builder.Configuration["Jwt:Key"];
+EMS.Infrastructure.Services.JwtKeyValidator.EnsureValid(jwtKey);
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "ems";
 builder.Services.AddAuthentication(options =>
 {
@@ -133,7 +184,7 @@ builder.Services.AddAuthentication(options =>
             ValidateAudience = true,
             ValidIssuer = jwtIssuer,
             ValidAudience = jwtIssuer,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey!))
         };
     });
 
@@ -161,6 +212,53 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanViewRoles", policy => policy.RequireRole("Admin", "HR"));
 });
 
+// Rate limiting: login and register are the two unauthenticated endpoints an attacker can hammer
+// to brute-force credentials or mass-create accounts, so each gets its own fixed-window budget
+// keyed by client IP. Separate policies (rather than one shared "auth" bucket) so a user
+// exhausting the login limit with bad passwords can't also lock themselves out of registering,
+// and vice versa. Limits are configurable per environment; defaults are deliberately strict.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    AddFixedWindowIpPolicy(options, "LoginPolicy", "Login", defaultPermitLimit: 5, defaultWindowSeconds: 60);
+    AddFixedWindowIpPolicy(options, "RegisterPolicy", "Register", defaultPermitLimit: 5, defaultWindowSeconds: 60);
+
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.TotalSeconds).ToString();
+        }
+
+        context.HttpContext.Response.ContentType = "application/json";
+        var error = new EMS.API.Controllers.ApiErrorResponse
+        {
+            Status = StatusCodes.Status429TooManyRequests,
+            Code = "RATE_LIMIT_EXCEEDED",
+            Message = "Too many requests. Please try again later."
+        };
+        await context.HttpContext.Response.WriteAsJsonAsync(error, cancellationToken);
+    };
+
+    void AddFixedWindowIpPolicy(RateLimiterOptions rateLimiterOptions, string policyName, string configSection, int defaultPermitLimit, int defaultWindowSeconds)
+    {
+        var permitLimit = builder.Configuration.GetValue<int?>($"RateLimiting:{configSection}:PermitLimit") ?? defaultPermitLimit;
+        var windowSeconds = builder.Configuration.GetValue<int?>($"RateLimiting:{configSection}:WindowSeconds") ?? defaultWindowSeconds;
+
+        rateLimiterOptions.AddPolicy(policyName, httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = permitLimit,
+                    Window = TimeSpan.FromSeconds(windowSeconds),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                }));
+    }
+});
+
 var app = builder.Build();
 
 // The in-memory provider never creates its store (or applies HasData seeds, e.g. the RBAC
@@ -181,7 +279,29 @@ if (app.Environment.IsDevelopment())
 
 app.UseMiddleware<EMS.API.Middleware.ExceptionHandlingMiddleware>();
 
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value ?? string.Empty);
+        diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
+        diagnosticContext.Set("TraceId", httpContext.TraceIdentifier);
+        diagnosticContext.Set("RemoteIpAddress", httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+
+        var userId = httpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!string.IsNullOrEmpty(userId))
+        {
+            diagnosticContext.Set("UserId", userId);
+        }
+    };
+});
+
 app.UseHttpsRedirection();
+
+app.UseCors(CorsPolicyName);
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -189,3 +309,17 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+}
+catch (Exception ex) when (ex is not HostAbortedException)
+{
+    Log.Fatal(ex, "EMS API host terminated unexpectedly");
+    throw;
+}
+finally
+{
+    Log.CloseAndFlush();
+}
+
+// Exposed so Microsoft.AspNetCore.Mvc.Testing's WebApplicationFactory<Program> can host this
+// app in-process for integration tests.
+public partial class Program { }

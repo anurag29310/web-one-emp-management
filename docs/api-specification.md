@@ -109,6 +109,7 @@ List resource:
 | `404 Not Found` | Resource not found |
 | `409 Conflict` | Duplicate or conflicting state |
 | `422 Unprocessable Entity` | Business rule violation |
+| `429 Too Many Requests` | Rate limit exceeded (see [3.1](#31-login) and [3.10](#310-register)); response includes a `Retry-After` header |
 | `500 Internal Server Error` | Unexpected server error |
 
 ### 2.6 Pagination, Sorting, And Filtering
@@ -173,6 +174,11 @@ Response `200 OK`:
 ```
 
 If MFA is required, return `200 OK` with `requiresMfa: true` and an `mfaChallengeId` instead of tokens.
+
+Rate limited per client IP (default: 5 requests / 60 seconds, configurable via `RateLimiting:Login` in
+app configuration). Exceeding the limit returns `429 Too Many Requests` with a `Retry-After` header and
+body `{ "status": 429, "code": "RATE_LIMIT_EXCEEDED", "message": "Too many requests. Please try again later." }`.
+This budget is independent of the [Register](#310-register) endpoint's.
 
 ### 3.2 Verify MFA
 
@@ -335,6 +341,10 @@ ever created on a fresh deployment, which is automatically granted `Admin`. This
 because there is otherwise no way to reach the `Admin`-only [Users API](#4-user-and-role-administration-apis)
 at all on a brand-new system. Every registration after the first gets no role, regardless of
 input — an existing Admin must assign one afterward via `PUT /users/{id}`.
+
+Rate limited per client IP (default: 5 requests / 60 seconds, configurable via `RateLimiting:Register`
+in app configuration), independently of the [Login](#31-login) endpoint's budget. Exceeding the limit
+returns `429 Too Many Requests` with a `Retry-After` header, same error body shape as login.
 
 ## 4. User And Role Administration APIs
 
@@ -1035,7 +1045,9 @@ Query parameters: `userId`, `entityName`, `entityId`, `action`, `dateFrom`, `dat
 
 ## 13. Export APIs
 
-Reporting requirements include Excel and PDF export.
+Reporting requirements include Excel and PDF export. Export endpoints return the file directly
+(no `data`/`correlationId` envelope) via `Content-Disposition: attachment`; errors still use the
+standard error response (`api-specification.md §2.4`).
 
 | Method | Endpoint | Access | Description |
 | --- | --- | --- | --- |
@@ -1044,7 +1056,39 @@ Reporting requirements include Excel and PDF export.
 | `GET` | `/exports/leave-requests` | Admin, HR, Manager | Export leave requests to Excel |
 | `GET` | `/exports/dashboard-summary` | Admin, HR, Manager | Export dashboard summary to PDF |
 
-Export endpoints should accept the same filters as their list or dashboard endpoints.
+Export endpoints accept the same filters as their list or dashboard endpoints (§5.1, §8.3, §9.2,
+§10.1), scoped to the filters currently implemented by those endpoints.
+
+### 13.1 Export Employees
+
+Query parameters: `search`, `sortBy`, `sortDir`, `departmentId`, `status` (same meaning as §5.1).
+
+Response: `200 OK`, `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`,
+file name `employees_{yyyyMMddHHmmss}.xlsx`.
+
+### 13.2 Export Attendance
+
+Query parameters: `employeeId`, `departmentId`, `managerId`, `dateFrom`, `dateTo`, `status`,
+`isLateArrival`, `isEarlyLeave` (same meaning as §8.3). Manager-role callers are scoped to their
+own team regardless of the `employeeId`/`managerId` filters supplied, matching the scoping rules
+of the list endpoint.
+
+Response: `200 OK`, `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`,
+file name `attendance_{yyyyMMddHHmmss}.xlsx`.
+
+### 13.3 Export Leave Requests
+
+Query parameters: `employeeId`, `leaveTypeId`, `year`, `status` (same meaning as §9.2). Only
+Admin, HR, and Manager can call this endpoint, so no self-service scoping is applied.
+
+Response: `200 OK`, `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`,
+file name `leave-requests_{yyyyMMddHHmmss}.xlsx`.
+
+### 13.4 Export Dashboard Summary
+
+Query parameters: `departmentId`, `officeLocationId`, `date` (same meaning as §10.1).
+
+Response: `200 OK`, `Content-Type: application/pdf`, file name `dashboard-summary_{yyyyMMdd}.pdf`.
 
 ## 14. Health And System APIs
 
@@ -1072,6 +1116,7 @@ Export endpoints should accept the same filters as their list or dashboard endpo
 | `CanManagePayroll` | Process payroll, manage salary structures, view payroll runs |
 | `CanApprovePayroll` | Approve a completed payroll run |
 | `CanViewReports` | Employee, department, leave, and turnover reports |
+| `CanManageAnnouncements` (`Admin,HR` roles) | Create and retract company-wide announcements |
 
 ## 16. Missing But Recommended APIs
 
@@ -1192,4 +1237,101 @@ Base path: `/reports`. All endpoints require the `CanViewReports` policy (Admin,
 `from` and `to` are both required and `from` must be before or equal to `to` on every date-ranged endpoint; violations return `400 VALIDATION_ERROR`.
 
 Department counts exclude soft-deleted departments. CSV exports neutralize formula/CSV injection (CWE-1236): any field value starting with `=`, `+`, `-`, `@`, tab, or CR is prefixed with `'` before being written, so a department or employee name cannot execute as a formula when the file is opened in Excel or Sheets.
+
+## 19. Notification And Announcement APIs (Phase 2)
+
+Two distinct broadcast mechanisms exist: personal `Notifications` (per-user, e.g. leave-decision or attendance alerts) and company-wide `Announcements` (broadcast to everyone, or optionally scoped to one department or one role). See [database-design.md §9](database-design.md#9-notifications-and-announcement-tables) for the underlying schema.
+
+### 19.1 Notifications
+
+Base path: `/notifications`. All endpoints require authentication.
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `POST` | `/notifications` | `Admin,HR` roles | Create a personal notification for a specific user |
+| `GET` | `/notifications/user/{userId}` | Authenticated (self); `Admin` for any user | List notifications for a user, paginated. Returns 403 if a non-Admin caller requests another user's notifications |
+| `POST` | `/notifications/{id}/mark-read` | Authenticated | Mark a notification as read |
+
+Query parameters on the list endpoint: `page` (default 1), `pageSize` (default 20), `onlyUnread` (default `false`).
+
+Create notification request:
+
+```json
+{
+  "userId": "00000000-0000-0000-0000-000000000101",
+  "title": "Leave Approved",
+  "message": "Your leave request for 2026-08-01 to 2026-08-03 was approved.",
+  "channel": "InApp",
+  "expiresAtUtc": null
+}
+```
+
+`channel` is `InApp` or `Email`. When `channel` is `Email`, delivery failures are logged but do not fail the request — the in-app row is always created.
+
+Notification response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000001001",
+  "userId": "00000000-0000-0000-0000-000000000101",
+  "title": "Leave Approved",
+  "message": "Your leave request for 2026-08-01 to 2026-08-03 was approved.",
+  "channel": "InApp",
+  "isRead": false,
+  "createdAtUtc": "2026-07-20T09:00:00Z",
+  "expiresAtUtc": null
+}
+```
+
+### 19.2 Announcements
+
+Base path: `/announcements`. All endpoints require authentication; create and retract additionally require the `CanManageAnnouncements` (`Admin,HR`) roles.
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `POST` | `/announcements` | `Admin,HR` roles | Broadcast a new company-wide announcement |
+| `GET` | `/announcements` | Authenticated | List announcements visible to the caller, paginated, most recent first |
+| `GET` | `/announcements/{id}` | Authenticated | Get a single announcement. Returns 404 if it does not exist, is expired, is retracted, or is not visible to the caller's department/role |
+| `POST` | `/announcements/{id}/mark-read` | Authenticated | Mark an announcement as read by the caller |
+| `DELETE` | `/announcements/{id}` | `Admin,HR` roles | Retract (soft-delete) an announcement |
+
+Query parameters on the list endpoint: `page` (default 1), `pageSize` (default 20), `onlyUnread` (default `false`).
+
+The caller's visible list is filtered server-side from the authenticated user's id and role claim — there is no client-suppliable `userId`/`departmentId` filter. An announcement is visible to a caller when it is not retracted, not expired, and either `audienceType` is `All`, or `audienceType` is `Department` and the caller's employee record belongs to the announcement's `departmentId`, or `audienceType` is `Role` and the caller's role matches `targetRole`.
+
+Create announcement request:
+
+```json
+{
+  "title": "Office Closed for Maintenance",
+  "message": "The Bengaluru office will be closed on 2026-08-15 for electrical maintenance.",
+  "priority": "Important",
+  "audienceType": "All",
+  "departmentId": null,
+  "targetRole": null,
+  "expiresAtUtc": "2026-08-16T00:00:00Z"
+}
+```
+
+`priority` is one of `Normal`, `Important`, `Critical` (default `Normal`). `audienceType` is one of `All`, `Department`, `Role` (default `All`). `departmentId` is required when `audienceType` is `Department`; `targetRole` is required when `audienceType` is `Role`. `expiresAtUtc`, if provided, must be in the future. `createdByUserId` is derived from the authenticated caller and is not accepted from the client.
+
+Announcement response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000001101",
+  "title": "Office Closed for Maintenance",
+  "message": "The Bengaluru office will be closed on 2026-08-15 for electrical maintenance.",
+  "priority": "Important",
+  "audienceType": "All",
+  "departmentId": null,
+  "targetRole": null,
+  "createdByUserId": "00000000-0000-0000-0000-000000000010",
+  "createdAtUtc": "2026-07-23T10:00:00Z",
+  "expiresAtUtc": "2026-08-16T00:00:00Z",
+  "isReadByMe": false
+}
+```
+
+Delivery is poll-based, not real-time: the frontend fetches `GET /announcements` on load and on an interval (see [architecture.md §8](architecture.md#8-cross-cutting-concerns)). There is no SignalR or push infrastructure in this system today.
 

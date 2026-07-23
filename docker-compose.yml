@@ -24,6 +24,9 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=${POSTGRES_DB:-ems_db};Username=${POSTGRES_USER:-ems};Password=${POSTGRES_PASSWORD:-ems_password}
       JWT__KEY: ${JWT__KEY}
+      # frontend (port 80) and backend (port 5000) are different origins here — unlike
+      # docker-compose.prod.yml, nothing unifies them behind a single reverse-proxy origin.
+      Cors__AllowedOrigins__0: http://localhost
     depends_on:
       db:
         condition: service_healthy

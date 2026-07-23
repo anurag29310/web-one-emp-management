@@ -6,15 +6,26 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.Storage.Blobs" Version="12.29.0" />
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.3" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.3" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.3" />
+    <PackageReference Include="PDFsharp" Version="6.2.4" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.19.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\EMS.Application\EMS.Application.csproj" />
     <ProjectReference Include="..\EMS.Domain\EMS.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PDFsharp 6.x has no GDI+ dependency and therefore no built-in font access on any
+         platform; a resolver-supplied font is required even on Windows. PT Sans (SIL OFL 1.1,
+         see Pdf/Fonts/OFL.txt) is embedded here so PDF generation needs no fonts installed on
+         the host, dev or Docker/Linux alike. -->
+    <EmbeddedResource Include="Pdf\Fonts\PTSans-Regular.ttf" />
+    <EmbeddedResource Include="Pdf\Fonts\PTSans-Bold.ttf" />
   </ItemGroup>
 
   <PropertyGroup>

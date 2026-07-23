@@ -33,6 +33,12 @@ namespace EMS.Persistence.Repositories
             Guid? employeeId, Guid? leaveTypeId, int? year, string? status, CancellationToken ct = default) =>
             await BuildLeaveFilter(employeeId, leaveTypeId, year, status).CountAsync(ct);
 
+        public async Task<IEnumerable<LeaveRequest>> GetAllLeavesAsync(
+            Guid? employeeId, Guid? leaveTypeId, int? year, string? status, CancellationToken ct = default) =>
+            await BuildLeaveFilter(employeeId, leaveTypeId, year, status)
+                .OrderByDescending(l => l.CreatedAtUtc)
+                .ToListAsync(ct);
+
         public async Task AddLeaveRequestAsync(LeaveRequest request, CancellationToken ct = default) =>
             await _db.LeaveRequests.AddAsync(request, ct);
 

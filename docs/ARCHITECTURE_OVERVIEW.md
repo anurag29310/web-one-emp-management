@@ -20,7 +20,7 @@ Implemented modules (server-side)
 - Dashboard: aggregated counts and summaries.
 - Document Management: upload/download/delete employee documents (with local storage stub).
 - Notifications: persist notifications and send email via local outbox.
-- Payroll: salary structures, payroll runs, payslip generation (PDF stub).
+- Payroll: salary structures, payroll runs, payslip generation (real PDF via PDFsharp, MIT licensed).
 - Reports: repository queries and CSV export.
 
 Where to find code

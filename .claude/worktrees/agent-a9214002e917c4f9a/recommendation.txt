@@ -1,0 +1,192 @@
+
+You have exceeded your premium request allowance. We have automatically switched you to GPT-5 mini which is included with your plan. Enable additional paid premium requests to continue using premium models.
+
+I'll scan auth, storage, validation, and token code to identify security issues and recommend fixes. I'll read the relevant files now.
+
+Summary: I reviewed the repository code related to authentication, tokens, password hashing, API configuration, file uploads, persistence usage, and validation. Below are concise findings, risks, and prioritized recommendations with concrete code and configuration improvements.
+
+High‑priority findings (immediate fixes)
+Weak refresh token handling (plaintext storage, non-cryptographic generation, no rotation)
+
+Risk: If DB is leaked or attacker obtains tokens, tokens can be used to impersonate users. No rotation/rehash/reuse detection increases blast radius.
+Fixes:
+Generate refresh tokens using a secure RNG (e.g., 32+ bytes from RandomNumberGenerator) and treat them as opaque.
+Store only a hashed version (SHA-256) of the refresh token server-side; compare using hash.
+Implement refresh token rotation: when a refresh request is used, issue a new refresh token and mark the old one revoked; support token family and detect reuse to revoke family.
+Add fields to RefreshToken entity: TokenHash, TokenFamilyId, ReplacedByTokenId, RevokedAtUtc, IpAddress, UserAgent. Stop storing Token plaintext.
+Update AuthRepository API to lookup by token hash, not plaintext.
+Why: Prevents disclosure of usable tokens from DB and supports robust session management.
+Refresh endpoint does not rotate or revoke refresh tokens
+
+Risk: Long-lived replayable refresh tokens.
+Fixes:
+In AuthController.Refresh and the refresh handler: validate token, create a new refresh token, store its hashed value, set ReplacedByTokenId and revoke or mark the used token, return the new refresh token to client.
+If reuse of revoked token is detected, revoke entire token family and force re-login.
+JWT secret fallback and key management
+
+Risk: Hard-coded fallback "dev-secret-key-please-change" is insecure; weak keys allow token forgery.
+Fixes:
+Require secret in configuration; fail startup if missing.
+Use strong secret (minimum 32+ chars), rotate regularly.
+Use secure secret storage (Azure Key Vault, AWS Secrets Manager, environment variables injected by CI/CD).
+Set ValidateIssuerSigningKey = true explicitly and set small ClockSkew (e.g., 30s).
+Refresh tokens returned to client in response body (no HttpOnly cookie)
+
+Risk: If frontend stores refresh token in localStorage it is exposed to XSS; better to keep refresh tokens in HttpOnly, Secure, SameSite cookies or use rotating refresh-token cookie + anti-CSRF.
+Fix:
+Return access token in response body, but set refresh token in an HttpOnly, Secure, SameSite cookie. Use anti-CSRF protections for cookie-based flows (double submit cookie or same-site + CSRF tokens).
+If you must use persisted JS storage, educate about XSS risk and implement additional mitigations.
+Authentication & password storage
+Password hashing: PBKDF2 with 100,000 iterations & SHA-256 is acceptable but could be stronger
+
+Risk: PBKDF2 configuration might be insufficient for future; Argon2/BCrypt recommended.
+Fix:
+Consider using Argon2 (libsodium) or ASP.NET Core Identity's PasswordHasher which supports PBKDF2 with secure defaults and versioning.
+Add an upgrade path: store a PasswordHash version and rehash on next login if algorithm/parameters changed.
+Login error handling reveals little (throws UnauthorizedAccessException)
+
+Fix:
+Do not reveal whether username or password was incorrect in logs or responses. Return a generic failure message; log details server-side for audit.
+JWT implementation / Token validation
+TokenValidationParameters: missing explicit ValidateIssuerSigningKey, RequireExpirationTime, ValidateLifetime/ClockSkew
+Risk: mis-configuration could allow improperly validated tokens.
+Fix:
+Set:
+ValidateIssuerSigningKey = true
+RequireExpirationTime = true
+ValidateLifetime = true
+ClockSkew = TimeSpan.FromSeconds(30)
+Use JwtSecurityTokenHandler configuration to validate token claims and algorithm (reject alg=none).
+API Security / Authorization
+Policy usage is present but inconsistent; some controllers use role attributes, others only [Authorize]
+
+Risk: endpoints may expose privileged data to unauthorized roles.
+Fix:
+Review all controllers and endpoints to apply least-privilege policies (e.g., [Authorize(Roles="Admin,HR")] where appropriate).
+Add unit tests for authorization policies.
+Model validation: no global automatic FluentValidation filter
+
+Risk: Missing/partial validation allows invalid inputs to reach business logic.
+Fix:
+Register FluentValidation as MVC filter (AddFluentValidationAutoValidation / AddValidatorsFromAssembly and AddMvc().AddFluentValidation() or a global action filter) so invalid models produce 400 responses automatically.
+File upload security
+Content validation: handler checks ContentType and size in UploadDocumentCommandHandler (good), but additional checks are needed:
+Risk: Content-Type header can be faked; file content may contain executable content, XSS payloads, etc.
+Fix:
+Inspect file magic bytes (content sniffing) to ensure type matches (PDF, PNG, JPEG, DOCX).
+Validate filename (strip path characters, remove control chars), limit filename length and normalize Unicode.
+Store files outside web root and ensure web server is not serving uploaded directories directly.
+For LocalFileStorageService.GetFullPath: do robust path normalization:
+Use Path.GetFullPath and verify the resulting path is under the configured storage base directory; reject otherwise.
+Avoid simple string replace of ...
+Set restrictive filesystem ACLs on storage directory.
+For downloadable files, ensure correct Content-Disposition header and sanitized filenames (avoid CRLF injection).
+Local file storage path sanitization
+LocalFileStorageService.GetFullPath uses string replace of .. and trimming — not robust.
+Risk: Directory traversal if attacker crafts weird paths (UTF-8 encodings, symlinks).
+Fix:
+Use Path.GetFullPath(Path.Combine(base, container, path)) and then assert the fullPath.StartsWith(basePath); throw if not.
+Use Path.GetInvalidFileNameChars and Path.GetInvalidPathChars to validate parts.
+Do not allow absolute paths; drop leading directory separators.
+Input validation & parameter handling
+Many endpoints accept GUIDs parsed from path/body. Ensure model binding checks and validate GUIDs server-side.
+For query parameters (sorting, columns), validate allowable values to avoid injection into EF OrderBy string-based calls. Use safe mappings instead of raw strings.
+SQL Injection / EF usage
+Current code uses EF Core LINQ and parameterized queries — low SQLi risk.
+Caveat: If you ever use FromSqlRaw or build queries with string concatenation, use parameterized APIs.
+Fix:
+Add code review checklist to disallow unparameterized SQL.
+XSS / Data returned to UI
+API returns user-controlled data (file names, messages). Frontend must HTML-encode when rendering. Server-side can sanitize stored HTML or disallow HTML in inputs (e.g., file names, comments).
+Fix:
+Validate and whitelist characters for names and titles; disallow HTML markup.
+Consider server-side sanitization for any rich-text fields.
+CSRF
+If you switch to cookie-based refresh tokens (recommended), add CSRF protection:
+Use SameSite=Lax/Strict for refresh cookie and/or double-submit anti-CSRF token for endpoints that modify state.
+If JWT in Authorization header only (no cookies), CSRF is less of an issue but XSS remains primary.
+Rate limiting & brute-force protections
+No rate limiting or account lockout on login endpoints.
+Risk: brute-force password guessing.
+Fix:
+Add per-IP and per-account rate limiting on auth endpoints (e.g., ASP.NET Core RateLimiting middleware, third-party libraries, or API gateway), with exponential backoff/lockout.
+Log failed attempts and consider progressive delays.
+Logging & Audit
+AuditLogs table exists (docs) but I didn't find usage for writing audit events for security-sensitive actions (login success/failure, password reset, token revocation, file upload/delete, admin actions).
+Fix:
+Implement AuditLog service and call it on all security-sensitive operations, with non-sensitive fields only (do not log tokens or passwords).
+Ensure logs are write-only, immutable, and forwarded to central logging (SIEM) in production.
+Sensitive data exposure
+Avoid logging tokens, password, or PII. Ensure structured logs redact sensitive fields.
+Transport security
+Ensure HSTS and HTTPS are enforced in production; Use app.UseHsts() and require TLS in hosting environment; do not rely on UseHttpsRedirection alone.
+Misc / operational
+Health checks, monitoring, alerting for anomalies (large number of failed logins, refresh token reuse) should be added.
+Secrets rotation & key rollover plan (JWT signing key rotation) required.
+Concrete code improvements (examples)
+
+Jwt validation (Program.cs): set
+
+TokenValidationParameters.ValidateIssuerSigningKey = true
+TokenValidationParameters.RequireExpirationTime = true
+TokenValidationParameters.ValidateLifetime = true
+TokenValidationParameters.ClockSkew = TimeSpan.FromSeconds(30)
+Password hashing: consider replacing PasswordHashService with ASP.NET Core Identity password hasher or Argon2 library. If staying with PBKDF2, increase iteration count and add a HashVersion prefix so you can upgrade later.
+
+RefreshToken flow:
+
+Change RefreshToken entity:
+Replace Token with TokenHash (store hash), add TokenFamilyId (guid), RevokedAtUtc, ReplacedByTokenId, IpAddress, UserAgent.
+Update RefreshTokenService.CreateRefreshToken to return a DTO containing PlaintextToken (sent to client) and TokenHash.
+Update AuthRepository.GetRefreshTokenAsync to search by hash.
+Update AuthController.Refresh to rotate tokens and persist the new one and revoke the old.
+File storage: replace LocalFileStorageService.GetFullPath with:
+
+var basePath = Path.GetFullPath(_basePath);
+var target = Path.GetFullPath(Path.Combine(basePath, container, path));
+if (!target.StartsWith(basePath, StringComparison.OrdinalIgnoreCase)) throw new UnauthorizedAccessException();
+Use Path.GetFileName(path) or sanitize path parts.
+File content validation: read initial bytes and check PDF header %PDF, PNG signature (89 50 4E 47), JPEG (FF D8 FF), DOCX (it's a ZIP: PK..). Use libraries that detect MIME by content.
+
+Prioritization (short term -> long term)
+
+Immediate (days)
+
+Require strong JWT secret and fail fast if missing.
+Validate TokenValidationParameters as above.
+Stop storing refresh tokens plaintext; implement hashed-storage and rotation.
+Use secure RNG for refresh tokens.
+Validate storage path properly (no naive .. replace).
+Add rate limiting for auth endpoints.
+Add global model validation filter.
+Short term (weeks)
+
+Move refresh tokens to HttpOnly Secure SameSite cookie and implement anti-CSRF if cookie-based.
+Implement audit logging for auth and file operations.
+Harden password hashing strategy (consider Argon2).
+Add file content sniffing and filename normalization.
+Medium term (1–3 months)
+
+Implement refresh token family revocation logic.
+Add central logging/alerting, SIEM integration.
+Add integration tests for token rotation and reuse detection.
+Add HSTS and enforce TLS in deployments.
+Files & code references I inspected (key ones)
+
+Program.cs — JWT config, DI registration
+JwtTokenService.cs — token creation
+RefreshTokenService.cs — token generation
+AuthRepository.cs — refresh token storage/lookup
+LoginCommandHandler.cs — login flow
+AuthController.cs — refresh & logout endpoints
+PasswordHashService.cs — password hashing
+UploadDocumentCommandHandler.cs — upload validations
+LocalFileStorageService.cs — storage path handling
+Next steps I can implement for you (pick any):
+
+Implement refresh token hashing + rotation changes across repository, service, and controller (non-trivial; will change DB schema).
+Harden JWT validation options in Program.cs and fail startup if secret missing.
+Replace LocalFileStorageService.GetFullPath with robust path normalization and add content-type sniffing on uploads.
+Add rate limiting middleware and account lockout logic for login endpoint.
+Add global FluentValidation MVC filter and a central AuditLog call site for login/logout/upload/delete.
+Which of the above changes do you want me to implement first?

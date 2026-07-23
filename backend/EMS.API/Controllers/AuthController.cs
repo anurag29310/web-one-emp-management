@@ -1,6 +1,7 @@
 using EMS.Application.Features.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System;
 using System.Security.Claims;
 using System.Threading;
@@ -47,9 +48,11 @@ namespace EMS.API.Controllers
 
         /// <summary>Authenticate with username/email and password.</summary>
         [AllowAnonymous]
+        [EnableRateLimiting("LoginPolicy")]
         [HttpPost("login")]
         [ProducesResponseType(typeof(ApiResponse<LoginResult>), 200)]
         [ProducesResponseType(typeof(ApiErrorResponse), 401)]
+        [ProducesResponseType(typeof(ApiErrorResponse), 429)]
         public async Task<IActionResult> Login([FromBody] LoginCommand cmd, CancellationToken ct)
         {
             var result = await _loginHandler.Handle(cmd, ct);
@@ -58,9 +61,11 @@ namespace EMS.API.Controllers
 
         /// <summary>Register a new user account.</summary>
         [AllowAnonymous]
+        [EnableRateLimiting("RegisterPolicy")]
         [HttpPost("register")]
         [ProducesResponseType(typeof(ApiResponse<LoginResult>), 201)]
         [ProducesResponseType(typeof(ApiErrorResponse), 409)]
+        [ProducesResponseType(typeof(ApiErrorResponse), 429)]
         public async Task<IActionResult> Register([FromBody] RegisterUserCommand cmd, CancellationToken ct)
         {
             var result = await _registerHandler.Handle(cmd, ct);

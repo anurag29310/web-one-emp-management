@@ -18,6 +18,7 @@ namespace EMS.Application.Interfaces
         Task<AttendanceRecord?> GetRecordByEmployeeAndDateAsync(Guid employeeId, DateTime date, CancellationToken ct = default);
         Task<IEnumerable<AttendanceRecord>> GetRecordsAsync(AttendanceRecordFilter filter, int page, int pageSize, CancellationToken ct = default);
         Task<int> CountRecordsAsync(AttendanceRecordFilter filter, CancellationToken ct = default);
+        Task<IEnumerable<AttendanceRecord>> GetAllRecordsAsync(AttendanceRecordFilter filter, CancellationToken ct = default);
         Task AddRecordAsync(AttendanceRecord record, CancellationToken ct = default);
         Task UpdateRecordAsync(AttendanceRecord record, CancellationToken ct = default);
         Task DeleteRecordAsync(AttendanceRecord record, CancellationToken ct = default);

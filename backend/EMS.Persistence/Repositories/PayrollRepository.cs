@@ -19,7 +19,7 @@ namespace EMS.Persistence.Repositories
         }
 
         public async Task<IEnumerable<Employee>> GetAllEmployeesAsync()
-            => await _db.Employees.AsNoTracking().Where(e => e.IsActive).ToListAsync();
+            => await _db.Employees.AsNoTracking().Include(e => e.Department).Where(e => e.IsActive).ToListAsync();
 
         public async Task<SalaryStructure?> GetEffectiveSalaryStructureAsync(Guid employeeId, DateTime asOf)
         {
