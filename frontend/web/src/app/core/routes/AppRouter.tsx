@@ -32,6 +32,22 @@ const DepartmentDetailPage = lazy(() =>
 const LeaveListPage = lazy(() =>
   import('@/app/features/leave/pages/LeaveListPage').then((m) => ({ default: m.LeaveListPage })),
 )
+const MyPayslipsPage = lazy(() =>
+  import('@/app/features/payroll/pages/MyPayslipsPage').then((m) => ({ default: m.MyPayslipsPage })),
+)
+const SalaryStructuresPage = lazy(() =>
+  import('@/app/features/payroll/pages/SalaryStructuresPage').then((m) => ({
+    default: m.SalaryStructuresPage,
+  })),
+)
+const PayrollRunsPage = lazy(() =>
+  import('@/app/features/payroll/pages/PayrollRunsPage').then((m) => ({ default: m.PayrollRunsPage })),
+)
+const PayrollRunDetailPage = lazy(() =>
+  import('@/app/features/payroll/pages/PayrollRunDetailPage').then((m) => ({
+    default: m.PayrollRunDetailPage,
+  })),
+)
 
 function PageFallback() {
   return <div className="min-h-screen bg-canvas p-6 text-sm text-ink-subtle">Loading…</div>
@@ -52,6 +68,10 @@ export function AppRouter() {
               <Route path="/departments" element={<DepartmentListPage />} />
               <Route path="/departments/:id" element={<DepartmentDetailPage />} />
               <Route path="/leave" element={<LeaveListPage />} />
+              <Route path="/payslips" element={<MyPayslipsPage />} />
+              <Route path="/payroll/salary-structures" element={<SalaryStructuresPage />} />
+              <Route path="/payroll/runs" element={<PayrollRunsPage />} />
+              <Route path="/payroll/runs/:id" element={<PayrollRunDetailPage />} />
             </Route>
           </Route>
 
