@@ -134,6 +134,19 @@ const RoleDetailPage = lazy(() =>
     default: m.RoleDetailPage,
   })),
 )
+const ReportsOverviewPage = lazy(() =>
+  import('@/app/features/reports/pages/ReportsOverviewPage').then((m) => ({
+    default: m.ReportsOverviewPage,
+  })),
+)
+const ExportsPage = lazy(() =>
+  import('@/app/features/reports/pages/ExportsPage').then((m) => ({ default: m.ExportsPage })),
+)
+const AuditLogListPage = lazy(() =>
+  import('@/app/features/audit-logs/pages/AuditLogListPage').then((m) => ({
+    default: m.AuditLogListPage,
+  })),
+)
 
 function PageFallback() {
   return <div className="min-h-screen bg-canvas p-6 text-sm text-ink-subtle">Loading…</div>
@@ -177,6 +190,9 @@ export function AppRouter() {
               <Route path="/admin/users/:id/edit" element={<UserEditPage />} />
               <Route path="/admin/roles" element={<RoleListPage />} />
               <Route path="/admin/roles/:id" element={<RoleDetailPage />} />
+              <Route path="/reports" element={<ReportsOverviewPage />} />
+              <Route path="/reports/exports" element={<ExportsPage />} />
+              <Route path="/audit-logs" element={<AuditLogListPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>
           </Route>
