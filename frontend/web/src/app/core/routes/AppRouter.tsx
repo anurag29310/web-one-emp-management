@@ -147,6 +147,16 @@ const AuditLogListPage = lazy(() =>
     default: m.AuditLogListPage,
   })),
 )
+const AnnouncementListPage = lazy(() =>
+  import('@/app/features/announcements/pages/AnnouncementListPage').then((m) => ({
+    default: m.AnnouncementListPage,
+  })),
+)
+const NotificationsPage = lazy(() =>
+  import('@/app/features/notifications/pages/NotificationsPage').then((m) => ({
+    default: m.NotificationsPage,
+  })),
+)
 
 function PageFallback() {
   return <div className="min-h-screen bg-canvas p-6 text-sm text-ink-subtle">Loading…</div>
@@ -193,6 +203,8 @@ export function AppRouter() {
               <Route path="/reports" element={<ReportsOverviewPage />} />
               <Route path="/reports/exports" element={<ExportsPage />} />
               <Route path="/audit-logs" element={<AuditLogListPage />} />
+              <Route path="/announcements" element={<AnnouncementListPage />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>
           </Route>

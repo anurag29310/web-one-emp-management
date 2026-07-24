@@ -723,15 +723,23 @@ Returns manager chain and direct report summaries.
 
 ## 6. Employee Document APIs
 
+Note: unlike most controllers in this API, `EmployeeDocumentsController` returns raw JSON bodies
+(a bare array from List, a bare id from Upload) rather than the `{ data, message, correlationId }`
+envelope from [§2.3](#23-standard-success-response). Frontend clients must not unwrap these
+responses. Employee-self access is enforced by comparing the caller's user id directly to the
+`employeeId` route parameter (i.e. an employee's id and their linked user account's id must match)
+— the Manager-for-team and role-scoped download restrictions described below are not currently
+enforced in code and are tracked as a gap, not a contract to build against.
+
 ### 6.1 List Employee Documents
 
 ```text
 GET /employees/{employeeId}/documents
 ```
 
-Access: Admin, HR, Manager for team, Employee self
+Access: any authenticated user (see note above on Manager/self enforcement not yet being in code)
 
-Query parameters: `documentType`, `page`, `pageSize`
+Query parameters: `documentType`, `page`, `pageSize`, `search`
 
 ### 6.2 Upload Employee Document
 
@@ -739,7 +747,8 @@ Query parameters: `documentType`, `page`, `pageSize`
 POST /employees/{employeeId}/documents
 ```
 
-Access: Admin, HR, Employee self for allowed document types
+Access: Admin, HR, or the employee themselves (self-upload is authorized by matching the caller's
+user id to `employeeId`)
 
 Content type: `multipart/form-data`
 
@@ -747,11 +756,11 @@ Form fields:
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `file` | file | Required |
-| `documentType` | string | Required |
-| `description` | string | Optional |
+| `file` | file | Required. Allowed types: `application/pdf`, `image/jpeg`, `image/png`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`. Max size 10 MB (see `UploadDocumentCommandHandler`) |
+| `documentType` | string | Required. Free-form string; conventional values are `ID Proof`, `OfferLetter`, `NDA`, `Appraisal`, `Payslip`, `Other` |
+| `expiresAtUtc` | datetime | Optional |
 
-Response: `201 Created`
+Response: `201 Created` with a bare document id in the body.
 
 ### 6.3 Download Employee Document
 
@@ -1380,6 +1389,11 @@ Department counts exclude soft-deleted departments. CSV exports neutralize formu
 ## 19. Notification And Announcement APIs (Phase 2)
 
 Two distinct broadcast mechanisms exist: personal `Notifications` (per-user, e.g. leave-decision or attendance alerts) and company-wide `Announcements` (broadcast to everyone, or optionally scoped to one department or one role). See [database-design.md §9](database-design.md#9-notifications-and-announcement-tables) for the underlying schema.
+
+Note: like the Employee Document APIs ([§6](#6-employee-document-apis)), `NotificationsController` and
+`AnnouncementsController` return raw JSON bodies (bare arrays/ids) rather than the
+`{ data, message, correlationId }` envelope from [§2.3](#23-standard-success-response). Frontend
+clients must not unwrap these responses.
 
 ### 19.1 Notifications
 

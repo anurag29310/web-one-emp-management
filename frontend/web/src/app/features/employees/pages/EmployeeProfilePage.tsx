@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useEmployee } from '../hooks/useEmployee'
 import { Avatar } from '@/app/shared/components/Avatar'
 import { StatusBadge } from '@/app/shared/components/StatusBadge'
+import { EmployeeDocumentsPanel } from '@/app/features/documents/components/EmployeeDocumentsPanel'
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -56,6 +57,8 @@ export function EmployeeProfilePage() {
           <Field label="Emergency Number" value={employee.emergencyContactNumber ?? '—'} />
         </div>
       </div>
+
+      <EmployeeDocumentsPanel employeeId={employee.id} />
     </div>
   )
 }

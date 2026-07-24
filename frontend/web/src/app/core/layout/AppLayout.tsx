@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/app/core/auth/useAuth'
 import { Avatar } from '@/app/shared/components/Avatar'
 import type { Role } from '@/app/shared/models/user'
+import { NotificationBell } from '@/app/features/notifications/components/NotificationBell'
 
 const navItems: { to: string; label: string; icon: ReactNode; roles?: Role[] }[] = [
   {
@@ -92,6 +93,17 @@ const navItems: { to: string; label: string; icon: ReactNode; roles?: Role[] }[]
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0V11.25A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5M8.25 12.75h1.5v1.5h-1.5v-1.5Zm3 0h1.5v1.5h-1.5v-1.5Zm3 0h1.5v1.5h-1.5v-1.5Z"
+      />
+    ),
+  },
+  {
+    to: '/announcements',
+    label: 'Announcements',
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z"
       />
     ),
   },
@@ -244,6 +256,9 @@ export function AppLayout() {
       </aside>
 
       <main className="flex-1 overflow-y-auto">
+        <header className="flex items-center justify-end border-b border-hairline bg-surface-1 px-8 py-2.5">
+          <NotificationBell />
+        </header>
         <div className="mx-auto max-w-5xl px-8 py-8">
           <Outlet />
         </div>
