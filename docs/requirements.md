@@ -12,7 +12,7 @@ Technology Stack:
 
 * React
 * .NET 9 Web API
-* SQL Server
+* PostgreSQL
 * Azure
 * Docker
 

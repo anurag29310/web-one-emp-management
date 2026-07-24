@@ -34,8 +34,9 @@ try
 
     // Add services to the container.
     builder.Services.AddControllers();
-// DbContext (in-memory for dev)
-builder.Services.AddDbContext<ApplicationDbContext>(opt => opt.UseInMemoryDatabase("EMS"));
+// DbContext (PostgreSQL)
+builder.Services.AddDbContext<ApplicationDbContext>(opt =>
+    opt.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Repositories
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();

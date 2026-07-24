@@ -2,12 +2,12 @@
 
 ## 1. Overview
 
-The Employee Management System will use SQL Server for local and hosted database workloads, with Azure SQL Database recommended for Azure deployment. Entity Framework Core migrations will manage schema changes, and the data model will follow the Clean Architecture boundaries defined in `docs/architecture.md`.
+The Employee Management System will use PostgreSQL for local and hosted database workloads, run via Docker (`postgres:15`) in every environment per `docker-compose.yml` / `docker-compose.prod.yml`. Entity Framework Core migrations (Npgsql provider) will manage schema changes, and the data model will follow the Clean Architecture boundaries defined in `docs/architecture.md`.
 
 Design decisions:
 
 - Use relational tables for core HR, attendance, leave, department, and identity data.
-- Store files in Azure Blob Storage and keep only file metadata in SQL Server.
+- Store files in Azure Blob Storage and keep only file metadata in PostgreSQL.
 - Use audit fields and soft delete on business tables as required by `AI_CONTRACT.md`.
 - Use proper foreign keys and indexes to support 10,000+ employees and response times under 2 seconds.
 - Keep authentication tables separate from employee profile tables so user accounts can be managed independently from HR records.
@@ -16,13 +16,13 @@ Design decisions:
 
 Recommended conventions:
 
-- Primary keys: `Id` as `uniqueidentifier`.
-- Foreign keys: `{EntityName}Id` as `uniqueidentifier`.
-- Dates and timestamps: UTC, using `datetime2`.
-- Status fields: `nvarchar(50)` or small enum-backed integers. Use one approach consistently in implementation.
-- Text fields: use bounded `nvarchar` lengths instead of `nvarchar(max)` unless the field is intentionally long.
+- Primary keys: `Id` as `uuid`.
+- Foreign keys: `{EntityName}Id` as `uuid`.
+- Dates and timestamps: UTC, using `timestamptz`.
+- Status fields: `varchar(50)` or small enum-backed integers. Use one approach consistently in implementation.
+- Text fields: use bounded `varchar` lengths instead of `text` unless the field is intentionally long.
 - Money values in future payroll modules: `decimal(18,2)`.
-- Row version: `rowversion` for optimistic concurrency.
+- Row version: PostgreSQL has no automatic rowversion column type. Use a `uint` property marked `.IsRowVersion()` in EF Core, which the Npgsql provider maps to the system `xmin` column instead of a stored column.
 
 ## 3. Shared Audit Fields
 
@@ -30,15 +30,16 @@ All business tables should include the following columns unless noted otherwise:
 
 | Column | Type | Required | Purpose |
 | --- | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Yes | Primary key |
-| `CreatedAtUtc` | `datetime2` | Yes | Record creation timestamp |
-| `CreatedBy` | `uniqueidentifier` | No | User who created the record |
-| `UpdatedAtUtc` | `datetime2` | No | Last update timestamp |
-| `UpdatedBy` | `uniqueidentifier` | No | User who last updated the record |
-| `DeletedAtUtc` | `datetime2` | No | Soft delete timestamp |
-| `DeletedBy` | `uniqueidentifier` | No | User who soft deleted the record |
-| `IsDeleted` | `bit` | Yes | Soft delete flag |
-| `RowVersion` | `rowversion` | Yes | Optimistic concurrency token |
+| `Id` | `uuid` | Yes | Primary key |
+| `CreatedAtUtc` | `timestamptz` | Yes | Record creation timestamp |
+| `CreatedBy` | `uuid` | No | User who created the record |
+| `UpdatedAtUtc` | `timestamptz` | No | Last update timestamp |
+| `UpdatedBy` | `uuid` | No | User who last updated the record |
+| `DeletedAtUtc` | `timestamptz` | No | Soft delete timestamp |
+| `DeletedBy` | `uuid` | No | User who soft deleted the record |
+| `IsDeleted` | `boolean` | Yes | Soft delete flag |
+
+> **Optimistic concurrency:** PostgreSQL has no automatic rowversion type. A `uint RowVersion` property configured with `.IsRowVersion()` is auto-mapped by the Npgsql EF Core provider to the database's native `xmin` system column — no `RowVersion` column is created in the table; reads/writes go through the existing `xmin` column PostgreSQL already maintains on every row.
 
 Identity and security tables may use a smaller audit set where appropriate, but refresh token activity must still be traceable.
 
@@ -60,9 +61,9 @@ Identity and security tables may use a smaller audit set where appropriate, but 
 > schema change.
 >
 > **Implementation note (MFA):** `IsMfaEnabled` below is implemented as-is. Two columns beyond
-> what's listed also exist on the real `Users` table: `MfaSecretProtected` (`nvarchar(max)`,
+> what's listed also exist on the real `Users` table: `MfaSecretProtected` (`text`,
 > nullable) — the TOTP secret, encrypted at rest via ASP.NET Core Data Protection, never stored
-> or transmitted in plaintext after enrollment — and `MfaEnabledAtUtc` (`datetime2`, nullable).
+> or transmitted in plaintext after enrollment — and `MfaEnabledAtUtc` (`timestamptz`, nullable).
 > They're omitted from the table below because they're an implementation detail of how
 > `IsMfaEnabled` is realized, not part of the target ERD shape.
 
@@ -72,14 +73,14 @@ Stores application login accounts.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `EmployeeId` | `uniqueidentifier` | Nullable FK to `Employees` |
-| `UserName` | `nvarchar(100)` | Unique |
-| `Email` | `nvarchar(256)` | Unique |
-| `PasswordHash` | `nvarchar(max)` | Required |
-| `IsActive` | `bit` | Required |
-| `IsMfaEnabled` | `bit` | Required |
-| `LastLoginAtUtc` | `datetime2` | Nullable |
+| `Id` | `uuid` | Primary key |
+| `EmployeeId` | `uuid` | Nullable FK to `Employees` |
+| `UserName` | `varchar(100)` | Unique |
+| `Email` | `varchar(256)` | Unique |
+| `PasswordHash` | `text` | Required |
+| `IsActive` | `boolean` | Required |
+| `IsMfaEnabled` | `boolean` | Required |
+| `LastLoginAtUtc` | `timestamptz` | Nullable |
 | Audit fields | Shared | Include audit and soft delete fields |
 
 ### 4.2 Roles
@@ -88,9 +89,9 @@ Stores role definitions.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `Name` | `nvarchar(50)` | Unique: `Admin`, `HR`, `Manager`, `Employee` |
-| `Description` | `nvarchar(250)` | Nullable |
+| `Id` | `uuid` | Primary key |
+| `Name` | `varchar(50)` | Unique: `Admin`, `HR`, `Manager`, `Employee` |
+| `Description` | `varchar(250)` | Nullable |
 | Audit fields | Shared | Include audit and soft delete fields |
 
 ### 4.3 UserRoles
@@ -99,10 +100,10 @@ Maps users to roles.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `UserId` | `uniqueidentifier` | FK to `Users` |
-| `RoleId` | `uniqueidentifier` | FK to `Roles` |
-| `AssignedAtUtc` | `datetime2` | Required |
-| `AssignedBy` | `uniqueidentifier` | Nullable FK to `Users` |
+| `UserId` | `uuid` | FK to `Users` |
+| `RoleId` | `uuid` | FK to `Roles` |
+| `AssignedAtUtc` | `timestamptz` | Required |
+| `AssignedBy` | `uuid` | Nullable FK to `Users` |
 
 Primary key: composite key on `UserId`, `RoleId`.
 
@@ -112,17 +113,17 @@ Stores hashed refresh tokens for JWT session renewal.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `UserId` | `uniqueidentifier` | FK to `Users` |
-| `TokenHash` | `nvarchar(512)` | Required |
-| `TokenFamilyId` | `uniqueidentifier` | Groups rotated tokens |
-| `IssuedAtUtc` | `datetime2` | Required |
-| `ExpiresAtUtc` | `datetime2` | Required |
-| `RevokedAtUtc` | `datetime2` | Nullable |
-| `ReplacedByTokenId` | `uniqueidentifier` | Nullable FK to `RefreshTokens` |
-| `IpAddress` | `nvarchar(64)` | Nullable |
-| `UserAgent` | `nvarchar(500)` | Nullable |
-| `IsRevoked` | `bit` | Required |
+| `Id` | `uuid` | Primary key |
+| `UserId` | `uuid` | FK to `Users` |
+| `TokenHash` | `varchar(512)` | Required |
+| `TokenFamilyId` | `uuid` | Groups rotated tokens |
+| `IssuedAtUtc` | `timestamptz` | Required |
+| `ExpiresAtUtc` | `timestamptz` | Required |
+| `RevokedAtUtc` | `timestamptz` | Nullable |
+| `ReplacedByTokenId` | `uuid` | Nullable FK to `RefreshTokens` |
+| `IpAddress` | `varchar(64)` | Nullable |
+| `UserAgent` | `varchar(500)` | Nullable |
+| `IsRevoked` | `boolean` | Required |
 
 Refresh tokens should be hard deleted only after expiry and retention policy allow it.
 
@@ -132,13 +133,13 @@ Stores password reset requests.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `UserId` | `uniqueidentifier` | FK to `Users` |
-| `TokenHash` | `nvarchar(512)` | Required |
-| `ExpiresAtUtc` | `datetime2` | Required |
-| `UsedAtUtc` | `datetime2` | Nullable |
-| `CreatedAtUtc` | `datetime2` | Required |
-| `IpAddress` | `nvarchar(64)` | Nullable |
+| `Id` | `uuid` | Primary key |
+| `UserId` | `uuid` | FK to `Users` |
+| `TokenHash` | `varchar(512)` | Required |
+| `ExpiresAtUtc` | `timestamptz` | Required |
+| `UsedAtUtc` | `timestamptz` | Nullable |
+| `CreatedAtUtc` | `timestamptz` | Required |
+| `IpAddress` | `varchar(64)` | Nullable |
 
 ### 4.6 MfaChallenges
 
@@ -150,11 +151,11 @@ expired rows is a reasonable operational follow-up but not required for correctn
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key; this is the `mfaChallengeId` |
-| `UserId` | `uniqueidentifier` | FK to `Users` |
-| `CreatedAtUtc` | `datetime2` | Required |
-| `ExpiresAtUtc` | `datetime2` | Required — 5 minutes from creation |
-| `IsConsumed` | `bit` | Required — set once a code has been successfully verified against this challenge |
+| `Id` | `uuid` | Primary key; this is the `mfaChallengeId` |
+| `UserId` | `uuid` | FK to `Users` |
+| `CreatedAtUtc` | `timestamptz` | Required |
+| `ExpiresAtUtc` | `timestamptz` | Required — 5 minutes from creation |
+| `IsConsumed` | `boolean` | Required — set once a code has been successfully verified against this challenge |
 
 ### 4.7 MfaRecoveryCodes
 
@@ -166,11 +167,11 @@ every prior code for the user, used or not, and issues 10 fresh ones.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `UserId` | `uniqueidentifier` | FK to `Users` |
-| `CodeHash` | `nvarchar(max)` | Required — same PBKDF2 hashing as `Users.PasswordHash` |
-| `CreatedAtUtc` | `datetime2` | Required |
-| `UsedAtUtc` | `datetime2` | Nullable — set on first (and only) successful use |
+| `Id` | `uuid` | Primary key |
+| `UserId` | `uuid` | FK to `Users` |
+| `CodeHash` | `text` | Required — same PBKDF2 hashing as `Users.PasswordHash` |
+| `CreatedAtUtc` | `timestamptz` | Required |
+| `UsedAtUtc` | `timestamptz` | Nullable — set on first (and only) successful use |
 
 ## 5. Employee And Organization Tables
 
@@ -180,55 +181,55 @@ Stores employee profile and employment information.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `EmployeeCode` | `nvarchar(50)` | Unique |
-| `FirstName` | `nvarchar(100)` | Required |
-| `MiddleName` | `nvarchar(100)` | Nullable |
-| `LastName` | `nvarchar(100)` | Required |
-| `Email` | `nvarchar(256)` | Unique for active employees |
-| `PhoneNumber` | `nvarchar(30)` | Nullable |
+| `Id` | `uuid` | Primary key |
+| `EmployeeCode` | `varchar(50)` | Unique |
+| `FirstName` | `varchar(100)` | Required |
+| `MiddleName` | `varchar(100)` | Nullable |
+| `LastName` | `varchar(100)` | Required |
+| `Email` | `varchar(256)` | Unique for active employees |
+| `PhoneNumber` | `varchar(30)` | Nullable |
 | `DateOfBirth` | `date` | Nullable |
-| `Gender` | `nvarchar(50)` | Nullable |
-| `AddressLine1` | `nvarchar(250)` | Nullable |
-| `AddressLine2` | `nvarchar(250)` | Nullable |
-| `City` | `nvarchar(100)` | Nullable |
-| `State` | `nvarchar(100)` | Nullable |
-| `PostalCode` | `nvarchar(20)` | Nullable |
-| `Country` | `nvarchar(100)` | Nullable |
-| `EmergencyContactName` | `nvarchar(150)` | Nullable |
-| `EmergencyContactPhone` | `nvarchar(30)` | Nullable |
-| `EmergencyContactRelation` | `nvarchar(100)` | Nullable |
-| `DepartmentId` | `uniqueidentifier` | FK to `Departments` |
-| `TeamId` | `uniqueidentifier` | Nullable FK to `Teams` |
-| `DesignationId` | `uniqueidentifier` | FK to `Designations` |
-| `ManagerId` | `uniqueidentifier` | Nullable self FK to `Employees` |
-| `OfficeLocationId` | `uniqueidentifier` | FK to `OfficeLocations` |
+| `Gender` | `varchar(50)` | Nullable |
+| `AddressLine1` | `varchar(250)` | Nullable |
+| `AddressLine2` | `varchar(250)` | Nullable |
+| `City` | `varchar(100)` | Nullable |
+| `State` | `varchar(100)` | Nullable |
+| `PostalCode` | `varchar(20)` | Nullable |
+| `Country` | `varchar(100)` | Nullable |
+| `EmergencyContactName` | `varchar(150)` | Nullable |
+| `EmergencyContactPhone` | `varchar(30)` | Nullable |
+| `EmergencyContactRelation` | `varchar(100)` | Nullable |
+| `DepartmentId` | `uuid` | FK to `Departments` |
+| `TeamId` | `uuid` | Nullable FK to `Teams` |
+| `DesignationId` | `uuid` | FK to `Designations` |
+| `ManagerId` | `uuid` | Nullable self FK to `Employees` |
+| `OfficeLocationId` | `uuid` | FK to `OfficeLocations` |
 | `JoinDate` | `date` | Required |
 | `ExitDate` | `date` | Nullable |
-| `Status` | `nvarchar(50)` | Active, Inactive, OnLeave, Terminated |
-| `ProfilePhotoDocumentId` | `uniqueidentifier` | Nullable FK to `EmployeeDocuments` |
+| `Status` | `varchar(50)` | Active, Inactive, OnLeave, Terminated |
+| `ProfilePhotoDocumentId` | `uuid` | Nullable FK to `EmployeeDocuments` |
 | Audit fields | Shared | Include audit and soft delete fields |
 
 ### 5.2 Departments
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `Name` | `nvarchar(150)` | Unique |
-| `Code` | `nvarchar(50)` | Unique |
-| `Description` | `nvarchar(500)` | Nullable |
-| `HeadEmployeeId` | `uniqueidentifier` | Nullable FK to `Employees` |
+| `Id` | `uuid` | Primary key |
+| `Name` | `varchar(150)` | Unique |
+| `Code` | `varchar(50)` | Unique |
+| `Description` | `varchar(500)` | Nullable |
+| `HeadEmployeeId` | `uuid` | Nullable FK to `Employees` |
 | Audit fields | Shared | Include audit and soft delete fields |
 
 ### 5.3 Teams
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `DepartmentId` | `uniqueidentifier` | FK to `Departments` |
-| `Name` | `nvarchar(150)` | Required |
-| `Code` | `nvarchar(50)` | Required |
-| `LeadEmployeeId` | `uniqueidentifier` | Nullable FK to `Employees` |
+| `Id` | `uuid` | Primary key |
+| `DepartmentId` | `uuid` | FK to `Departments` |
+| `Name` | `varchar(150)` | Required |
+| `Code` | `varchar(50)` | Required |
+| `LeadEmployeeId` | `uuid` | Nullable FK to `Employees` |
 | Audit fields | Shared | Include audit and soft delete fields |
 
 Unique constraint: `DepartmentId`, `Code`.
@@ -237,9 +238,9 @@ Unique constraint: `DepartmentId`, `Code`.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `Name` | `nvarchar(150)` | Unique |
-| `Code` | `nvarchar(50)` | Unique |
+| `Id` | `uuid` | Primary key |
+| `Name` | `varchar(150)` | Unique |
+| `Code` | `varchar(50)` | Unique |
 | `Level` | `int` | Optional hierarchy level |
 | Audit fields | Shared | Include audit and soft delete fields |
 
@@ -247,15 +248,15 @@ Unique constraint: `DepartmentId`, `Code`.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `Name` | `nvarchar(150)` | Required |
-| `Code` | `nvarchar(50)` | Unique |
-| `AddressLine1` | `nvarchar(250)` | Nullable |
-| `AddressLine2` | `nvarchar(250)` | Nullable |
-| `City` | `nvarchar(100)` | Required |
-| `State` | `nvarchar(100)` | Nullable |
-| `Country` | `nvarchar(100)` | Required |
-| `TimeZoneId` | `nvarchar(100)` | Required |
+| `Id` | `uuid` | Primary key |
+| `Name` | `varchar(150)` | Required |
+| `Code` | `varchar(50)` | Unique |
+| `AddressLine1` | `varchar(250)` | Nullable |
+| `AddressLine2` | `varchar(250)` | Nullable |
+| `City` | `varchar(100)` | Required |
+| `State` | `varchar(100)` | Nullable |
+| `Country` | `varchar(100)` | Required |
+| `TimeZoneId` | `varchar(100)` | Required |
 | Audit fields | Shared | Include audit and soft delete fields |
 
 ### 5.6 EmployeeDocuments
@@ -264,16 +265,16 @@ Stores metadata for files stored in Azure Blob Storage.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `EmployeeId` | `uniqueidentifier` | FK to `Employees` |
-| `DocumentType` | `nvarchar(100)` | ProfilePhoto, Identity, OfferLetter, NDA, Appraisal, Other |
-| `OriginalFileName` | `nvarchar(255)` | Required |
-| `ContentType` | `nvarchar(100)` | Required |
+| `Id` | `uuid` | Primary key |
+| `EmployeeId` | `uuid` | FK to `Employees` |
+| `DocumentType` | `varchar(100)` | ProfilePhoto, Identity, OfferLetter, NDA, Appraisal, Other |
+| `OriginalFileName` | `varchar(255)` | Required |
+| `ContentType` | `varchar(100)` | Required |
 | `FileSizeBytes` | `bigint` | Required |
-| `BlobContainer` | `nvarchar(100)` | Required |
-| `BlobPath` | `nvarchar(500)` | Required |
-| `UploadedAtUtc` | `datetime2` | Required |
-| `UploadedBy` | `uniqueidentifier` | FK to `Users` |
+| `BlobContainer` | `varchar(100)` | Required |
+| `BlobPath` | `varchar(500)` | Required |
+| `UploadedAtUtc` | `timestamptz` | Required |
+| `UploadedBy` | `uuid` | FK to `Users` |
 | Audit fields | Shared | Include audit and soft delete fields |
 
 ## 6. Attendance Tables
@@ -282,21 +283,21 @@ Stores metadata for files stored in Azure Blob Storage.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `Name` | `nvarchar(150)` | Required |
+| `Id` | `uuid` | Primary key |
+| `Name` | `varchar(150)` | Required |
 | `StartTime` | `time` | Required |
 | `EndTime` | `time` | Required |
 | `GraceMinutes` | `int` | Required |
-| `IsNightShift` | `bit` | Required |
+| `IsNightShift` | `boolean` | Required |
 | Audit fields | Shared | Include audit and soft delete fields |
 
 ### 6.2 EmployeeShifts
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `EmployeeId` | `uniqueidentifier` | FK to `Employees` |
-| `ShiftId` | `uniqueidentifier` | FK to `Shifts` |
+| `Id` | `uuid` | Primary key |
+| `EmployeeId` | `uuid` | FK to `Employees` |
+| `ShiftId` | `uuid` | FK to `Shifts` |
 | `EffectiveFrom` | `date` | Required |
 | `EffectiveTo` | `date` | Nullable |
 | Audit fields | Shared | Include audit and soft delete fields |
@@ -305,17 +306,17 @@ Stores metadata for files stored in Azure Blob Storage.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `EmployeeId` | `uniqueidentifier` | FK to `Employees` |
-| `ShiftId` | `uniqueidentifier` | Nullable FK to `Shifts` |
+| `Id` | `uuid` | Primary key |
+| `EmployeeId` | `uuid` | FK to `Employees` |
+| `ShiftId` | `uuid` | Nullable FK to `Shifts` |
 | `AttendanceDate` | `date` | Required |
-| `CheckInAtUtc` | `datetime2` | Nullable |
-| `CheckOutAtUtc` | `datetime2` | Nullable |
-| `Status` | `nvarchar(50)` | Present, Absent, Late, HalfDay, OnLeave, Holiday |
-| `IsLateArrival` | `bit` | Required |
-| `IsEarlyLeave` | `bit` | Required |
+| `CheckInAtUtc` | `timestamptz` | Nullable |
+| `CheckOutAtUtc` | `timestamptz` | Nullable |
+| `Status` | `varchar(50)` | Present, Absent, Late, HalfDay, OnLeave, Holiday |
+| `IsLateArrival` | `boolean` | Required |
+| `IsEarlyLeave` | `boolean` | Required |
 | `TotalWorkMinutes` | `int` | Nullable |
-| `Notes` | `nvarchar(500)` | Nullable |
+| `Notes` | `varchar(500)` | Nullable |
 | Audit fields | Shared | Include audit and soft delete fields |
 
 Unique constraint: `EmployeeId`, `AttendanceDate`.
@@ -324,16 +325,16 @@ Unique constraint: `EmployeeId`, `AttendanceDate`.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `AttendanceRecordId` | `uniqueidentifier` | FK to `AttendanceRecords` |
-| `RequestedByEmployeeId` | `uniqueidentifier` | FK to `Employees` |
-| `ApprovedByEmployeeId` | `uniqueidentifier` | Nullable FK to `Employees` |
-| `RequestedCheckInAtUtc` | `datetime2` | Nullable |
-| `RequestedCheckOutAtUtc` | `datetime2` | Nullable |
-| `Reason` | `nvarchar(500)` | Required |
-| `Status` | `nvarchar(50)` | Pending, Approved, Rejected |
-| `DecisionAtUtc` | `datetime2` | Nullable |
-| `DecisionComments` | `nvarchar(500)` | Nullable |
+| `Id` | `uuid` | Primary key |
+| `AttendanceRecordId` | `uuid` | FK to `AttendanceRecords` |
+| `RequestedByEmployeeId` | `uuid` | FK to `Employees` |
+| `ApprovedByEmployeeId` | `uuid` | Nullable FK to `Employees` |
+| `RequestedCheckInAtUtc` | `timestamptz` | Nullable |
+| `RequestedCheckOutAtUtc` | `timestamptz` | Nullable |
+| `Reason` | `varchar(500)` | Required |
+| `Status` | `varchar(50)` | Pending, Approved, Rejected |
+| `DecisionAtUtc` | `timestamptz` | Nullable |
+| `DecisionComments` | `varchar(500)` | Nullable |
 | Audit fields | Shared | Include audit and soft delete fields |
 
 ## 7. Leave Tables
@@ -342,11 +343,11 @@ Unique constraint: `EmployeeId`, `AttendanceDate`.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `Name` | `nvarchar(100)` | Casual Leave, Sick Leave, Earned Leave, Unpaid Leave, Work From Home |
-| `Code` | `nvarchar(50)` | Unique |
-| `IsPaid` | `bit` | Required |
-| `RequiresApproval` | `bit` | Required |
+| `Id` | `uuid` | Primary key |
+| `Name` | `varchar(100)` | Casual Leave, Sick Leave, Earned Leave, Unpaid Leave, Work From Home |
+| `Code` | `varchar(50)` | Unique |
+| `IsPaid` | `boolean` | Required |
+| `RequiresApproval` | `boolean` | Required |
 | `AnnualEntitlementDays` | `decimal(5,2)` | Nullable |
 | Audit fields | Shared | Include audit and soft delete fields |
 
@@ -354,9 +355,9 @@ Unique constraint: `EmployeeId`, `AttendanceDate`.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `EmployeeId` | `uniqueidentifier` | FK to `Employees` |
-| `LeaveTypeId` | `uniqueidentifier` | FK to `LeaveTypes` |
+| `Id` | `uuid` | Primary key |
+| `EmployeeId` | `uuid` | FK to `Employees` |
+| `LeaveTypeId` | `uuid` | FK to `LeaveTypes` |
 | `Year` | `int` | Required |
 | `OpeningBalance` | `decimal(5,2)` | Required |
 | `Accrued` | `decimal(5,2)` | Required |
@@ -371,28 +372,28 @@ Unique constraint: `EmployeeId`, `LeaveTypeId`, `Year`.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `EmployeeId` | `uniqueidentifier` | FK to `Employees` |
-| `LeaveTypeId` | `uniqueidentifier` | FK to `LeaveTypes` |
-| `ApproverEmployeeId` | `uniqueidentifier` | Nullable FK to `Employees` |
+| `Id` | `uuid` | Primary key |
+| `EmployeeId` | `uuid` | FK to `Employees` |
+| `LeaveTypeId` | `uuid` | FK to `LeaveTypes` |
+| `ApproverEmployeeId` | `uuid` | Nullable FK to `Employees` |
 | `StartDate` | `date` | Required |
 | `EndDate` | `date` | Required |
 | `TotalDays` | `decimal(5,2)` | Required |
-| `Reason` | `nvarchar(500)` | Nullable |
-| `Status` | `nvarchar(50)` | Pending, Approved, Rejected, Cancelled |
-| `DecisionAtUtc` | `datetime2` | Nullable |
-| `DecisionComments` | `nvarchar(500)` | Nullable |
+| `Reason` | `varchar(500)` | Nullable |
+| `Status` | `varchar(50)` | Pending, Approved, Rejected, Cancelled |
+| `DecisionAtUtc` | `timestamptz` | Nullable |
+| `DecisionComments` | `varchar(500)` | Nullable |
 | Audit fields | Shared | Include audit and soft delete fields |
 
 ### 7.4 Holidays
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `OfficeLocationId` | `uniqueidentifier` | Nullable FK to `OfficeLocations` |
-| `Name` | `nvarchar(150)` | Required |
+| `Id` | `uuid` | Primary key |
+| `OfficeLocationId` | `uuid` | Nullable FK to `OfficeLocations` |
+| `Name` | `varchar(150)` | Required |
 | `HolidayDate` | `date` | Required |
-| `IsOptional` | `bit` | Required |
+| `IsOptional` | `boolean` | Required |
 | Audit fields | Shared | Include audit and soft delete fields |
 
 ## 8. Audit And Reporting Tables
@@ -403,16 +404,16 @@ Stores immutable audit events for security-sensitive and HR-sensitive operations
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `UserId` | `uniqueidentifier` | Nullable FK to `Users` |
-| `EntityName` | `nvarchar(150)` | Required |
-| `EntityId` | `uniqueidentifier` | Nullable |
-| `Action` | `nvarchar(100)` | Created, Updated, Deleted, Approved, Rejected, LoginFailed |
-| `OldValuesJson` | `nvarchar(max)` | Nullable |
-| `NewValuesJson` | `nvarchar(max)` | Nullable |
-| `IpAddress` | `nvarchar(64)` | Nullable |
-| `UserAgent` | `nvarchar(500)` | Nullable |
-| `CreatedAtUtc` | `datetime2` | Required |
+| `Id` | `uuid` | Primary key |
+| `UserId` | `uuid` | Nullable FK to `Users` |
+| `EntityName` | `varchar(150)` | Required |
+| `EntityId` | `uuid` | Nullable |
+| `Action` | `varchar(100)` | Created, Updated, Deleted, Approved, Rejected, LoginFailed |
+| `OldValuesJson` | `text` | Nullable |
+| `NewValuesJson` | `text` | Nullable |
+| `IpAddress` | `varchar(64)` | Nullable |
+| `UserAgent` | `varchar(500)` | Nullable |
+| `CreatedAtUtc` | `timestamptz` | Required |
 
 Audit logs should be append-only. They should not use normal soft delete.
 
@@ -424,17 +425,17 @@ Stores personal, per-user in-app/email notifications (e.g. leave decisions, atte
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `UserId` | `uniqueidentifier` | Nullable FK to `Users`; recipient |
-| `Title` | `nvarchar(250)` | Required |
-| `Message` | `nvarchar(2000)` | Required |
-| `Channel` | `nvarchar(50)` | `InApp` or `Email` |
-| `IsRead` | `bit` | Required |
-| `CreatedAtUtc` | `datetime2` | Required |
-| `ReadAtUtc` | `datetime2` | Nullable |
-| `ExpiresAtUtc` | `datetime2` | Nullable |
-| `IsDeleted` | `bit` | Required |
-| `DeletedAtUtc` | `datetime2` | Nullable |
+| `Id` | `uuid` | Primary key |
+| `UserId` | `uuid` | Nullable FK to `Users`; recipient |
+| `Title` | `varchar(250)` | Required |
+| `Message` | `varchar(2000)` | Required |
+| `Channel` | `varchar(50)` | `InApp` or `Email` |
+| `IsRead` | `boolean` | Required |
+| `CreatedAtUtc` | `timestamptz` | Required |
+| `ReadAtUtc` | `timestamptz` | Nullable |
+| `ExpiresAtUtc` | `timestamptz` | Nullable |
+| `IsDeleted` | `boolean` | Required |
+| `DeletedAtUtc` | `timestamptz` | Nullable |
 
 > **Implementation note:** this table predates this section and uses a reduced audit set (`IsDeleted`/`CreatedAtUtc`/`DeletedAtUtc` only — no `CreatedBy`/`UpdatedAtUtc`/`UpdatedBy`/`RowVersion`), consistent with §3's allowance for a smaller audit set where appropriate. It does not follow the full Shared Audit Fields table.
 
@@ -444,18 +445,18 @@ Stores company-wide broadcast announcements created by Admin/HR, distinct from p
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `Title` | `nvarchar(250)` | Required |
-| `Message` | `nvarchar(2000)` | Required |
-| `Priority` | `nvarchar(50)` | `Normal`, `Important`, `Critical` |
-| `AudienceType` | `nvarchar(50)` | `All`, `Department`, `Role` |
-| `DepartmentId` | `uniqueidentifier` | Nullable FK to `Departments`; set when `AudienceType = Department` |
-| `TargetRole` | `nvarchar(50)` | Nullable; set when `AudienceType = Role` (matches `Roles.Name`) |
-| `CreatedByUserId` | `uniqueidentifier` | FK to `Users`; author |
-| `CreatedAtUtc` | `datetime2` | Required |
-| `ExpiresAtUtc` | `datetime2` | Nullable |
-| `IsDeleted` | `bit` | Required; retracting an announcement soft-deletes it |
-| `DeletedAtUtc` | `datetime2` | Nullable |
+| `Id` | `uuid` | Primary key |
+| `Title` | `varchar(250)` | Required |
+| `Message` | `varchar(2000)` | Required |
+| `Priority` | `varchar(50)` | `Normal`, `Important`, `Critical` |
+| `AudienceType` | `varchar(50)` | `All`, `Department`, `Role` |
+| `DepartmentId` | `uuid` | Nullable FK to `Departments`; set when `AudienceType = Department` |
+| `TargetRole` | `varchar(50)` | Nullable; set when `AudienceType = Role` (matches `Roles.Name`) |
+| `CreatedByUserId` | `uuid` | FK to `Users`; author |
+| `CreatedAtUtc` | `timestamptz` | Required |
+| `ExpiresAtUtc` | `timestamptz` | Nullable |
+| `IsDeleted` | `boolean` | Required; retracting an announcement soft-deletes it |
+| `DeletedAtUtc` | `timestamptz` | Nullable |
 
 > **Implementation note:** follows the same reduced audit set as `Notifications` (`IsDeleted`/`CreatedAtUtc`/`DeletedAtUtc` only), for consistency with the sibling table it was built alongside, rather than the full Shared Audit Fields table.
 
@@ -465,10 +466,10 @@ Per-user read receipts for `Announcements`, since a single announcement row is s
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `Id` | `uniqueidentifier` | Primary key |
-| `AnnouncementId` | `uniqueidentifier` | FK to `Announcements` |
-| `UserId` | `uniqueidentifier` | FK to `Users` |
-| `ReadAtUtc` | `datetime2` | Required |
+| `Id` | `uuid` | Primary key |
+| `AnnouncementId` | `uuid` | FK to `Announcements` |
+| `UserId` | `uuid` | FK to `Users` |
+| `ReadAtUtc` | `timestamptz` | Required |
 
 Unique constraint: `AnnouncementId`, `UserId`.
 

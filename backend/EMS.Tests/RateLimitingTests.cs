@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using EMS.Persistence.Context;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -51,7 +52,12 @@ namespace EMS.Tests
 
                 builder.ConfigureServices(services =>
                 {
+                    // Since EF Core 8, AddDbContext also layers configuration through
+                    // IDbContextOptionsConfiguration<TContext>; removing only DbContextOptions<TContext>
+                    // leaves Program.cs's UseNpgsql(...) call registered alongside UseInMemoryDatabase(...)
+                    // below, which EF Core rejects as two providers on one context.
                     services.RemoveAll<DbContextOptions<ApplicationDbContext>>();
+                    services.RemoveAll<IDbContextOptionsConfiguration<ApplicationDbContext>>();
                     services.AddDbContext<ApplicationDbContext>(opt => opt.UseInMemoryDatabase(dbName));
                 });
             });

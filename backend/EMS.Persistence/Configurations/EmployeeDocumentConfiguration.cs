@@ -19,6 +19,9 @@ namespace EMS.Persistence.Configurations
             builder.Property(d => d.UploadedAtUtc).IsRequired();
             builder.HasIndex(d => d.EmployeeId);
             builder.HasIndex(d => d.DocumentType);
+            // PostgreSQL has no automatic rowversion column; a `uint` property marked
+            // IsRowVersion() is auto-mapped by the Npgsql provider to the native `xmin`
+            // system column (see NpgsqlPostgresModelFinalizingConvention.ProcessRowVersionProperty).
             builder.Property(d => d.RowVersion).IsRowVersion();
         }
     }

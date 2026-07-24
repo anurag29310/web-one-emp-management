@@ -26,7 +26,7 @@ The first sprint should not try to complete every MVP module end to end. Authent
 - Workdays: 10 business days.
 - Backend: .NET 9 Web API using Clean Architecture.
 - Frontend: React 18+ (Vite, TypeScript) with functional components, hooks, and React Hook Form.
-- Database: SQL Server with EF Core migrations.
+- Database: PostgreSQL with EF Core migrations (Npgsql provider).
 - Authentication: JWT access tokens and refresh tokens.
 - Deployment target: local Docker-ready setup first, Azure deployment preparation only.
 - MVP quality rules from `AI_CONTRACT.md` apply from the start.
@@ -38,7 +38,7 @@ The first sprint should not try to complete every MVP module end to end. Authent
 - Repository and solution structure.
 - Backend Clean Architecture projects.
 - React application shell.
-- SQL Server database foundation.
+- PostgreSQL database foundation.
 - Shared audit fields and soft delete support.
 - Authentication APIs for login, refresh, logout, forgot password, reset password, and current user.
 - Role model for Admin, HR, Manager, and Employee.
@@ -93,7 +93,7 @@ Backend:
 - Create solution under `src/server`.
 - Add `EmployeeManagement.Api`, `Application`, `Domain`, `Infrastructure`, and `Tests`.
 - Configure project references according to Clean Architecture.
-- Add baseline packages for EF Core, SQL Server, FluentValidation, Serilog, JWT authentication, and testing.
+- Add baseline packages for EF Core, Npgsql (PostgreSQL), FluentValidation, Serilog, JWT authentication, and testing.
 
 Frontend:
 

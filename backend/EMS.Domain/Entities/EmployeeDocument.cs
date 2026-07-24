@@ -25,6 +25,6 @@ namespace EMS.Domain.Entities
         public DateTime? UpdatedAtUtc { get; set; }
         public Guid? UpdatedBy { get; set; }
 
-        public byte[]? RowVersion { get; set; }
+        public uint RowVersion { get; set; }
     }
 }

@@ -6,7 +6,7 @@ This project is a production-ready Employee Management System built using:
 
 * React 18+ (Vite, TypeScript, React Router)
 * .NET 9
-* SQL Server
+* PostgreSQL
 * Docker
 * Clean Architecture
 * CQRS
@@ -78,7 +78,7 @@ Technology:
 * .NET 9
 * ASP.NET Core
 * Entity Framework Core
-* SQL Server
+* PostgreSQL
 
 Requirements:
 

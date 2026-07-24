@@ -15,7 +15,7 @@ Act as a senior .NET engineer. All code generated must be enterprise-grade and s
 - .NET 9
 - ASP.NET Core Web API
 - Entity Framework Core
-- SQL Server
+- PostgreSQL
 - JWT Authentication + Refresh Token Authentication
 - Clean Architecture
 - Repository Pattern

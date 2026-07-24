@@ -4,7 +4,7 @@ Technology Stack
 
 * React 18+ (Vite, TypeScript, React Router)
 * .NET 9
-* SQL Server
+* PostgreSQL
 * Azure
 
 Architecture Rules

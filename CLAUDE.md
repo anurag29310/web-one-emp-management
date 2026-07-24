@@ -6,7 +6,7 @@ Production-ready Employee Management System built with:
 
 - React 18+ (Vite, TypeScript, React Router)
 - .NET 9
-- SQL Server
+- PostgreSQL
 - Docker
 - Clean Architecture / CQRS / MediatR
 - FluentValidation

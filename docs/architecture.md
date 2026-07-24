@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The Employee Management System will be built as a modern web application using React 18+ (Vite, TypeScript, React Router), .NET 9 Web API, SQL Server, Docker, and Azure. The backend will follow Clean Architecture so business rules remain independent from frameworks, databases, UI concerns, and cloud infrastructure.
+The Employee Management System will be built as a modern web application using React 18+ (Vite, TypeScript, React Router), .NET 9 Web API, PostgreSQL, Docker, and Azure. The backend will follow Clean Architecture so business rules remain independent from frameworks, databases, UI concerns, and cloud infrastructure.
 
 The system must support the MVP modules defined in `docs/requirements.md`:
 
@@ -151,7 +151,7 @@ Recommended contents:
 
 Design decision:
 
-The application layer coordinates work but does not know whether data comes from SQL Server, Azure Blob Storage, or another provider. This keeps use cases testable and prevents business logic from leaking into controllers.
+The application layer coordinates work but does not know whether data comes from PostgreSQL, Azure Blob Storage, or another provider. This keeps use cases testable and prevents business logic from leaking into controllers.
 
 ### 3.3 Infrastructure Layer
 
@@ -160,7 +160,7 @@ Project: `EmployeeManagement.Infrastructure`
 Purpose:
 
 - Implement persistence, authentication services, file storage, email, logging integrations, and other external concerns.
-- Use Entity Framework Core for SQL Server access.
+- Use Entity Framework Core (Npgsql provider) for PostgreSQL access.
 - Implement repositories and unit of work.
 
 Recommended contents:
@@ -309,14 +309,14 @@ never stored or logged in plaintext after enrollment completes.
 
 ### 5.1 Database Platform
 
-Use SQL Server for local development and Azure SQL Database in Azure. Use Entity Framework Core migrations to manage schema changes.
+Use PostgreSQL in every environment, run as a `postgres:15` container per `docker-compose.yml` / `docker-compose.prod.yml`. Use Entity Framework Core migrations (Npgsql provider) to manage schema changes.
 
 Recommended environments:
 
-- Local: SQL Server Developer Edition or SQL Server container.
-- Development: Azure SQL Database basic or serverless tier.
-- Test/UAT: Azure SQL Database with production-like schema and masked data.
-- Production: Azure SQL Database with backups, geo-replication as needed, auditing, and threat detection.
+- Local: PostgreSQL via Docker Compose (`docker compose up -d db`).
+- Development: PostgreSQL container with development data.
+- Test/UAT: PostgreSQL with production-like schema and masked data.
+- Production: PostgreSQL with backups, replication as needed, auditing, and threat detection.
 
 ### 5.2 Data Modeling
 
@@ -385,7 +385,7 @@ Indexes are aligned with expected screens: employee search, dashboard summaries,
 
 ### 5.6 File Storage
 
-Store binary files in Azure Blob Storage, not SQL Server.
+Store binary files in Azure Blob Storage, not PostgreSQL.
 
 Examples:
 
@@ -395,7 +395,7 @@ Examples:
 - NDA files
 - Appraisal documents
 
-SQL Server should store file metadata only:
+PostgreSQL should store file metadata only:
 
 - Blob container
 - Blob path
