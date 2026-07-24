@@ -30,7 +30,7 @@ namespace EMS.Application.Features.Exports.Handlers
         public async Task<ExportFileResult> Handle(ExportEmployeesQuery request, CancellationToken cancellationToken)
         {
             var employees = await _repo.GetAllForExportAsync(
-                request.Search, request.SortBy, request.SortDir, request.DepartmentId, request.Status, cancellationToken);
+                request.Search, request.SortBy, request.SortDir, request.DepartmentId, request.Status, ct: cancellationToken);
 
             var rows = new List<IReadOnlyList<object?>>();
             foreach (var e in employees)
@@ -38,7 +38,7 @@ namespace EMS.Application.Features.Exports.Handlers
                 rows.Add(new List<object?>
                 {
                     e.EmployeeCode, e.FirstName, e.LastName, e.Email, e.PhoneNumber,
-                    e.Department?.Name, e.Designation, e.JoinDate, e.ExitDate, e.EmploymentStatus
+                    e.Department?.Name, e.Designation?.Name, e.JoinDate, e.ExitDate, e.EmploymentStatus
                 });
             }
 

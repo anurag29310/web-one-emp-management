@@ -13,6 +13,9 @@ namespace EMS.Application.Features.Employees.Queries
         public string? SortBy { get; set; }
         public string? SortDir { get; set; }
         public Guid? DepartmentId { get; set; }
+        public Guid? TeamId { get; set; }
+        public Guid? DesignationId { get; set; }
+        public Guid? OfficeLocationId { get; set; }
         public string? Status { get; set; }
     }
 }

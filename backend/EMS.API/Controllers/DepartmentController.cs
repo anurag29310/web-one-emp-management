@@ -2,6 +2,8 @@ using EMS.Application.Features.Departments;
 using EMS.Application.Features.Departments.DTOs;
 using EMS.Application.Features.Employees.DTOs;
 using EMS.Application.Features.Employees.Queries;
+using EMS.Application.Features.Teams;
+using EMS.Application.Features.Teams.DTOs;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -108,6 +110,16 @@ namespace EMS.API.Controllers
                 new GetEmployeesByDepartmentQuery { DepartmentId = id, Page = page, PageSize = pageSize }, ct);
             var dtos = result.Select(EmployeeDto.FromEntity);
             return Ok(ApiResponse<System.Collections.Generic.IEnumerable<EmployeeDto>>.Success(dtos));
+        }
+
+        /// <summary>List teams belonging to this department.</summary>
+        [HttpGet("{id:guid}/teams")]
+        [ProducesResponseType(typeof(ApiResponse<System.Collections.Generic.IEnumerable<TeamDto>>), 200)]
+        public async Task<IActionResult> GetTeams(Guid id, CancellationToken ct)
+        {
+            var teams = await _mediator.Send(new GetTeamsByDepartmentQuery { DepartmentId = id }, ct);
+            var dtos = teams.Select(TeamDto.FromEntity);
+            return Ok(ApiResponse<System.Collections.Generic.IEnumerable<TeamDto>>.Success(dtos));
         }
     }
 }

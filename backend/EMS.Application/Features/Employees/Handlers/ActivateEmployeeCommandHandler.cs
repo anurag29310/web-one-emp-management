@@ -25,6 +25,7 @@ namespace EMS.Application.Features.Employees.Handlers
             var emp = await _repo.GetByIdIncludingDeletedAsync(request.Id, cancellationToken)
                 ?? throw new System.InvalidOperationException($"Employee {request.Id} not found.");
             emp.IsActive = true;
+            emp.UpdatedAtUtc = System.DateTime.UtcNow;
             await _repo.UpdateAsync(emp, cancellationToken);
             await _repo.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Activated employee {EmployeeId}", emp.Id);

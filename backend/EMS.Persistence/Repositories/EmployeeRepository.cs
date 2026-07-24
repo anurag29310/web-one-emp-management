@@ -16,30 +16,33 @@ namespace EMS.Persistence.Repositories
 
         public EmployeeRepository(ApplicationDbContext db) => _db = db;
 
+        private static IQueryable<Employee> IncludeOrg(IQueryable<Employee> q) =>
+            q.Include(e => e.Department).Include(e => e.Team).Include(e => e.Designation).Include(e => e.OfficeLocation);
+
         public async Task<Employee?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
-            await _db.Employees.Include(e => e.Department)
+            await IncludeOrg(_db.Employees)
                 .FirstOrDefaultAsync(e => e.Id == id && e.IsActive, ct);
 
         public async Task<Employee?> GetByIdIncludingDeletedAsync(Guid id, CancellationToken ct = default) =>
-            await _db.Employees.Include(e => e.Department)
+            await IncludeOrg(_db.Employees)
                 .FirstOrDefaultAsync(e => e.Id == id, ct);
 
         public async Task<IEnumerable<Employee>> GetAllAsync(
             int page, int pageSize, string? search, string? sortBy, string? sortDir,
-            Guid? departmentId, string? status, CancellationToken ct = default)
+            Guid? departmentId, string? status, Guid? teamId = null, Guid? designationId = null, Guid? officeLocationId = null, CancellationToken ct = default)
         {
-            var q = BuildFilterQuery(search, departmentId, status);
+            var q = IncludeOrg(BuildFilterQuery(search, departmentId, status, teamId, designationId, officeLocationId));
             q = ApplySort(q, sortBy, sortDir);
             return await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
         }
 
-        public async Task<int> CountAsync(string? search, Guid? departmentId, string? status, CancellationToken ct = default) =>
-            await BuildFilterQuery(search, departmentId, status).CountAsync(ct);
+        public async Task<int> CountAsync(string? search, Guid? departmentId, string? status, Guid? teamId = null, Guid? designationId = null, Guid? officeLocationId = null, CancellationToken ct = default) =>
+            await BuildFilterQuery(search, departmentId, status, teamId, designationId, officeLocationId).CountAsync(ct);
 
         public async Task<IEnumerable<Employee>> GetAllForExportAsync(
-            string? search, string? sortBy, string? sortDir, Guid? departmentId, string? status, CancellationToken ct = default)
+            string? search, string? sortBy, string? sortDir, Guid? departmentId, string? status, Guid? teamId = null, Guid? designationId = null, Guid? officeLocationId = null, CancellationToken ct = default)
         {
-            IQueryable<Employee> q = BuildFilterQuery(search, departmentId, status).Include(e => e.Department);
+            IQueryable<Employee> q = IncludeOrg(BuildFilterQuery(search, departmentId, status, teamId, designationId, officeLocationId));
             q = ApplySort(q, sortBy, sortDir);
             return await q.ToListAsync(ct);
         }
@@ -51,8 +54,15 @@ namespace EMS.Persistence.Repositories
         }
 
         public async Task<IEnumerable<Employee>> GetByDepartmentAsync(Guid departmentId, int page, int pageSize, CancellationToken ct = default) =>
-            await _db.Employees.AsNoTracking()
+            await IncludeOrg(_db.Employees.AsNoTracking())
                 .Where(e => e.DepartmentId == departmentId && e.IsActive)
+                .OrderBy(e => e.FirstName)
+                .Skip((page - 1) * pageSize).Take(pageSize)
+                .ToListAsync(ct);
+
+        public async Task<IEnumerable<Employee>> GetByTeamAsync(Guid teamId, int page, int pageSize, CancellationToken ct = default) =>
+            await IncludeOrg(_db.Employees.AsNoTracking())
+                .Where(e => e.TeamId == teamId && e.IsActive)
                 .OrderBy(e => e.FirstName)
                 .Skip((page - 1) * pageSize).Take(pageSize)
                 .ToListAsync(ct);
@@ -85,8 +95,7 @@ namespace EMS.Persistence.Repositories
             while (current?.ManagerId != null && !visited.Contains(current.Id))
             {
                 visited.Add(current.Id);
-                var manager = await _db.Employees.AsNoTracking()
-                    .Include(e => e.Department)
+                var manager = await IncludeOrg(_db.Employees.AsNoTracking())
                     .FirstOrDefaultAsync(e => e.Id == current.ManagerId, ct);
 
                 if (manager == null) break;
@@ -109,6 +118,7 @@ namespace EMS.Persistence.Repositories
         public Task DeleteAsync(Employee employee, CancellationToken ct = default)
         {
             employee.IsActive = false;
+            employee.IsDeleted = true;
             _db.Employees.Update(employee);
             return Task.CompletedTask;
         }
@@ -116,6 +126,7 @@ namespace EMS.Persistence.Repositories
         public Task RestoreAsync(Employee employee, CancellationToken ct = default)
         {
             employee.IsActive = true;
+            employee.IsDeleted = false;
             employee.ExitDate = null;
             employee.EmploymentStatus = "Active";
             _db.Employees.Update(employee);
@@ -123,17 +134,19 @@ namespace EMS.Persistence.Repositories
         }
 
         public async Task<bool> EmployeeCodeExistsAsync(string code, Guid? excludeId = null, CancellationToken ct = default) =>
-            await _db.Employees.AnyAsync(e => e.EmployeeCode == code && (excludeId == null || e.Id != excludeId), ct);
+            await _db.Employees.AnyAsync(e => e.EmployeeCode == code && !e.IsDeleted && (excludeId == null || e.Id != excludeId), ct);
 
         public async Task<bool> EmailExistsAsync(string email, Guid? excludeId = null, CancellationToken ct = default) =>
-            await _db.Employees.AnyAsync(e => e.Email == email && (excludeId == null || e.Id != excludeId), ct);
+            await _db.Employees.AnyAsync(e => e.Email == email && !e.IsDeleted && (excludeId == null || e.Id != excludeId), ct);
 
         public async Task SaveChangesAsync(CancellationToken ct = default) =>
             await _db.SaveChangesAsync(ct);
 
         // ─── Helpers ───────────────────────────────────────────────────────────────
 
-        private IQueryable<Employee> BuildFilterQuery(string? search, Guid? departmentId, string? status)
+        private IQueryable<Employee> BuildFilterQuery(
+            string? search, Guid? departmentId, string? status,
+            Guid? teamId = null, Guid? designationId = null, Guid? officeLocationId = null)
         {
             var q = _db.Employees.AsNoTracking().Where(e => e.IsActive);
 
@@ -146,6 +159,15 @@ namespace EMS.Persistence.Repositories
 
             if (!string.IsNullOrWhiteSpace(status))
                 q = q.Where(e => e.EmploymentStatus == status);
+
+            if (teamId.HasValue)
+                q = q.Where(e => e.TeamId == teamId.Value);
+
+            if (designationId.HasValue)
+                q = q.Where(e => e.DesignationId == designationId.Value);
+
+            if (officeLocationId.HasValue)
+                q = q.Where(e => e.OfficeLocationId == officeLocationId.Value);
 
             return q;
         }

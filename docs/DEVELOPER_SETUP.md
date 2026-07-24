@@ -31,13 +31,19 @@ dotnet user-secrets init --project backend/EMS.API
 dotnet user-secrets set "Jwt:Key" "<a random string of at least 32 bytes>" --project backend/EMS.API
 ```
 
-4. Run migrations and start the API:
+4. Build and start the API. Program.cs applies any pending EF Core migrations automatically on
+   startup (`db.Database.Migrate()`), so no separate migration step is required:
 
 ```powershell
 dotnet restore
 dotnet build
-dotnet ef database update --project backend/EMS.Persistence --startup-project backend/EMS.API
 dotnet run --project backend/EMS.API
+```
+
+   To apply migrations without starting the API (e.g. before a deploy), run:
+
+```powershell
+dotnet ef database update --project backend/EMS.Persistence --startup-project backend/EMS.API
 ```
 
 Frontend - local run

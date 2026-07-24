@@ -35,6 +35,7 @@ namespace EMS.Application.Features.Employees.Handlers
                 || string.Equals(request.Status, "Terminated", StringComparison.OrdinalIgnoreCase);
 
             emp.IsActive = !isTerminated;
+            emp.UpdatedAtUtc = DateTime.UtcNow;
 
             await _repo.UpdateAsync(emp, cancellationToken);
             await _repo.SaveChangesAsync(cancellationToken);

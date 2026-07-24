@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EMS.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260724101559_InitialCreate")]
+    [Migration("20260724122740_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -255,7 +255,7 @@ namespace EMS.Persistence.Migrations
                     b.HasIndex("EmployeeId", "AttendanceDate")
                         .IsUnique()
                         .HasDatabaseName("IX_AttendanceRecords_EmployeeId_AttendanceDate")
-                        .HasFilter("[IsDeleted] = 0");
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.HasIndex("EmployeeId", "AttendanceDate", "Status")
                         .HasDatabaseName("IX_AttendanceRecords_EmployeeId_AttendanceDate_Status");

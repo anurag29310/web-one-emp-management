@@ -15,6 +15,9 @@ namespace EMS.Persistence.Context
         public DbSet<EMS.Domain.Entities.MfaChallenge> MfaChallenges => Set<EMS.Domain.Entities.MfaChallenge>();
         public DbSet<EMS.Domain.Entities.MfaRecoveryCode> MfaRecoveryCodes => Set<EMS.Domain.Entities.MfaRecoveryCode>();
         public DbSet<EMS.Domain.Entities.Department> Departments => Set<EMS.Domain.Entities.Department>();
+        public DbSet<EMS.Domain.Entities.Team> Teams => Set<EMS.Domain.Entities.Team>();
+        public DbSet<EMS.Domain.Entities.Designation> Designations => Set<EMS.Domain.Entities.Designation>();
+        public DbSet<EMS.Domain.Entities.OfficeLocation> OfficeLocations => Set<EMS.Domain.Entities.OfficeLocation>();
         public DbSet<EMS.Domain.Entities.Employee> Employees => Set<EMS.Domain.Entities.Employee>();
         public DbSet<EMS.Domain.Entities.LeaveType> LeaveTypes => Set<EMS.Domain.Entities.LeaveType>();
         public DbSet<EMS.Domain.Entities.LeaveRequest> LeaveRequests => Set<EMS.Domain.Entities.LeaveRequest>();
@@ -44,6 +47,9 @@ namespace EMS.Persistence.Context
             modelBuilder.ApplyConfiguration(new Configurations.MfaChallengeConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.MfaRecoveryCodeConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.DepartmentConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.TeamConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.DesignationConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.OfficeLocationConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.EmployeeConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.LeaveTypeConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.LeaveRequestConfiguration());

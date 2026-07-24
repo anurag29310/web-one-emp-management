@@ -77,7 +77,7 @@ namespace EMS.Application.Features.Payroll.Handlers
                     {
                         EmployeeName = $"{emp.FirstName} {emp.LastName}".Trim(),
                         EmployeeCode = emp.EmployeeCode,
-                        Designation = emp.Designation,
+                        Designation = emp.Designation?.Name,
                         Department = emp.Department?.Name,
                         PeriodStart = run.PeriodStart,
                         PeriodEnd = run.PeriodEnd,

@@ -29,15 +29,28 @@ namespace EMS.Application.Features.Employees.Handlers
             var oldValues = new
             {
                 emp.PhoneNumber,
-                emp.Address,
+                emp.AddressLine1,
+                emp.AddressLine2,
+                emp.City,
+                emp.State,
+                emp.PostalCode,
+                emp.Country,
                 emp.EmergencyContactName,
-                emp.EmergencyContactNumber
+                emp.EmergencyContactPhone,
+                emp.EmergencyContactRelation
             };
 
             emp.PhoneNumber = request.PhoneNumber;
-            emp.Address = request.Address;
-            emp.EmergencyContactName = request.EmergencyContactName;
-            emp.EmergencyContactNumber = request.EmergencyContactNumber;
+            emp.AddressLine1 = request.Address?.AddressLine1;
+            emp.AddressLine2 = request.Address?.AddressLine2;
+            emp.City = request.Address?.City;
+            emp.State = request.Address?.State;
+            emp.PostalCode = request.Address?.PostalCode;
+            emp.Country = request.Address?.Country;
+            emp.EmergencyContactName = request.EmergencyContact?.Name;
+            emp.EmergencyContactPhone = request.EmergencyContact?.Phone;
+            emp.EmergencyContactRelation = request.EmergencyContact?.Relation;
+            emp.UpdatedAtUtc = DateTime.UtcNow;
 
             await _repo.UpdateAsync(emp, cancellationToken);
             await _repo.SaveChangesAsync(cancellationToken);
@@ -47,9 +60,15 @@ namespace EMS.Application.Features.Employees.Handlers
             await _auditLogger.LogAsync("Employee", emp.Id, "Updated", oldValues: oldValues, newValues: new
             {
                 emp.PhoneNumber,
-                emp.Address,
+                emp.AddressLine1,
+                emp.AddressLine2,
+                emp.City,
+                emp.State,
+                emp.PostalCode,
+                emp.Country,
                 emp.EmergencyContactName,
-                emp.EmergencyContactNumber
+                emp.EmergencyContactPhone,
+                emp.EmergencyContactRelation
             }, ct: cancellationToken);
         }
     }

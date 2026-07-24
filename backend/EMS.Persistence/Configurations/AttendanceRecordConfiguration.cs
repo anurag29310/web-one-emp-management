@@ -28,7 +28,7 @@ namespace EMS.Persistence.Configurations
 
             builder.HasIndex(x => new { x.EmployeeId, x.AttendanceDate })
                 .IsUnique()
-                .HasFilter("[IsDeleted] = 0")
+                .HasFilter("\"IsDeleted\" = false")
                 .HasDatabaseName("IX_AttendanceRecords_EmployeeId_AttendanceDate");
 
             builder.HasIndex(x => new { x.AttendanceDate, x.Status })

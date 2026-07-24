@@ -81,7 +81,9 @@ namespace EMS.Tests
 
             using var db = new ApplicationDbContext(options);
             // create employee
-            var emp = new EMS.Domain.Entities.Employee { Id = Guid.NewGuid(), EmployeeCode = "EMP-1", FirstName = "Test", LastName = "User", IsActive = true, JoinDate = DateTime.UtcNow };
+            var designation = new EMS.Domain.Entities.Designation { Id = Guid.NewGuid(), Name = "Staff", Code = "STF", CreatedAtUtc = DateTime.UtcNow };
+            await db.Designations.AddAsync(designation);
+            var emp = new EMS.Domain.Entities.Employee { Id = Guid.NewGuid(), EmployeeCode = "EMP-1", FirstName = "Test", LastName = "User", IsActive = true, JoinDate = DateTime.UtcNow, DesignationId = designation.Id };
             await db.Employees.AddAsync(emp);
 
             // salary structure

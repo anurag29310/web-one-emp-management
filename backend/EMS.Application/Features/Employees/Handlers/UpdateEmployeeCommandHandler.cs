@@ -43,20 +43,29 @@ namespace EMS.Application.Features.Employees.Handlers
 
             emp.EmployeeCode = request.EmployeeCode;
             emp.FirstName = request.FirstName;
+            emp.MiddleName = request.MiddleName;
             emp.LastName = request.LastName;
             emp.Email = request.Email;
             emp.PhoneNumber = request.PhoneNumber;
             emp.DateOfBirth = request.DateOfBirth;
             emp.Gender = request.Gender;
-            emp.Address = request.Address;
-            emp.EmergencyContactName = request.EmergencyContactName;
-            emp.EmergencyContactNumber = request.EmergencyContactNumber;
+            emp.AddressLine1 = request.Address?.AddressLine1;
+            emp.AddressLine2 = request.Address?.AddressLine2;
+            emp.City = request.Address?.City;
+            emp.State = request.Address?.State;
+            emp.PostalCode = request.Address?.PostalCode;
+            emp.Country = request.Address?.Country;
+            emp.EmergencyContactName = request.EmergencyContact?.Name;
+            emp.EmergencyContactPhone = request.EmergencyContact?.Phone;
+            emp.EmergencyContactRelation = request.EmergencyContact?.Relation;
             emp.JoinDate = request.JoinDate;
             emp.DepartmentId = request.DepartmentId;
-            emp.Designation = request.Designation;
+            emp.TeamId = request.TeamId;
+            emp.DesignationId = request.DesignationId;
             emp.ManagerId = request.ManagerId;
-            emp.ProfilePhotoUrl = request.ProfilePhotoUrl;
+            emp.OfficeLocationId = request.OfficeLocationId;
             emp.EmploymentStatus = request.EmploymentStatus;
+            emp.UpdatedAtUtc = DateTime.UtcNow;
 
             await _repo.UpdateAsync(emp, cancellationToken);
             await _repo.SaveChangesAsync(cancellationToken);

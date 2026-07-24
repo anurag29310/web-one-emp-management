@@ -43,6 +43,9 @@ builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IUserRepository, EMS.Persistence.Repositories.UserRepository>();
 builder.Services.AddScoped<IRoleRepository, EMS.Persistence.Repositories.RoleRepository>();
 builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
+builder.Services.AddScoped<EMS.Application.Interfaces.ITeamRepository, EMS.Persistence.Repositories.TeamRepository>();
+builder.Services.AddScoped<EMS.Application.Interfaces.IDesignationRepository, EMS.Persistence.Repositories.DesignationRepository>();
+builder.Services.AddScoped<EMS.Application.Interfaces.IOfficeLocationRepository, EMS.Persistence.Repositories.OfficeLocationRepository>();
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<ILeaveRepository, LeaveRepository>();
 builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
@@ -98,6 +101,13 @@ builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.
 // Department validators
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Departments.CreateDepartmentCommand>, EMS.Application.Features.Departments.Validators.CreateDepartmentCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Departments.UpdateDepartmentCommand>, EMS.Application.Features.Departments.Validators.UpdateDepartmentCommandValidator>();
+// Team / Designation / Office Location validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Teams.CreateTeamCommand>, EMS.Application.Features.Teams.Validators.CreateTeamCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Teams.UpdateTeamCommand>, EMS.Application.Features.Teams.Validators.UpdateTeamCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Designations.CreateDesignationCommand>, EMS.Application.Features.Designations.Validators.CreateDesignationCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Designations.UpdateDesignationCommand>, EMS.Application.Features.Designations.Validators.UpdateDesignationCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.OfficeLocations.CreateOfficeLocationCommand>, EMS.Application.Features.OfficeLocations.Validators.CreateOfficeLocationCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.OfficeLocations.UpdateOfficeLocationCommand>, EMS.Application.Features.OfficeLocations.Validators.UpdateOfficeLocationCommandValidator>();
 // Payroll validators
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Payroll.Commands.CreateSalaryStructureCommand>, EMS.Application.Features.Payroll.Validators.CreateSalaryStructureCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Payroll.Commands.UpdateSalaryStructureCommand>, EMS.Application.Features.Payroll.Validators.UpdateSalaryStructureCommandValidator>();
@@ -140,6 +150,8 @@ builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.
 // Role validators
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Roles.Commands.CreateRoleCommand>, EMS.Application.Features.Roles.Validators.CreateRoleCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Roles.Commands.UpdateRoleCommand>, EMS.Application.Features.Roles.Validators.UpdateRoleCommandValidator>();
+// Document validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Documents.Commands.UploadDocumentCommand>, EMS.Application.Features.Documents.Validators.UploadDocumentCommandValidator>();
 
 // Infrastructure services
 builder.Services.AddSingleton<IPasswordHashService, PasswordHashService>();
@@ -278,13 +290,21 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// The in-memory provider never creates its store (or applies HasData seeds, e.g. the RBAC
-// roles) on its own — it has no migrations to run. EnsureCreated() triggers both. This must be
-// replaced with a real Database.Migrate() call once a persistent provider is configured.
+// Applies any pending EF Core migrations (including HasData seeds, e.g. the RBAC roles) on
+// startup so the PostgreSQL schema is always up to date with the compiled model. The InMemory
+// provider (used by WebApplicationFactory-based tests) has no migrations to run and rejects
+// Migrate() outright, so it still goes through EnsureCreated().
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    db.Database.EnsureCreated();
+    if (db.Database.IsRelational())
+    {
+        db.Database.Migrate();
+    }
+    else
+    {
+        db.Database.EnsureCreated();
+    }
 }
 
 // Configure the HTTP request pipeline.

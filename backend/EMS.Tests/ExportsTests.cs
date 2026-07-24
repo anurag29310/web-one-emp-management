@@ -41,7 +41,11 @@ namespace EMS.Tests
         {
             using var db = CreateDb("ems_export_emp_" + Guid.NewGuid());
             var dept = new Department { Id = Guid.NewGuid(), Name = "Engineering" };
+            var designation = new Designation { Id = Guid.NewGuid(), Name = "Engineer", Code = "ENG", CreatedAtUtc = DateTime.UtcNow };
+            var officeLocation = new OfficeLocation { Id = Guid.NewGuid(), Name = "HQ", Code = "HQ", City = "City", Country = "Country", TimeZoneId = "UTC", CreatedAtUtc = DateTime.UtcNow };
             db.Departments.Add(dept);
+            db.Designations.Add(designation);
+            db.OfficeLocations.Add(officeLocation);
             for (var i = 0; i < 25; i++)
             {
                 db.Employees.Add(new Employee
@@ -51,6 +55,8 @@ namespace EMS.Tests
                     FirstName = "First" + i,
                     LastName = "Last" + i,
                     DepartmentId = dept.Id,
+                    DesignationId = designation.Id,
+                    OfficeLocationId = officeLocation.Id,
                     EmploymentStatus = "Active",
                     IsActive = true,
                     JoinDate = DateTime.UtcNow
@@ -59,7 +65,7 @@ namespace EMS.Tests
             await db.SaveChangesAsync();
 
             var repo = new EmployeeRepository(db);
-            var result = (await repo.GetAllForExportAsync(null, null, null, dept.Id, "Active", CancellationToken.None)).ToList();
+            var result = (await repo.GetAllForExportAsync(null, null, null, dept.Id, "Active", ct: CancellationToken.None)).ToList();
 
             Assert.Equal(25, result.Count);
             Assert.All(result, e => Assert.Equal("Engineering", e.Department!.Name));
@@ -143,7 +149,7 @@ namespace EMS.Tests
         {
             var employeeRepo = new Mock<IEmployeeRepository>();
             employeeRepo
-                .Setup(r => r.GetAllForExportAsync(null, null, null, null, null, It.IsAny<CancellationToken>()))
+                .Setup(r => r.GetAllForExportAsync(null, null, null, null, null, null, null, null, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new[]
                 {
                     new Employee { Id = Guid.NewGuid(), EmployeeCode = "E1", FirstName = "Ada", LastName = "Lovelace", IsActive = true, JoinDate = DateTime.UtcNow }

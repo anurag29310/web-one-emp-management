@@ -1270,7 +1270,6 @@ Response: `200 OK`, `Content-Type: application/pdf`, file name `dashboard-summar
 
 The requirements explicitly mention the main MVP modules, but these supporting APIs are recommended because the architecture and database design require them:
 
-- `Teams`, `Designations`, and `OfficeLocations` for department management.
 - `EmployeeDocuments` and `ProfilePhoto` for employee files.
 - `Shifts` and `EmployeeShifts` for shift attendance.
 - `LeaveTypes`, `LeaveBalances`, and `Holidays` for leave management.

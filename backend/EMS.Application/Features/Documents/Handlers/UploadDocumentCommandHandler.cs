@@ -14,9 +14,6 @@ namespace EMS.Application.Features.Documents.Handlers
         private readonly IFileStorageService _storage;
         private readonly ILogger<UploadDocumentCommandHandler> _logger;
 
-        private static readonly string[] AllowedContentTypes = new[] { "application/pdf", "image/jpeg", "image/png", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
-        private const long MaxBytes = 10 * 1024 * 1024; // 10 MB
-
         public UploadDocumentCommandHandler(IDocumentRepository repo, IFileStorageService storage, ILogger<UploadDocumentCommandHandler> logger)
         {
             _repo = repo;
@@ -26,13 +23,6 @@ namespace EMS.Application.Features.Documents.Handlers
 
         public async Task<Guid> Handle(Commands.UploadDocumentCommand request, CancellationToken cancellationToken)
         {
-            if (request.Content == null || request.Content.Length == 0)
-                throw new ArgumentException("File content is empty");
-            if (request.Content.Length > MaxBytes)
-                throw new ArgumentException("File exceeds maximum allowed size");
-            if (Array.IndexOf(AllowedContentTypes, request.ContentType) < 0)
-                throw new ArgumentException("Unsupported file type");
-
             var doc = new EmployeeDocument
             {
                 Id = Guid.NewGuid(),

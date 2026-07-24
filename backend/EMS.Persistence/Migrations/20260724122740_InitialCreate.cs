@@ -656,7 +656,7 @@ namespace EMS.Persistence.Migrations
                 table: "AttendanceRecords",
                 columns: new[] { "EmployeeId", "AttendanceDate" },
                 unique: true,
-                filter: "[IsDeleted] = 0");
+                filter: "\"IsDeleted\" = false");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AttendanceRecords_EmployeeId_AttendanceDate_Status",

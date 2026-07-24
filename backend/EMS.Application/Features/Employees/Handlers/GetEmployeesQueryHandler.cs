@@ -19,8 +19,8 @@ namespace EMS.Application.Features.Employees.Handlers
             var pageSize = request.PageSize > 0 && request.PageSize <= 100 ? request.PageSize : 20;
             var page = request.Page > 0 ? request.Page : 1;
 
-            var items = await _repo.GetAllAsync(page, pageSize, request.Search, request.SortBy, request.SortDir, request.DepartmentId, request.Status, cancellationToken);
-            var total = await _repo.CountAsync(request.Search, request.DepartmentId, request.Status, cancellationToken);
+            var items = await _repo.GetAllAsync(page, pageSize, request.Search, request.SortBy, request.SortDir, request.DepartmentId, request.Status, request.TeamId, request.DesignationId, request.OfficeLocationId, cancellationToken);
+            var total = await _repo.CountAsync(request.Search, request.DepartmentId, request.Status, request.TeamId, request.DesignationId, request.OfficeLocationId, cancellationToken);
 
             return PagedResult<EmployeeDto>.Create(
                 items.Select(EmployeeDto.FromEntity),

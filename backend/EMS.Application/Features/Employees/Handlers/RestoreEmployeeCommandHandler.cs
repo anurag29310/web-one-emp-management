@@ -26,7 +26,7 @@ namespace EMS.Application.Features.Employees.Handlers
             var emp = await _repo.GetByIdIncludingDeletedAsync(request.Id, cancellationToken)
                 ?? throw new InvalidOperationException($"Employee {request.Id} not found.");
 
-            if (emp.IsActive)
+            if (!emp.IsDeleted)
                 throw new InvalidOperationException("Employee is not deleted and cannot be restored.");
 
             await _repo.RestoreAsync(emp, cancellationToken);
