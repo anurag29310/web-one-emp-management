@@ -1,32 +1,31 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Employee } from '@/app/shared/models/employee'
+import type { OfficeLocation } from '../api'
 import { AppError } from '@/app/shared/models/appError'
-import { employeeRepository } from '../api'
+import { officeLocationRepository } from '../api'
 
-interface UseEmployeeResult {
-  employee: Employee | null
+interface UseOfficeLocationsResult {
+  officeLocations: OfficeLocation[]
   isLoading: boolean
   error: string | null
   refresh: () => void
 }
 
-export function useEmployee(id: string | undefined): UseEmployeeResult {
-  const [employee, setEmployee] = useState<Employee | null>(null)
+export function useOfficeLocations(): UseOfficeLocationsResult {
+  const [officeLocations, setOfficeLocations] = useState<OfficeLocation[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshToken, setRefreshToken] = useState(0)
 
   useEffect(() => {
-    if (!id) return
     let cancelled = false
-    employeeRepository
-      .getById(id)
+    officeLocationRepository
+      .list()
       .then((data) => {
-        if (!cancelled) setEmployee(data)
+        if (!cancelled) setOfficeLocations(data)
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof AppError ? err.message : 'Failed to load employee profile.')
+          setError(err instanceof AppError ? err.message : 'Failed to load office locations.')
         }
       })
       .finally(() => {
@@ -35,9 +34,9 @@ export function useEmployee(id: string | undefined): UseEmployeeResult {
     return () => {
       cancelled = true
     }
-  }, [id, refreshToken])
+  }, [refreshToken])
 
   const refresh = useCallback(() => setRefreshToken((t) => t + 1), [])
 
-  return { employee, isLoading, error, refresh }
+  return { officeLocations, isLoading, error, refresh }
 }

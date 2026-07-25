@@ -38,6 +38,11 @@ const EmployeeProfilePage = lazy(() =>
     default: m.EmployeeProfilePage,
   })),
 )
+const EmployeeCreatePage = lazy(() =>
+  import('@/app/features/employees/pages/EmployeeCreatePage').then((m) => ({
+    default: m.EmployeeCreatePage,
+  })),
+)
 const DepartmentListPage = lazy(() =>
   import('@/app/features/departments/pages/DepartmentListPage').then((m) => ({
     default: m.DepartmentListPage,
@@ -46,6 +51,32 @@ const DepartmentListPage = lazy(() =>
 const DepartmentDetailPage = lazy(() =>
   import('@/app/features/departments/pages/DepartmentDetailPage').then((m) => ({
     default: m.DepartmentDetailPage,
+  })),
+)
+const DesignationListPage = lazy(() =>
+  import('@/app/features/designations/pages/DesignationListPage').then((m) => ({
+    default: m.DesignationListPage,
+  })),
+)
+const DesignationDetailPage = lazy(() =>
+  import('@/app/features/designations/pages/DesignationDetailPage').then((m) => ({
+    default: m.DesignationDetailPage,
+  })),
+)
+const TeamListPage = lazy(() =>
+  import('@/app/features/teams/pages/TeamListPage').then((m) => ({ default: m.TeamListPage })),
+)
+const TeamDetailPage = lazy(() =>
+  import('@/app/features/teams/pages/TeamDetailPage').then((m) => ({ default: m.TeamDetailPage })),
+)
+const OfficeLocationListPage = lazy(() =>
+  import('@/app/features/office-locations/pages/OfficeLocationListPage').then((m) => ({
+    default: m.OfficeLocationListPage,
+  })),
+)
+const OfficeLocationDetailPage = lazy(() =>
+  import('@/app/features/office-locations/pages/OfficeLocationDetailPage').then((m) => ({
+    default: m.OfficeLocationDetailPage,
   })),
 )
 const LeaveListPage = lazy(() =>
@@ -177,9 +208,16 @@ export function AppRouter() {
             <Route element={<AppLayout />}>
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/employees" element={<EmployeeListPage />} />
+              <Route path="/employees/new" element={<EmployeeCreatePage />} />
               <Route path="/employees/:id" element={<EmployeeProfilePage />} />
               <Route path="/departments" element={<DepartmentListPage />} />
               <Route path="/departments/:id" element={<DepartmentDetailPage />} />
+              <Route path="/designations" element={<DesignationListPage />} />
+              <Route path="/designations/:id" element={<DesignationDetailPage />} />
+              <Route path="/teams" element={<TeamListPage />} />
+              <Route path="/teams/:id" element={<TeamDetailPage />} />
+              <Route path="/office-locations" element={<OfficeLocationListPage />} />
+              <Route path="/office-locations/:id" element={<OfficeLocationDetailPage />} />
               <Route path="/leave" element={<LeaveListPage />} />
               <Route path="/leave/approvals" element={<LeaveApprovalQueuePage />} />
               <Route path="/leave/balances" element={<LeaveBalancesPage />} />
