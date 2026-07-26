@@ -547,6 +547,8 @@ Unique constraint: `AnnouncementId`, `UserId`.
 | `Designations` | `IX_Designations_Code` | Unique, filtered by `IsDeleted = 0` | Designation lookup |
 | `OfficeLocations` | `IX_OfficeLocations_Code` | Unique, filtered by `IsDeleted = 0` | Location lookup |
 | `EmployeeDocuments` | `IX_EmployeeDocuments_EmployeeId_DocumentType` | Non-unique | Document list screens |
+| `Clients` | `IX_Clients_ClientName` | Unique, not filtered (see §15.1) | Client lookup and duplicate-name prevention |
+| `Clients` | `IX_Clients_IsActive` | Non-unique | Active-status filter on the client list |
 
 ### 11.3 Attendance Indexes
 
@@ -612,6 +614,7 @@ Soft-deleted tables:
 - `Holidays`
 - `Notifications`
 - `Announcements`
+- `Clients`
 
 Not normally soft-deleted:
 
@@ -644,13 +647,45 @@ Recommended foreign key delete behavior:
 Phase 2 and Phase 3 modules should be added in separate bounded table groups:
 
 - Payroll: `SalaryStructures`, `Allowances`, `Deductions`, `Payslips`, `Bonuses`, `OvertimeRecords`.
-- Tasks: `Tasks`, `TaskAssignments`, `TaskComments`.
+- Tasks: `Tasks`, `TaskAssignments`, `TaskComments`. Will have a required FK to `Clients` (§15) once built.
 - Announcements: `Announcements` and `Notifications` are implemented — see §9. `EmailLogs` remains a future extension point.
+- Client Master: `Clients` is implemented — see §15.
 - Recruitment: `Candidates`, `Interviews`, `Offers`, `OnboardingChecklists`.
 - Assets: `Assets`, `AssetAssignments`, `AssetReturns`.
 - Performance: `Goals`, `Kpis`, `PerformanceReviews`, `Promotions`.
-- Expenses: `ExpenseClaims`, `ExpenseClaimItems`, `Reimbursements`.
+- Expenses: `Reimbursements` (see [requirements.md](requirements.md#expense-management-employee-reimbursement-management)) — one table covering the full Draft → Submitted → Under Review → Approved/Rejected/Changes Requested → Paid workflow, plus a related attachment table (`ReimbursementAttachments`). Will need a `PayrollProcessed` flag and `PayrollDate` to satisfy the once-only payroll processing rule.
 - Messaging: `Conversations`, `Messages`, `MessageParticipants`.
 
 Each future module should follow the same audit, soft delete, indexing, and ownership rules unless there is a clear compliance reason to do otherwise.
+
+## 15. Client Tables
+
+### 15.1 Clients
+
+Client Master (see [requirements.md](requirements.md#client-master-new-module--supports-task-management)). Read access is open to any authenticated user; all mutations are Admin-only — this is intentionally not delegated to HR.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `ClientName` | `varchar(150)` | Required, unique |
+| `CompanyName` | `varchar(150)` | Required |
+| `ContactPerson` | `varchar(150)` | Required |
+| `MobileNumber` | `varchar(20)` | Required |
+| `AlternateMobile` | `varchar(20)` | Nullable |
+| `Email` | `varchar(255)` | Required |
+| `GstNumber` | `varchar(20)` | Nullable |
+| `AddressLine1` | `varchar(250)` | Required |
+| `AddressLine2` | `varchar(250)` | Nullable |
+| `City` | `varchar(100)` | Required |
+| `State` | `varchar(100)` | Nullable |
+| `Country` | `varchar(100)` | Required |
+| `PostalCode` | `varchar(20)` | Required |
+| `Latitude` | `decimal(9,6)` | Nullable |
+| `Longitude` | `decimal(9,6)` | Nullable |
+| `Notes` | `varchar(1000)` | Nullable |
+| `IsActive` | `boolean` | Required, default `true`. Inactive clients cannot receive new tasks (enforced when Task Management ships) |
+| `IsArchived` | `boolean` | Required, default `false`. Retired from active workflows but retained for history — distinct from soft delete |
+| Audit fields | Shared | Include audit and soft delete fields |
+
+Unique index on `ClientName`. As implemented, the index itself is not filtered by `IsDeleted`; a soft-deleted client's name stays reserved unless it is restored or the row is purged. Rejecting a duplicate name against active *and* soft-deleted rows is enforced in the application layer (`IClientRepository.NameExistsAsync`, checked from `CreateClientCommandValidator`/`UpdateClientCommandValidator`) — the same pattern already used for `Designations`/`Teams`/`OfficeLocations` code uniqueness, despite §11.2 describing those as filtered indexes.
 

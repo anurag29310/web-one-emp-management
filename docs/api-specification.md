@@ -1265,6 +1265,7 @@ Response: `200 OK`, `Content-Type: application/pdf`, file name `dashboard-summar
 | `CanApprovePayroll` | Approve a completed payroll run |
 | `CanViewReports` | Employee, department, leave, and turnover reports |
 | `CanManageAnnouncements` (`Admin,HR` roles) | Create and retract company-wide announcements |
+| `CanManageClients` (`Admin` role only) | Create, update, delete, activate, deactivate, archive, restore clients — deliberately not delegated to HR |
 
 ## 16. Missing But Recommended APIs
 
@@ -1486,4 +1487,80 @@ Announcement response:
 ```
 
 Delivery is poll-based, not real-time: the frontend fetches `GET /announcements` on load and on an interval (see [architecture.md §8](architecture.md#8-cross-cutting-concerns)). There is no SignalR or push infrastructure in this system today.
+
+## 20. Client Master APIs
+
+Base path: `/clients`. See [database-design.md §15](database-design.md#15-client-tables) for the underlying schema and [requirements.md](requirements.md#client-master-new-module--supports-task-management) for the source requirement. `GET` endpoints require only authentication — Employees will be scoped to clients linked to their assigned tasks once Task Management ships, but that scoping isn't implemented yet, so every authenticated caller currently sees every client. All mutating endpoints require the `CanManageClients` policy (`Admin` role only — intentionally not delegated to HR, unlike every other master-data module in this API).
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/clients` | Authenticated | List clients — search, active-status filter, pagination |
+| `GET` | `/clients/{id}` | Authenticated | Get a single client |
+| `POST` | `/clients` | `CanManageClients` | Create a client |
+| `PUT` | `/clients/{id}` | `CanManageClients` | Update a client |
+| `DELETE` | `/clients/{id}` | `CanManageClients` | Soft delete a client |
+| `POST` | `/clients/{id}/activate` | `CanManageClients` | Activate a client (eligible for new tasks) |
+| `POST` | `/clients/{id}/deactivate` | `CanManageClients` | Deactivate a client (blocks new tasks; history retained) |
+| `POST` | `/clients/{id}/archive` | `CanManageClients` | Archive a client — retires it from active workflows (also deactivates it) while keeping it distinct from a soft delete |
+| `POST` | `/clients/{id}/restore` | `CanManageClients` | Restore a client — reverses whichever terminal state applies: un-deletes a soft-deleted client, or un-archives an archived one |
+
+Query parameters on the list endpoint: `page` (default 1), `pageSize` (default 20, max 100), `search` (matches `clientName`, `companyName`, `contactPerson`, or `email`), `isActive` (optional boolean filter).
+
+Create/update request body:
+
+```json
+{
+  "clientName": "Acme Retail",
+  "companyName": "Acme Corp",
+  "contactPerson": "Jane Doe",
+  "mobileNumber": "+1-555-0100",
+  "alternateMobile": null,
+  "email": "jane@acme.example",
+  "gstNumber": null,
+  "addressLine1": "1 Market Street",
+  "addressLine2": null,
+  "city": "San Francisco",
+  "state": "CA",
+  "country": "USA",
+  "postalCode": "94105",
+  "latitude": 37.7936,
+  "longitude": -122.3965,
+  "notes": null
+}
+```
+
+`clientName` must be unique among non-deleted clients (`409`-equivalent `VALIDATION_ERROR` on conflict, enforced by `CreateClientCommandValidator`/`UpdateClientCommandValidator`, not a database constraint violation). `email` must be a valid email address. `latitude`/`longitude` are optional and independently validated to `[-90, 90]` / `[-180, 180]` when supplied.
+
+Client response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000001201",
+  "clientName": "Acme Retail",
+  "companyName": "Acme Corp",
+  "contactPerson": "Jane Doe",
+  "mobileNumber": "+1-555-0100",
+  "alternateMobile": null,
+  "email": "jane@acme.example",
+  "gstNumber": null,
+  "addressLine1": "1 Market Street",
+  "addressLine2": null,
+  "city": "San Francisco",
+  "state": "CA",
+  "country": "USA",
+  "postalCode": "94105",
+  "latitude": 37.7936,
+  "longitude": -122.3965,
+  "notes": null,
+  "isActive": true,
+  "isArchived": false,
+  "isDeleted": false,
+  "createdAtUtc": "2026-07-26T09:00:00Z",
+  "updatedAtUtc": null
+}
+```
+
+The `activate`/`deactivate`/`archive`/`restore`/`delete` endpoints return `204 No Content` on success, matching the Employee status-management endpoints ([§5.6](#56-update-employee-status)).
+
+Business rules enforced today: client names must be unique (see above); soft-deleted clients are excluded from `GET /clients` and `GET /clients/{id}` (`404`) until restored. The "inactive clients cannot receive new tasks" rule from requirements.md cannot be enforced yet — there is no `Tasks` table to enforce it against — and will be added as a validation rule in `CreateTaskCommand` when Task Management is built.
 

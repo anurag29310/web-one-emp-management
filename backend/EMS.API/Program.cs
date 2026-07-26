@@ -55,6 +55,7 @@ builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IAnnouncementRepository, EMS.Persistence.Repositories.AnnouncementRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IAuditLogRepository, EMS.Persistence.Repositories.AuditLogRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IHealthCheckRepository, EMS.Persistence.Repositories.HealthCheckRepository>();
+builder.Services.AddScoped<EMS.Application.Interfaces.IClientRepository, EMS.Persistence.Repositories.ClientRepository>();
 // Payroll services
 builder.Services.AddScoped<EMS.Application.Interfaces.IPayrollRepository, EMS.Persistence.Repositories.PayrollRepository>();
 builder.Services.AddSingleton<EMS.Application.Interfaces.IPdfService, EMS.Infrastructure.Pdf.PdfSharpDocumentService>();
@@ -152,6 +153,9 @@ builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Roles.Commands.UpdateRoleCommand>, EMS.Application.Features.Roles.Validators.UpdateRoleCommandValidator>();
 // Document validators
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Documents.Commands.UploadDocumentCommand>, EMS.Application.Features.Documents.Validators.UploadDocumentCommandValidator>();
+// Client validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Clients.CreateClientCommand>, EMS.Application.Features.Clients.Validators.CreateClientCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Clients.UpdateClientCommand>, EMS.Application.Features.Clients.Validators.UpdateClientCommandValidator>();
 
 // Infrastructure services
 builder.Services.AddSingleton<IPasswordHashService, PasswordHashService>();
@@ -235,6 +239,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanViewAuditLogs", policy => policy.RequireRole("Admin"));
     options.AddPolicy("CanManageUsers", policy => policy.RequireRole("Admin"));
     options.AddPolicy("CanViewRoles", policy => policy.RequireRole("Admin", "HR"));
+    options.AddPolicy("CanManageClients", policy => policy.RequireRole("Admin"));
 });
 
 // Rate limiting: login and register are the two unauthenticated endpoints an attacker can hammer

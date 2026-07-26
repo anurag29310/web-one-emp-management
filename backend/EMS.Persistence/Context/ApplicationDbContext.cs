@@ -37,6 +37,7 @@ namespace EMS.Persistence.Context
         public DbSet<EMS.Domain.Entities.Shift> Shifts => Set<EMS.Domain.Entities.Shift>();
         public DbSet<EMS.Domain.Entities.EmployeeShift> EmployeeShifts => Set<EMS.Domain.Entities.EmployeeShift>();
         public DbSet<EMS.Domain.Entities.AttendanceCorrection> AttendanceCorrections => Set<EMS.Domain.Entities.AttendanceCorrection>();
+        public DbSet<EMS.Domain.Entities.Client> Clients => Set<EMS.Domain.Entities.Client>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -69,6 +70,7 @@ namespace EMS.Persistence.Context
             modelBuilder.ApplyConfiguration(new Configurations.ShiftConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.EmployeeShiftConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.AttendanceCorrectionConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.ClientConfiguration());
         }
     }
 }
