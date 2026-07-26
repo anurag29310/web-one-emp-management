@@ -549,6 +549,12 @@ Unique constraint: `AnnouncementId`, `UserId`.
 | `EmployeeDocuments` | `IX_EmployeeDocuments_EmployeeId_DocumentType` | Non-unique | Document list screens |
 | `Clients` | `IX_Clients_ClientName` | Unique, not filtered (see §15.1) | Client lookup and duplicate-name prevention |
 | `Clients` | `IX_Clients_IsActive` | Non-unique | Active-status filter on the client list |
+| `Tasks` | `IX_Tasks_TaskNumber` | Unique | Task lookup |
+| `Tasks` | `IX_Tasks_AssignedEmployeeId` | Non-unique | "My tasks" list and self-scoping checks |
+| `Tasks` | `IX_Tasks_ClientId` | Non-unique | Tasks-by-client filter |
+| `Tasks` | `IX_Tasks_Status` | Non-unique | Status filter on the task list |
+| `TaskComments` | `IX_TaskComments_TaskId_CreatedAtUtc` | Non-unique | Chronological comment feed per task |
+| `TaskAttachments` | `IX_TaskAttachments_TaskId` | Non-unique | Attachment list per task |
 
 ### 11.3 Attendance Indexes
 
@@ -623,6 +629,8 @@ Not normally soft-deleted:
 - `PasswordResetTokens`: purge after expiry and retention.
 - `AuditLogs`: append-only, no soft delete.
 - `AnnouncementReads`: append-only read receipts — a row is inserted once per `(AnnouncementId, UserId)` and never updated or soft-deleted.
+- `Tasks`: no soft delete — deliberately. There is no "Delete Task" action; `Cancel Task` is a status transition (`Status = Cancelled`), not a deletion, so a task is never removed from the table at all. See §16.1.
+- `TaskComments`, `TaskAttachments`: append-only child records of `Tasks` — never updated or deleted, matching `AnnouncementReads`.
 
 Implementation rules:
 
@@ -647,9 +655,9 @@ Recommended foreign key delete behavior:
 Phase 2 and Phase 3 modules should be added in separate bounded table groups:
 
 - Payroll: `SalaryStructures`, `Allowances`, `Deductions`, `Payslips`, `Bonuses`, `OvertimeRecords`.
-- Tasks: `Tasks`, `TaskAssignments`, `TaskComments`. Will have a required FK to `Clients` (§15) once built.
 - Announcements: `Announcements` and `Notifications` are implemented — see §9. `EmailLogs` remains a future extension point.
 - Client Master: `Clients` is implemented — see §15.
+- Tasks: `Tasks`, `TaskComments`, `TaskAttachments` are implemented — see §16. (No separate `TaskAssignments` table: a task has exactly one assignee at a time, tracked directly on `Tasks.AssignedEmployeeId`; reassignment overwrites it and is itself audited via `AuditLogs`, so a full assignment-history table wasn't needed.)
 - Recruitment: `Candidates`, `Interviews`, `Offers`, `OnboardingChecklists`.
 - Assets: `Assets`, `AssetAssignments`, `AssetReturns`.
 - Performance: `Goals`, `Kpis`, `PerformanceReviews`, `Promotions`.
@@ -688,4 +696,55 @@ Client Master (see [requirements.md](requirements.md#client-master-new-module--s
 | Audit fields | Shared | Include audit and soft delete fields |
 
 Unique index on `ClientName`. As implemented, the index itself is not filtered by `IsDeleted`; a soft-deleted client's name stays reserved unless it is restored or the row is purged. Rejecting a duplicate name against active *and* soft-deleted rows is enforced in the application layer (`IClientRepository.NameExistsAsync`, checked from `CreateClientCommandValidator`/`UpdateClientCommandValidator`) — the same pattern already used for `Designations`/`Teams`/`OfficeLocations` code uniqueness, despite §11.2 describing those as filtered indexes.
+
+## 16. Task Tables
+
+See [requirements.md](requirements.md#task-management) for the source requirement. A task's C# entity class is named `TaskItem`, not `Task` — `EMS.Domain.Entities.Task` would collide with `System.Threading.Tasks.Task`, which every async handler in this codebase uses. The database table itself is still named `Tasks`.
+
+### 16.1 Tasks
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `TaskNumber` | `varchar(20)` | Required, unique. Derived from `Id` (e.g. `TSK-3F2A9B10`), not user-editable |
+| `Title` | `varchar(200)` | Required |
+| `Description` | `varchar(2000)` | Nullable |
+| `ClientId` | `uuid` | Nullable FK to `Clients`, `Restrict` on delete. Not every task is a client visit — some are internal/office work |
+| `AssignedEmployeeId` | `uuid` | Required FK to `Employees`, `Restrict` on delete |
+| `AssignedByUserId` | `uuid` | Required. The Admin who created/assigned the task — not a FK-enforced relationship (matches the `AuditLogs`-style loose reference to `Users`) |
+| `AssignedDate` | `timestamptz` | Required |
+| `DueDate` | `timestamptz` | Nullable |
+| `Priority` | `varchar(20)` | Required. `Low`, `Medium`, `High`, `Critical` |
+| `Status` | `varchar(20)` | Required, default `Assigned`. `Assigned`, `Accepted`, `Rejected`, `InProgress`, `OnHold`, `Completed`, `Cancelled` — `Rejected` is one more than the six requirements.md lists, added because the "Reject task" employee action needs somewhere to land that isn't `Cancelled` (an Admin-only action) or a silent no-op back to `Assigned` |
+| `Notes` | `varchar(1000)` | Nullable |
+| `CompletedAtUtc` | `timestamptz` | Nullable. Set when `Status` becomes `Completed` |
+| Audit fields | Partial | `CreatedAtUtc`/`CreatedBy`/`UpdatedAtUtc`/`UpdatedBy` only — **no soft delete**. requirements.md lists no "Delete Task" action; `Cancel Task` (a status, not a deletion) is the only removal path, so `IsDeleted`/`DeletedAtUtc`/`DeletedBy` were left off rather than added unused |
+
+### 16.2 TaskComments
+
+Append-only progress/notes log — never updated or deleted, matching the `AnnouncementReads` convention (§12).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `TaskId` | `uuid` | Required FK to `Tasks`, `Cascade` on delete |
+| `AuthorUserId` | `uuid` | Required |
+| `Comment` | `varchar(2000)` | Required |
+| `CreatedAtUtc` | `timestamptz` | Required |
+
+### 16.3 TaskAttachments
+
+Uploaded photo/document evidence for a task ("Upload photos"). Mirrors `EmployeeDocuments` (§5.6), minus the fields that don't apply here (`DocumentType`, `ExpiresAtUtc`, soft delete). Files are stored via the same `IFileStorageService` used for employee documents, under a separate `task-attachments` container.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `TaskId` | `uuid` | Required FK to `Tasks`, `Cascade` on delete |
+| `OriginalFileName` | `varchar(255)` | Required |
+| `ContentType` | `varchar(100)` | Required. Restricted to `application/pdf`, `image/jpeg`, `image/png` — magic-byte verified, same as `EmployeeDocuments` uploads |
+| `FileSizeBytes` | `bigint` | Required. 10 MB max |
+| `BlobContainer` | `varchar(100)` | Required |
+| `BlobPath` | `varchar(500)` | Required |
+| `UploadedAtUtc` | `timestamptz` | Required |
+| `UploadedBy` | `uuid` | Nullable |
 

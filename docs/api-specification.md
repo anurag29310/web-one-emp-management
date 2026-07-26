@@ -1266,6 +1266,7 @@ Response: `200 OK`, `Content-Type: application/pdf`, file name `dashboard-summar
 | `CanViewReports` | Employee, department, leave, and turnover reports |
 | `CanManageAnnouncements` (`Admin,HR` roles) | Create and retract company-wide announcements |
 | `CanManageClients` (`Admin` role only) | Create, update, delete, activate, deactivate, archive, restore clients — deliberately not delegated to HR |
+| `CanManageTasks` (`Admin` role only) | Create, edit, reassign, cancel tasks — "Only Admin can assign tasks" per requirements.md. Accept/reject/start/progress/complete/comment/attach are open to any authenticated caller but scoped to the task's assignee at the handler level (see §21) |
 
 ## 16. Missing But Recommended APIs
 
@@ -1562,5 +1563,77 @@ Client response:
 
 The `activate`/`deactivate`/`archive`/`restore`/`delete` endpoints return `204 No Content` on success, matching the Employee status-management endpoints ([§5.6](#56-update-employee-status)).
 
-Business rules enforced today: client names must be unique (see above); soft-deleted clients are excluded from `GET /clients` and `GET /clients/{id}` (`404`) until restored. The "inactive clients cannot receive new tasks" rule from requirements.md cannot be enforced yet — there is no `Tasks` table to enforce it against — and will be added as a validation rule in `CreateTaskCommand` when Task Management is built.
+Business rules enforced today: client names must be unique (see above); soft-deleted clients are excluded from `GET /clients` and `GET /clients/{id}` (`404`) until restored. The "inactive clients cannot receive new tasks" rule is now enforced — see [§21](#21-task-management-apis), `CreateTaskCommandValidator`.
+
+## 21. Task Management APIs
+
+Base path: `/tasks`. See [database-design.md §16](database-design.md#16-task-tables) for the underlying schema and [requirements.md](requirements.md#task-management) for the source requirement. Create/Edit/Reassign/Cancel require the `CanManageTasks` policy (`Admin` role only — "Only Admin can assign tasks"). Everything else is open to any authenticated caller but scoped at the handler level: non-Admin callers may only act on tasks assigned to their own linked Employee record, mirroring the Attendance check-in/out privileged-override pattern (`RequestingUserId`/`IsPrivileged`, resolved server-side from the JWT, never client-supplied).
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/tasks` | Authenticated | List tasks — paginated, filterable by `assignedEmployeeId`, `clientId`, `status`, `priority`. Non-Admin callers are always scoped to their own tasks regardless of `assignedEmployeeId` |
+| `GET` | `/tasks/{id}` | Authenticated | Get a single task. Returns `404` (not `403`) for a non-Admin, non-assignee caller — existence is not disclosed |
+| `POST` | `/tasks` | `CanManageTasks` | Create (and assign) a task |
+| `PUT` | `/tasks/{id}` | `CanManageTasks` | Edit task details. Rejected once the task is `Completed` or `Cancelled` |
+| `POST` | `/tasks/{id}/reassign` | `CanManageTasks` | Reassign to a different employee; resets `Status` to `Assigned` regardless of where the previous assignee had gotten to |
+| `POST` | `/tasks/{id}/cancel` | `CanManageTasks` | Cancel a task. Rejected if already `Completed` |
+| `POST` | `/tasks/{id}/accept` | Authenticated (assignee or Admin) | `Assigned` → `Accepted` |
+| `POST` | `/tasks/{id}/reject` | Authenticated (assignee or Admin) | `Assigned` → `Rejected`. Optional `{ "reason": "..." }` body, appended to `Notes` |
+| `POST` | `/tasks/{id}/start` | Authenticated (assignee or Admin) | `Accepted` → `InProgress` |
+| `POST` | `/tasks/{id}/progress` | Authenticated (assignee or Admin) | The "Update progress" action — toggles between `InProgress` and `OnHold`. Body: `{ "status": "OnHold" }` |
+| `POST` | `/tasks/{id}/complete` | Authenticated (assignee or Admin) | `InProgress`/`OnHold` → `Completed`, sets `completedAtUtc`. The task becomes read-only afterward — every mutating endpoint above, plus comments and attachments, reject a `Completed` or `Cancelled` task |
+| `GET` | `/tasks/{id}/comments` | Authenticated (assignee or Admin) | List the progress/notes log, chronological |
+| `POST` | `/tasks/{id}/comments` | Authenticated (assignee or Admin) | The "Add notes" action. Body: `{ "comment": "..." }` |
+| `GET` | `/tasks/{id}/attachments` | Authenticated (assignee or Admin) | List attachments |
+| `POST` | `/tasks/{id}/attachments` | Authenticated (assignee or Admin) | The "Upload photos" action. Multipart form upload (`file`); PDF/JPEG/PNG only, magic-byte verified, 10 MB max — same constraints as [Employee Document upload](#62-upload-employee-document) |
+| `GET` | `/tasks/attachments/{attachmentId}/download` | Authenticated (assignee or Admin) | Download an attachment |
+
+Create/update request body:
+
+```json
+{
+  "title": "Deliver quarterly report",
+  "description": "Present Q3 numbers to the client's finance team.",
+  "clientId": "00000000-0000-0000-0000-000000001201",
+  "assignedEmployeeId": "00000000-0000-0000-0000-000000000101",
+  "dueDate": "2026-08-15T00:00:00Z",
+  "priority": "High",
+  "notes": null
+}
+```
+
+`assignedEmployeeId` must reference an existing employee (`create` only — `update` doesn't change the assignee, use `/reassign`). `clientId` is optional (not every task is a client visit) but when supplied must reference an existing, **active** client — this is the "inactive clients cannot receive new tasks" rule from requirements.md. `dueDate`, if supplied, cannot be in the past.
+
+Task response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000001301",
+  "taskNumber": "TSK-3F2A9B10",
+  "title": "Deliver quarterly report",
+  "description": "Present Q3 numbers to the client's finance team.",
+  "clientId": "00000000-0000-0000-0000-000000001201",
+  "clientName": "Acme Retail",
+  "clientAddress": "1 Market Street, San Francisco, CA, USA",
+  "clientLatitude": 37.7936,
+  "clientLongitude": -122.3965,
+  "assignedEmployeeId": "00000000-0000-0000-0000-000000000101",
+  "assignedEmployeeName": "Jane Doe",
+  "assignedByUserId": "00000000-0000-0000-0000-000000000010",
+  "assignedDate": "2026-07-26T09:00:00Z",
+  "dueDate": "2026-08-15T00:00:00Z",
+  "priority": "High",
+  "status": "Assigned",
+  "notes": null,
+  "completedAtUtc": null,
+  "createdAtUtc": "2026-07-26T09:00:00Z",
+  "updatedAtUtc": null
+}
+```
+
+`clientName`/`clientAddress`/`clientLatitude`/`clientLongitude` are denormalized onto the response so the mobile client can open the location in Maps ("Open client location in Maps") without a second round trip; they're `null` when the task has no client.
+
+Status values: `Assigned`, `Accepted`, `Rejected`, `InProgress`, `OnHold`, `Completed`, `Cancelled`. `Rejected` is one more than the six requirements.md names explicitly — see [database-design.md §16.1](database-design.md#161-tasks) for why. Priority values: `Low`, `Medium`, `High`, `Critical`.
+
+Business rules enforced: only Admin can create/edit/reassign/cancel a task; a non-Admin caller can only accept/reject/start/update-progress/complete/comment-on/attach-to a task assigned to their own employee record; a `Completed` or `Cancelled` task is read-only to every mutating endpoint in this module; `accept`/`reject` only from `Assigned`, `start` only from `Accepted`, `progress`/`complete` only from `InProgress`/`OnHold`; every status change is written to `AuditLogs` (entity `Task`).
 

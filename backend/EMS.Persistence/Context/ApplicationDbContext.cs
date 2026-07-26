@@ -38,6 +38,9 @@ namespace EMS.Persistence.Context
         public DbSet<EMS.Domain.Entities.EmployeeShift> EmployeeShifts => Set<EMS.Domain.Entities.EmployeeShift>();
         public DbSet<EMS.Domain.Entities.AttendanceCorrection> AttendanceCorrections => Set<EMS.Domain.Entities.AttendanceCorrection>();
         public DbSet<EMS.Domain.Entities.Client> Clients => Set<EMS.Domain.Entities.Client>();
+        public DbSet<EMS.Domain.Entities.TaskItem> Tasks => Set<EMS.Domain.Entities.TaskItem>();
+        public DbSet<EMS.Domain.Entities.TaskComment> TaskComments => Set<EMS.Domain.Entities.TaskComment>();
+        public DbSet<EMS.Domain.Entities.TaskAttachment> TaskAttachments => Set<EMS.Domain.Entities.TaskAttachment>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -71,6 +74,9 @@ namespace EMS.Persistence.Context
             modelBuilder.ApplyConfiguration(new Configurations.EmployeeShiftConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.AttendanceCorrectionConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.ClientConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.TaskItemConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.TaskCommentConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.TaskAttachmentConfiguration());
         }
     }
 }

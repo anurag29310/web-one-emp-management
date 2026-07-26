@@ -56,6 +56,7 @@ builder.Services.AddScoped<EMS.Application.Interfaces.IAnnouncementRepository, E
 builder.Services.AddScoped<EMS.Application.Interfaces.IAuditLogRepository, EMS.Persistence.Repositories.AuditLogRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IHealthCheckRepository, EMS.Persistence.Repositories.HealthCheckRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IClientRepository, EMS.Persistence.Repositories.ClientRepository>();
+builder.Services.AddScoped<EMS.Application.Interfaces.ITaskRepository, EMS.Persistence.Repositories.TaskRepository>();
 // Payroll services
 builder.Services.AddScoped<EMS.Application.Interfaces.IPayrollRepository, EMS.Persistence.Repositories.PayrollRepository>();
 builder.Services.AddSingleton<EMS.Application.Interfaces.IPdfService, EMS.Infrastructure.Pdf.PdfSharpDocumentService>();
@@ -156,6 +157,13 @@ builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.
 // Client validators
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Clients.CreateClientCommand>, EMS.Application.Features.Clients.Validators.CreateClientCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Clients.UpdateClientCommand>, EMS.Application.Features.Clients.Validators.UpdateClientCommandValidator>();
+// Task validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Tasks.CreateTaskCommand>, EMS.Application.Features.Tasks.Validators.CreateTaskCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Tasks.UpdateTaskCommand>, EMS.Application.Features.Tasks.Validators.UpdateTaskCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Tasks.ReassignTaskCommand>, EMS.Application.Features.Tasks.Validators.ReassignTaskCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Tasks.UpdateTaskProgressCommand>, EMS.Application.Features.Tasks.Validators.UpdateTaskProgressCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Tasks.AddTaskCommentCommand>, EMS.Application.Features.Tasks.Validators.AddTaskCommentCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Tasks.UploadTaskAttachmentCommand>, EMS.Application.Features.Tasks.Validators.UploadTaskAttachmentCommandValidator>();
 
 // Infrastructure services
 builder.Services.AddSingleton<IPasswordHashService, PasswordHashService>();
@@ -240,6 +248,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanManageUsers", policy => policy.RequireRole("Admin"));
     options.AddPolicy("CanViewRoles", policy => policy.RequireRole("Admin", "HR"));
     options.AddPolicy("CanManageClients", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("CanManageTasks", policy => policy.RequireRole("Admin"));
 });
 
 // Rate limiting: login and register are the two unauthenticated endpoints an attacker can hammer
