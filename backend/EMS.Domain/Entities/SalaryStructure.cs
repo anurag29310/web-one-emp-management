@@ -7,6 +7,7 @@ namespace EMS.Domain.Entities
     {
         public Guid Id { get; set; }
         public Guid EmployeeId { get; set; }
+        public Employee? Employee { get; set; }
         public decimal BasicSalary { get; set; }
         public System.Collections.Generic.List<Allowance>? Allowances { get; set; } = new();
         public System.Collections.Generic.List<Deduction>? Deductions { get; set; } = new();

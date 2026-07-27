@@ -51,10 +51,30 @@ namespace EMS.Persistence.Repositories
             return await _db.SalaryStructures.Include(s => s.Allowances).Include(s => s.Deductions).AsNoTracking().ToListAsync();
         }
 
-        public async Task UpdateSalaryStructureAsync(SalaryStructure structure)
+        public Task UpdateSalaryStructureAsync(SalaryStructure structure)
         {
-            _db.SalaryStructures.Update(structure);
-            await Task.CompletedTask;
+            // `structure` is always the tracked instance returned by GetSalaryStructureByIdAsync on
+            // this same DbContext, never a detached one, so scalar property changes and the removal
+            // of cleared Allowances/Deductions (a required relationship — severing deletes rather
+            // than orphans) are picked up automatically. The newly-assigned replacement Allowances/
+            // Deductions (the "replace children" pattern in UpdateSalaryStructureCommandHandler) need
+            // an explicit push, though: EF Core only auto-detects a reachable-but-untracked entity as
+            // Added when its key is unset. These are plain `new Allowance { Id = Guid.NewGuid(), ... }`
+            // objects with an already-assigned key, so EF's change detection assumes the row might
+            // already exist and marks them Modified instead — SaveChanges then throws
+            // DbUpdateConcurrencyException trying to UPDATE a row that was never inserted.
+            foreach (var allowance in structure.Allowances ?? Enumerable.Empty<Allowance>())
+            {
+                if (_db.Entry(allowance).State != EntityState.Added)
+                    _db.Entry(allowance).State = EntityState.Added;
+            }
+            foreach (var deduction in structure.Deductions ?? Enumerable.Empty<Deduction>())
+            {
+                if (_db.Entry(deduction).State != EntityState.Added)
+                    _db.Entry(deduction).State = EntityState.Added;
+            }
+
+            return Task.CompletedTask;
         }
 
         public async Task<bool> DeleteSalaryStructureAsync(Guid id)

@@ -1,13 +1,16 @@
 using EMS.Application.Features.Payroll.Commands;
+using EMS.Application.Interfaces;
 using FluentValidation;
 
 namespace EMS.Application.Features.Payroll.Validators
 {
     public class CreateSalaryStructureCommandValidator : AbstractValidator<CreateSalaryStructureCommand>
     {
-        public CreateSalaryStructureCommandValidator()
+        public CreateSalaryStructureCommandValidator(IEmployeeRepository employeeRepo)
         {
-            RuleFor(x => x.EmployeeId).NotEmpty();
+            RuleFor(x => x.EmployeeId).NotEmpty()
+                .MustAsync(async (id, ct) => await employeeRepo.GetByIdAsync(id, ct) != null)
+                .WithMessage("Employee does not exist.");
             RuleFor(x => x.BasicSalary).GreaterThanOrEqualTo(0);
             RuleFor(x => x.EffectiveFrom).LessThanOrEqualTo(x => x.EffectiveTo.Value).When(x => x.EffectiveTo.HasValue);
             RuleForEach(x => x.Allowances).ChildRules(a => {

@@ -13,6 +13,12 @@ namespace EMS.Persistence.Configurations
             builder.Property(p => p.EmployeeId).IsRequired();
             builder.Property(p => p.GeneratedAtUtc).IsRequired();
             builder.Property(p => p.NetPay).IsRequired();
+
+            builder.HasOne(p => p.Employee)
+                .WithMany()
+                .HasForeignKey(p => p.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             builder.HasIndex(p => p.EmployeeId);
             builder.HasIndex(p => p.PayrollRunId);
         }

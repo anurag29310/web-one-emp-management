@@ -617,15 +617,13 @@ Unique constraint: `AnnouncementId`, `UserId`.
 
 | Table | Index | Type | Purpose |
 | --- | --- | --- | --- |
+| `SalaryStructures` | `IX_SalaryStructures_EmployeeId` | Non-unique | Current/effective salary structure lookup per employee |
 | `Allowances` | `IX_Allowances_SalaryStructureId` | Non-unique | Allowances per salary structure |
-| `Allowances` | index on `SalaryStructureId1` | Non-unique | EF-generated for the unused shadow FK column (§15.2) — not purpose-built |
 | `Deductions` | `IX_Deductions_SalaryStructureId` | Non-unique | Deductions per salary structure |
-| `Deductions` | index on `SalaryStructureId1` | Non-unique | EF-generated for the unused shadow FK column (§15.3) |
 | `Payslips` | `IX_Payslips_EmployeeId` | Non-unique | Payslip history per employee |
 | `Payslips` | `IX_Payslips_PayrollRunId` | Non-unique | Payslips within a run |
-| `Payslips` | index on `PayrollRunId1` | Non-unique | EF-generated for the unused shadow FK column (§15.5) |
 
-`SalaryStructures` and `PayrollRuns` have no indexes beyond their primary key — see the §15 implementation note on the missing `SalaryStructures.EmployeeId` index.
+`PayrollRuns` has no indexes beyond its primary key.
 
 ## 12. Soft Delete Strategy
 
@@ -709,7 +707,7 @@ Implemented in Phase 1, before this document had Client/Task/Reimbursement-style
 | Column | Type | Notes |
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
-| `EmployeeId` | `uuid` | Required. **Not FK-enforced** — no foreign key constraint to `Employees` exists (see implementation note below) |
+| `EmployeeId` | `uuid` | Required FK to `Employees`, `Restrict` on delete. Indexed |
 | `BasicSalary` | `numeric` | Required |
 | `EffectiveFrom` | `timestamptz` | Required |
 | `EffectiveTo` | `timestamptz` | Nullable |
@@ -721,20 +719,18 @@ Implemented in Phase 1, before this document had Client/Task/Reimbursement-style
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
 | `SalaryStructureId` | `uuid` | Required FK to `SalaryStructures`, `Cascade` on delete |
-| `SalaryStructureId1` | `uuid` | Nullable, unused shadow FK column — see implementation note below |
 | `Name` | `varchar(150)` | Required |
 | `Amount` | `numeric` | Required |
 | Audit fields | None | No audit or soft-delete columns exist on this table |
 
 ### 15.3 Deductions
 
-Same shape as `Allowances` (§15.2), including the same unused shadow column:
+Same shape as `Allowances` (§15.2):
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
 | `SalaryStructureId` | `uuid` | Required FK to `SalaryStructures`, `Cascade` on delete |
-| `SalaryStructureId1` | `uuid` | Nullable, unused shadow FK column |
 | `Name` | `varchar(150)` | Required |
 | `Amount` | `numeric` | Required |
 | Audit fields | None | No audit or soft-delete columns exist on this table |
@@ -747,7 +743,7 @@ Same shape as `Allowances` (§15.2), including the same unused shadow column:
 | `PeriodStart` | `timestamptz` | Required |
 | `PeriodEnd` | `timestamptz` | Required |
 | `ProcessedAtUtc` | `timestamptz` | Required |
-| `ProcessedBy` | `uuid` | Required. Not FK-enforced |
+| `ProcessedBy` | `uuid` | Required. Not FK-enforced (loose reference to `Users`, matching `Tasks.AssignedByUserId`'s style) |
 | `Status` | `text` | Nullable |
 | Audit fields | None | No audit or soft-delete columns exist on this table |
 
@@ -757,8 +753,7 @@ Same shape as `Allowances` (§15.2), including the same unused shadow column:
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
 | `PayrollRunId` | `uuid` | Required FK to `PayrollRuns`, `Cascade` on delete |
-| `PayrollRunId1` | `uuid` | Nullable, unused shadow FK column — see implementation note below |
-| `EmployeeId` | `uuid` | Required. **Not FK-enforced** |
+| `EmployeeId` | `uuid` | Required FK to `Employees`, `Restrict` on delete. Indexed |
 | `Basic` | `numeric` | Required |
 | `TotalAllowances` | `numeric` | Required |
 | `TotalDeductions` | `numeric` | Required |
@@ -770,12 +765,9 @@ Same shape as `Allowances` (§15.2), including the same unused shadow column:
 | `BlobContainer` | `text` | Nullable |
 | Audit fields | None | No audit or soft-delete columns exist on this table |
 
-> **Implementation note — pre-existing gaps, backfilled into documentation as-is, not fixed in this pass:**
-> - **No FK constraint** on `SalaryStructures.EmployeeId` or `Payslips.EmployeeId` to `Employees` — both are plain `uuid` properties with no `HasOne`/navigation configured, so the database cannot reject an orphaned employee reference. `SalaryStructures.EmployeeId` also has no index at all, so "current salary structure for employee X" is a full table scan.
-> - **Unused shadow FK columns** (`Allowances.SalaryStructureId1`, `Deductions.SalaryStructureId1`, `Payslips.PayrollRunId1`, all nullable, always `NULL`): `SalaryStructureConfiguration`/`PayrollRunConfiguration` declare the parent side of the relationship as `HasMany<Allowance>().WithOne()` / `HasMany<Payslip>().WithOne()` without pointing at the entity's own `Allowances`/`Deductions`/`Payslips` navigation collection. EF Core reads that as two independent relationships instead of one — the explicit `HasForeignKey` one, plus a second by-convention one inferred from the orphaned navigation — and materializes the second as an extra FK column the application never populates.
-> - **No audit fields or soft delete** on any of the five tables, unlike every other business table in this document (§3); records are hard-updated in place.
->
-> None of these were touched by the Reimbursement Management payroll integration (§18.3), which only added the additive `TotalReimbursements` column. Fixing the above would mean an EF Core migration touching live payroll data — separate follow-up work, not bundled into this documentation backfill.
+> **Implementation note — fixed, and remaining known gap:**
+> - **Fixed** (migration `FixPayrollRelationshipsAndForeignKeys`): `SalaryStructures.EmployeeId` and `Payslips.EmployeeId` now have real FK constraints to `Employees` (`Restrict`), with `SalaryStructures.EmployeeId` also indexed for the first time. Separately, `SalaryStructureConfiguration`/`PayrollRunConfiguration` originally declared the parent side of the Allowances/Deductions/Payslips relationships as `HasMany<Allowance>().WithOne()` (etc.) without pointing at the entity's own navigation collection — EF Core read that as *two* independent relationships (the explicit `HasForeignKey` one, plus a second by-convention one inferred from the orphaned navigation) and materialized the second as an extra, always-`NULL` shadow FK column (`SalaryStructureId1`/`PayrollRunId1`) that the application never populated. Against the real (relational) provider, `.Include(s => s.Allowances)` joined on that dead shadow column, so **`GetEffectiveSalaryStructureAsync` silently returned zero allowances/deductions for every employee** — Payroll would compute correct `Basic` but always `$0` `TotalAllowances`/`TotalDeductions`. It also meant `UpdateSalaryStructureCommandHandler`'s "replace children" only cleared the shadow FK (an optional relationship, so EF nulls rather than deletes) instead of the real one, permanently orphaning every prior Allowance/Deduction row on each edit. Fixed by binding the relationships to the real navigation properties (`HasMany(s => s.Allowances)`); the migration drops the three dead shadow columns. See `SalaryStructureConfiguration.cs`/`PayrollRunConfiguration.cs` and `EMS.Tests/PayrollTests.cs`'s `SalaryStructure_AllowancesAndDeductions_RoundTripThroughRealNavigation` regression test.
+> - **Remaining gap, not fixed**: no audit fields or soft delete on any of the five tables, unlike every other business table in this document (§3); records are hard-updated in place. Left as-is — retrofitting audit/soft-delete columns onto live Payroll data is separate follow-up work, out of scope for this fix.
 
 ## 16. Client Tables
 

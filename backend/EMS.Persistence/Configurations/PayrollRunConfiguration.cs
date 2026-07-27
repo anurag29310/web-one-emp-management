@@ -14,7 +14,11 @@ namespace EMS.Persistence.Configurations
             builder.Property(p => p.PeriodEnd).IsRequired();
             builder.Property(p => p.ProcessedAtUtc).IsRequired();
             builder.Property(p => p.ProcessedBy).IsRequired();
-            builder.HasMany<Payslip>().WithOne().HasForeignKey(ps => ps.PayrollRunId);
+
+            // Bound to the PayrollRun.Payslips navigation explicitly — see the comment in
+            // SalaryStructureConfiguration for why HasMany<Payslip>() without it produces a redundant,
+            // always-null shadow FK column (PayrollRunId1) instead of reusing the real one.
+            builder.HasMany(p => p.Payslips).WithOne().HasForeignKey(ps => ps.PayrollRunId).OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

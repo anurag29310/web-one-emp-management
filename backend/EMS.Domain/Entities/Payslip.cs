@@ -7,6 +7,7 @@ namespace EMS.Domain.Entities
         public Guid Id { get; set; }
         public Guid PayrollRunId { get; set; }
         public Guid EmployeeId { get; set; }
+        public Employee? Employee { get; set; }
         public decimal Basic { get; set; }
         public decimal TotalAllowances { get; set; }
         public decimal TotalDeductions { get; set; }

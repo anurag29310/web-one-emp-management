@@ -10,6 +10,7 @@ using EMS.Persistence.Context;
 using EMS.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using System;
 using System.IO;
 using System.Linq;
@@ -358,6 +359,82 @@ namespace EMS.Tests
             var validator = new GetPayslipsForEmployeeQueryValidator();
             var result = validator.Validate(new GetPayslipsForEmployeeQuery { IsPrivileged = false, RequestingUserId = Guid.NewGuid() });
             Assert.True(result.IsValid);
+        }
+
+        [Fact]
+        public async Task CreateSalaryStructureCommandValidator_RejectsNonexistentEmployee()
+        {
+            var employeeRepo = new Mock<IEmployeeRepository>();
+            employeeRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Employee?)null);
+
+            var validator = new CreateSalaryStructureCommandValidator(employeeRepo.Object);
+
+            var result = await validator.ValidateAsync(new CreateSalaryStructureCommand
+            {
+                EmployeeId = Guid.NewGuid(),
+                BasicSalary = 1000m,
+                EffectiveFrom = DateTime.UtcNow
+            });
+
+            Assert.False(result.IsValid);
+            Assert.Contains(result.Errors, e => e.PropertyName == "EmployeeId");
+        }
+
+        // Regression test for a bug where SalaryStructureConfiguration bound Allowances/Deductions
+        // via the untyped HasMany<Allowance>() instead of HasMany(s => s.Allowances), causing EF Core
+        // to create a second, undeclared relationship with its own always-null shadow FK column
+        // (SalaryStructureId1) for the exact navigation .Include(s => s.Allowances) queries through.
+        // Against the real (relational) provider this made GetEffectiveSalaryStructureAsync's
+        // .Include() join on the wrong, always-empty column — Payroll would silently compute $0
+        // allowances/deductions for every employee. It also meant "replace children" on Update only
+        // cleared the shadow FK (an optional relationship, so EF nulls rather than deletes), leaving
+        // every prior Allowance/Deduction row permanently orphaned in the table. Both are exercised
+        // below; see SalaryStructureConfiguration.cs and the FixPayrollRelationshipsAndForeignKeys
+        // migration for the fix.
+        [Fact]
+        public async Task SalaryStructure_AllowancesAndDeductions_RoundTripThroughRealNavigation()
+        {
+            using var db = CreateDb();
+            var designation = new Designation { Id = Guid.NewGuid(), Name = "Staff", Code = "STF-" + Guid.NewGuid().ToString("N")[..6], CreatedAtUtc = DateTime.UtcNow };
+            await db.Designations.AddAsync(designation);
+            var employee = new Employee { Id = Guid.NewGuid(), EmployeeCode = "EMP-" + Guid.NewGuid().ToString("N")[..6], FirstName = "Test", LastName = "User", IsActive = true, JoinDate = DateTime.UtcNow, DesignationId = designation.Id };
+            await db.Employees.AddAsync(employee);
+            await db.SaveChangesAsync();
+
+            var repo = new PayrollRepository(db);
+            var createHandler = new CreateSalaryStructureCommandHandler(repo);
+
+            var structureId = await createHandler.Handle(new CreateSalaryStructureCommand
+            {
+                EmployeeId = employee.Id,
+                BasicSalary = 1000m,
+                EffectiveFrom = DateTime.UtcNow.AddMonths(-1),
+                Allowances = new() { new() { Name = "House", Amount = 100m } },
+                Deductions = new() { new() { Name = "Tax", Amount = 50m } }
+            }, CancellationToken.None);
+
+            var effective = await repo.GetEffectiveSalaryStructureAsync(employee.Id, DateTime.UtcNow);
+            Assert.NotNull(effective);
+            Assert.Single(effective!.Allowances!);
+            Assert.Equal("House", effective.Allowances![0].Name);
+            Assert.Single(effective.Deductions!);
+            Assert.Equal("Tax", effective.Deductions![0].Name);
+
+            var updateHandler = new UpdateSalaryStructureCommandHandler(repo);
+            await updateHandler.Handle(new UpdateSalaryStructureCommand
+            {
+                Id = structureId,
+                BasicSalary = 1200m,
+                EffectiveFrom = DateTime.UtcNow.AddMonths(-1),
+                Allowances = new() { new() { Name = "Transport", Amount = 75m } },
+                Deductions = new()
+            }, CancellationToken.None);
+
+            // The old "House" allowance and "Tax" deduction must be gone entirely, not merely
+            // detached from the salary structure — a real DELETE, not an orphaned row.
+            Assert.Equal(1, await db.Allowances.CountAsync());
+            Assert.Equal("Transport", (await db.Allowances.SingleAsync()).Name);
+            Assert.Equal(0, await db.Deductions.CountAsync());
         }
     }
 }
