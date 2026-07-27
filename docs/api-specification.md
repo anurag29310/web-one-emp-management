@@ -1492,7 +1492,7 @@ Delivery is poll-based, not real-time: the frontend fetches `GET /announcements`
 
 ## 20. Client Master APIs
 
-Base path: `/clients`. See [database-design.md §15](database-design.md#15-client-tables) for the underlying schema and [requirements.md](requirements.md#client-master-new-module--supports-task-management) for the source requirement. `GET` endpoints require only authentication — Employees will be scoped to clients linked to their assigned tasks once Task Management ships, but that scoping isn't implemented yet, so every authenticated caller currently sees every client. All mutating endpoints require the `CanManageClients` policy (`Admin` role only — intentionally not delegated to HR, unlike every other master-data module in this API).
+Base path: `/clients`. See [database-design.md §16](database-design.md#16-client-tables) for the underlying schema and [requirements.md](requirements.md#client-master-new-module--supports-task-management) for the source requirement. `GET` endpoints require only authentication — Employees will be scoped to clients linked to their assigned tasks once Task Management ships, but that scoping isn't implemented yet, so every authenticated caller currently sees every client. All mutating endpoints require the `CanManageClients` policy (`Admin` role only — intentionally not delegated to HR, unlike every other master-data module in this API).
 
 | Method | Endpoint | Access | Description |
 | --- | --- | --- | --- |
@@ -1568,7 +1568,7 @@ Business rules enforced today: client names must be unique (see above); soft-del
 
 ## 21. Task Management APIs
 
-Base path: `/tasks`. See [database-design.md §16](database-design.md#16-task-tables) for the underlying schema and [requirements.md](requirements.md#task-management) for the source requirement. Create/Edit/Reassign/Cancel require the `CanManageTasks` policy (`Admin` role only — "Only Admin can assign tasks"). Everything else is open to any authenticated caller but scoped at the handler level: non-Admin callers may only act on tasks assigned to their own linked Employee record, mirroring the Attendance check-in/out privileged-override pattern (`RequestingUserId`/`IsPrivileged`, resolved server-side from the JWT, never client-supplied).
+Base path: `/tasks`. See [database-design.md §17](database-design.md#17-task-tables) for the underlying schema and [requirements.md](requirements.md#task-management) for the source requirement. Create/Edit/Reassign/Cancel require the `CanManageTasks` policy (`Admin` role only — "Only Admin can assign tasks"). Everything else is open to any authenticated caller but scoped at the handler level: non-Admin callers may only act on tasks assigned to their own linked Employee record, mirroring the Attendance check-in/out privileged-override pattern (`RequestingUserId`/`IsPrivileged`, resolved server-side from the JWT, never client-supplied).
 
 | Method | Endpoint | Access | Description |
 | --- | --- | --- | --- |
@@ -1634,13 +1634,13 @@ Task response:
 
 `clientName`/`clientAddress`/`clientLatitude`/`clientLongitude` are denormalized onto the response so the mobile client can open the location in Maps ("Open client location in Maps") without a second round trip; they're `null` when the task has no client.
 
-Status values: `Assigned`, `Accepted`, `Rejected`, `InProgress`, `OnHold`, `Completed`, `Cancelled`. `Rejected` is one more than the six requirements.md names explicitly — see [database-design.md §16.1](database-design.md#161-tasks) for why. Priority values: `Low`, `Medium`, `High`, `Critical`.
+Status values: `Assigned`, `Accepted`, `Rejected`, `InProgress`, `OnHold`, `Completed`, `Cancelled`. `Rejected` is one more than the six requirements.md names explicitly — see [database-design.md §17.1](database-design.md#171-tasks) for why. Priority values: `Low`, `Medium`, `High`, `Critical`.
 
 Business rules enforced: only Admin can create/edit/reassign/cancel a task; a non-Admin caller can only accept/reject/start/update-progress/complete/comment-on/attach-to a task assigned to their own employee record; a `Completed` or `Cancelled` task is read-only to every mutating endpoint in this module; `accept`/`reject` only from `Assigned`, `start` only from `Accepted`, `progress`/`complete` only from `InProgress`/`OnHold`; every status change is written to `AuditLogs` (entity `Task`).
 
 ## 22. Reimbursement Management APIs
 
-Base path: `/reimbursements`. See [database-design.md §17](database-design.md#17-reimbursement-tables) for the underlying schema and [requirements.md](requirements.md#expense-management-employee-reimbursement-management) for the source requirement. Create/Edit/Submit/Delete/attach are **owner-only with no Admin override** — unlike Task Management, requirements.md never grants Admin the ability to edit an employee's claim on their behalf. Review actions (start-review/approve/reject/request-changes) require the `CanManageReimbursements` policy (`Admin` role only) and additionally block self-approval at the handler level: an Admin who is also the claimant on a reimbursement cannot approve/reject/request-changes on their own claim, checked against the caller's own linked `EmployeeId` regardless of role.
+Base path: `/reimbursements`. See [database-design.md §18](database-design.md#18-reimbursement-tables) for the underlying schema and [requirements.md](requirements.md#expense-management-employee-reimbursement-management) for the source requirement. Create/Edit/Submit/Delete/attach are **owner-only with no Admin override** — unlike Task Management, requirements.md never grants Admin the ability to edit an employee's claim on their behalf. Review actions (start-review/approve/reject/request-changes) require the `CanManageReimbursements` policy (`Admin` role only) and additionally block self-approval at the handler level: an Admin who is also the claimant on a reimbursement cannot approve/reject/request-changes on their own claim, checked against the caller's own linked `EmployeeId` regardless of role.
 
 | Method | Endpoint | Access | Description |
 | --- | --- | --- | --- |

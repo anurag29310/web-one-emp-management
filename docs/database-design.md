@@ -547,7 +547,7 @@ Unique constraint: `AnnouncementId`, `UserId`.
 | `Designations` | `IX_Designations_Code` | Unique, filtered by `IsDeleted = 0` | Designation lookup |
 | `OfficeLocations` | `IX_OfficeLocations_Code` | Unique, filtered by `IsDeleted = 0` | Location lookup |
 | `EmployeeDocuments` | `IX_EmployeeDocuments_EmployeeId_DocumentType` | Non-unique | Document list screens |
-| `Clients` | `IX_Clients_ClientName` | Unique, not filtered (see §15.1) | Client lookup and duplicate-name prevention |
+| `Clients` | `IX_Clients_ClientName` | Unique, not filtered (see §16.1) | Client lookup and duplicate-name prevention |
 | `Clients` | `IX_Clients_IsActive` | Non-unique | Active-status filter on the client list |
 | `Tasks` | `IX_Tasks_TaskNumber` | Unique | Task lookup |
 | `Tasks` | `IX_Tasks_AssignedEmployeeId` | Non-unique | "My tasks" list and self-scoping checks |
@@ -601,6 +601,20 @@ Unique constraint: `AnnouncementId`, `UserId`.
 | `Announcements` | `IX_Announcements_CreatedAtUtc` | Non-unique | Recency ordering |
 | `AnnouncementReads` | `IX_AnnouncementReads_AnnouncementId_UserId` | Unique | Read-receipt lookup and idempotency |
 
+### 11.7 Payroll Indexes
+
+| Table | Index | Type | Purpose |
+| --- | --- | --- | --- |
+| `Allowances` | `IX_Allowances_SalaryStructureId` | Non-unique | Allowances per salary structure |
+| `Allowances` | index on `SalaryStructureId1` | Non-unique | EF-generated for the unused shadow FK column (§15.2) — not purpose-built |
+| `Deductions` | `IX_Deductions_SalaryStructureId` | Non-unique | Deductions per salary structure |
+| `Deductions` | index on `SalaryStructureId1` | Non-unique | EF-generated for the unused shadow FK column (§15.3) |
+| `Payslips` | `IX_Payslips_EmployeeId` | Non-unique | Payslip history per employee |
+| `Payslips` | `IX_Payslips_PayrollRunId` | Non-unique | Payslips within a run |
+| `Payslips` | index on `PayrollRunId1` | Non-unique | EF-generated for the unused shadow FK column (§15.5) |
+
+`SalaryStructures` and `PayrollRuns` have no indexes beyond their primary key — see the §15 implementation note on the missing `SalaryStructures.EmployeeId` index.
+
 ## 12. Soft Delete Strategy
 
 Soft delete should be implemented for business data where historical traceability matters.
@@ -638,6 +652,7 @@ Not normally soft-deleted:
 - `Tasks`: no soft delete — deliberately. There is no "Delete Task" action; `Cancel Task` is a status transition (`Status = Cancelled`), not a deletion, so a task is never removed from the table at all. See §16.1.
 - `TaskComments`, `TaskAttachments`: append-only child records of `Tasks` — never updated or deleted, matching `AnnouncementReads`.
 - `ReimbursementAttachments`: append-only child records of `Reimbursements` — never updated or deleted.
+- `SalaryStructures`, `Allowances`, `Deductions`, `PayrollRuns`, `Payslips`: no soft delete *and* no audit columns of any kind — not a deliberate design choice like the entries above, but a pre-existing Phase 1 gap inconsistent with §3's baseline. See the implementation note in §15.
 
 Implementation rules:
 
@@ -661,24 +676,98 @@ Recommended foreign key delete behavior:
 
 Phase 2 and Phase 3 modules should be added in separate bounded table groups:
 
-- Payroll: `SalaryStructures`, `Allowances`, `Deductions`, `Payslips`, `Bonuses`, `OvertimeRecords`.
+- Payroll: `SalaryStructures`, `Allowances`, `Deductions`, `PayrollRuns`, `Payslips` are implemented — see §15. (Backfilled into this document for the first time; see the implementation note at the end of §15 for known gaps.) `Bonuses`, `OvertimeRecords` remain future extension points.
 - Announcements: `Announcements` and `Notifications` are implemented — see §9. `EmailLogs` remains a future extension point.
-- Client Master: `Clients` is implemented — see §15.
-- Tasks: `Tasks`, `TaskComments`, `TaskAttachments` are implemented — see §16. (No separate `TaskAssignments` table: a task has exactly one assignee at a time, tracked directly on `Tasks.AssignedEmployeeId`; reassignment overwrites it and is itself audited via `AuditLogs`, so a full assignment-history table wasn't needed.)
-- Expenses: `Reimbursements`, `ReimbursementAttachments` are implemented — see §17. (No separate `ExpenseClaims`/`ExpenseClaimItems` tables: requirements.md describes one flat reimbursement request per expense, not a multi-line claim, so one table covers it.)
-
-**Note on Payroll** (`SalaryStructures`, `Allowances`, `Deductions`, `PayrollRuns`, `Payslips`): these tables are implemented in code but were never added to this document when Payroll was built — a pre-existing documentation gap, not something introduced here. §17.2 below documents the one column added to `Payslips` for Reimbursement integration; the rest of the Payroll schema still needs to be backfilled into this document separately.
+- Client Master: `Clients` is implemented — see §16.
+- Tasks: `Tasks`, `TaskComments`, `TaskAttachments` are implemented — see §17. (No separate `TaskAssignments` table: a task has exactly one assignee at a time, tracked directly on `Tasks.AssignedEmployeeId`; reassignment overwrites it and is itself audited via `AuditLogs`, so a full assignment-history table wasn't needed.)
+- Expenses: `Reimbursements`, `ReimbursementAttachments` are implemented — see §18. (No separate `ExpenseClaims`/`ExpenseClaimItems` tables: requirements.md describes one flat reimbursement request per expense, not a multi-line claim, so one table covers it.)
 - Recruitment: `Candidates`, `Interviews`, `Offers`, `OnboardingChecklists`.
 - Assets: `Assets`, `AssetAssignments`, `AssetReturns`.
 - Performance: `Goals`, `Kpis`, `PerformanceReviews`, `Promotions`.
-- Expenses: `Reimbursements` (see [requirements.md](requirements.md#expense-management-employee-reimbursement-management)) — one table covering the full Draft → Submitted → Under Review → Approved/Rejected/Changes Requested → Paid workflow, plus a related attachment table (`ReimbursementAttachments`). Will need a `PayrollProcessed` flag and `PayrollDate` to satisfy the once-only payroll processing rule.
 - Messaging: `Conversations`, `Messages`, `MessageParticipants`.
 
 Each future module should follow the same audit, soft delete, indexing, and ownership rules unless there is a clear compliance reason to do otherwise.
 
-## 15. Client Tables
+## 15. Payroll Tables
 
-### 15.1 Clients
+Implemented in Phase 1, before this document had Client/Task/Reimbursement-style per-module sections — backfilled here for the first time. See §18.3 for the `TotalReimbursements` column added to `Payslips` by Reimbursement Management.
+
+### 15.1 SalaryStructures
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `EmployeeId` | `uuid` | Required. **Not FK-enforced** — no foreign key constraint to `Employees` exists (see implementation note below) |
+| `BasicSalary` | `numeric` | Required |
+| `EffectiveFrom` | `timestamptz` | Required |
+| `EffectiveTo` | `timestamptz` | Nullable |
+| Audit fields | None | No audit or soft-delete columns exist on this table |
+
+### 15.2 Allowances
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `SalaryStructureId` | `uuid` | Required FK to `SalaryStructures`, `Cascade` on delete |
+| `SalaryStructureId1` | `uuid` | Nullable, unused shadow FK column — see implementation note below |
+| `Name` | `varchar(150)` | Required |
+| `Amount` | `numeric` | Required |
+| Audit fields | None | No audit or soft-delete columns exist on this table |
+
+### 15.3 Deductions
+
+Same shape as `Allowances` (§15.2), including the same unused shadow column:
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `SalaryStructureId` | `uuid` | Required FK to `SalaryStructures`, `Cascade` on delete |
+| `SalaryStructureId1` | `uuid` | Nullable, unused shadow FK column |
+| `Name` | `varchar(150)` | Required |
+| `Amount` | `numeric` | Required |
+| Audit fields | None | No audit or soft-delete columns exist on this table |
+
+### 15.4 PayrollRuns
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `PeriodStart` | `timestamptz` | Required |
+| `PeriodEnd` | `timestamptz` | Required |
+| `ProcessedAtUtc` | `timestamptz` | Required |
+| `ProcessedBy` | `uuid` | Required. Not FK-enforced |
+| `Status` | `text` | Nullable |
+| Audit fields | None | No audit or soft-delete columns exist on this table |
+
+### 15.5 Payslips
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `PayrollRunId` | `uuid` | Required FK to `PayrollRuns`, `Cascade` on delete |
+| `PayrollRunId1` | `uuid` | Nullable, unused shadow FK column — see implementation note below |
+| `EmployeeId` | `uuid` | Required. **Not FK-enforced** |
+| `Basic` | `numeric` | Required |
+| `TotalAllowances` | `numeric` | Required |
+| `TotalDeductions` | `numeric` | Required |
+| `TotalReimbursements` | `numeric` | Required, default `0`. Added by Reimbursement Management — see §18.3 |
+| `GrossPay` | `numeric` | Required |
+| `NetPay` | `numeric` | Required. `Basic + TotalAllowances - TotalDeductions + TotalReimbursements` |
+| `GeneratedAtUtc` | `timestamptz` | Required |
+| `BlobPath` | `text` | Nullable |
+| `BlobContainer` | `text` | Nullable |
+| Audit fields | None | No audit or soft-delete columns exist on this table |
+
+> **Implementation note — pre-existing gaps, backfilled into documentation as-is, not fixed in this pass:**
+> - **No FK constraint** on `SalaryStructures.EmployeeId` or `Payslips.EmployeeId` to `Employees` — both are plain `uuid` properties with no `HasOne`/navigation configured, so the database cannot reject an orphaned employee reference. `SalaryStructures.EmployeeId` also has no index at all, so "current salary structure for employee X" is a full table scan.
+> - **Unused shadow FK columns** (`Allowances.SalaryStructureId1`, `Deductions.SalaryStructureId1`, `Payslips.PayrollRunId1`, all nullable, always `NULL`): `SalaryStructureConfiguration`/`PayrollRunConfiguration` declare the parent side of the relationship as `HasMany<Allowance>().WithOne()` / `HasMany<Payslip>().WithOne()` without pointing at the entity's own `Allowances`/`Deductions`/`Payslips` navigation collection. EF Core reads that as two independent relationships instead of one — the explicit `HasForeignKey` one, plus a second by-convention one inferred from the orphaned navigation — and materializes the second as an extra FK column the application never populates.
+> - **No audit fields or soft delete** on any of the five tables, unlike every other business table in this document (§3); records are hard-updated in place.
+>
+> None of these were touched by the Reimbursement Management payroll integration (§18.3), which only added the additive `TotalReimbursements` column. Fixing the above would mean an EF Core migration touching live payroll data — separate follow-up work, not bundled into this documentation backfill.
+
+## 16. Client Tables
+
+### 16.1 Clients
 
 Client Master (see [requirements.md](requirements.md#client-master-new-module--supports-task-management)). Read access is open to any authenticated user; all mutations are Admin-only — this is intentionally not delegated to HR.
 
@@ -707,11 +796,11 @@ Client Master (see [requirements.md](requirements.md#client-master-new-module--s
 
 Unique index on `ClientName`. As implemented, the index itself is not filtered by `IsDeleted`; a soft-deleted client's name stays reserved unless it is restored or the row is purged. Rejecting a duplicate name against active *and* soft-deleted rows is enforced in the application layer (`IClientRepository.NameExistsAsync`, checked from `CreateClientCommandValidator`/`UpdateClientCommandValidator`) — the same pattern already used for `Designations`/`Teams`/`OfficeLocations` code uniqueness, despite §11.2 describing those as filtered indexes.
 
-## 16. Task Tables
+## 17. Task Tables
 
 See [requirements.md](requirements.md#task-management) for the source requirement. A task's C# entity class is named `TaskItem`, not `Task` — `EMS.Domain.Entities.Task` would collide with `System.Threading.Tasks.Task`, which every async handler in this codebase uses. The database table itself is still named `Tasks`.
 
-### 16.1 Tasks
+### 17.1 Tasks
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -730,7 +819,7 @@ See [requirements.md](requirements.md#task-management) for the source requiremen
 | `CompletedAtUtc` | `timestamptz` | Nullable. Set when `Status` becomes `Completed` |
 | Audit fields | Partial | `CreatedAtUtc`/`CreatedBy`/`UpdatedAtUtc`/`UpdatedBy` only — **no soft delete**. requirements.md lists no "Delete Task" action; `Cancel Task` (a status, not a deletion) is the only removal path, so `IsDeleted`/`DeletedAtUtc`/`DeletedBy` were left off rather than added unused |
 
-### 16.2 TaskComments
+### 17.2 TaskComments
 
 Append-only progress/notes log — never updated or deleted, matching the `AnnouncementReads` convention (§12).
 
@@ -742,7 +831,7 @@ Append-only progress/notes log — never updated or deleted, matching the `Annou
 | `Comment` | `varchar(2000)` | Required |
 | `CreatedAtUtc` | `timestamptz` | Required |
 
-### 16.3 TaskAttachments
+### 17.3 TaskAttachments
 
 Uploaded photo/document evidence for a task ("Upload photos"). Mirrors `EmployeeDocuments` (§5.6), minus the fields that don't apply here (`DocumentType`, `ExpiresAtUtc`, soft delete). Files are stored via the same `IFileStorageService` used for employee documents, under a separate `task-attachments` container.
 
@@ -758,11 +847,11 @@ Uploaded photo/document evidence for a task ("Upload photos"). Mirrors `Employee
 | `UploadedAtUtc` | `timestamptz` | Required |
 | `UploadedBy` | `uuid` | Nullable |
 
-## 17. Reimbursement Tables
+## 18. Reimbursement Tables
 
 See [requirements.md](requirements.md#expense-management-employee-reimbursement-management) for the source requirement.
 
-### 17.1 Reimbursements
+### 18.1 Reimbursements
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -788,9 +877,9 @@ See [requirements.md](requirements.md#expense-management-employee-reimbursement-
 
 Business rules enforced in the application layer, not the schema: an employee cannot approve their own reimbursement (checked against the reviewer's own `EmployeeId`, regardless of role); edits are only accepted while `Draft` or `ChangesRequested`; delete is only accepted while `Draft`; review actions (`start-review`/`approve`/`reject`/`request-changes`) all require `UnderReview` except `start-review` itself, which requires `Submitted`.
 
-### 17.2 ReimbursementAttachments
+### 18.2 ReimbursementAttachments
 
-Uploaded receipt/supporting document for a reimbursement ("Upload one or more supporting documents"). Mirrors `TaskAttachments` (§16.3) exactly, under a separate `reimbursement-attachments` container.
+Uploaded receipt/supporting document for a reimbursement ("Upload one or more supporting documents"). Mirrors `TaskAttachments` (§17.3) exactly, under a separate `reimbursement-attachments` container.
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -804,7 +893,7 @@ Uploaded receipt/supporting document for a reimbursement ("Upload one or more su
 | `UploadedAtUtc` | `timestamptz` | Required |
 | `UploadedBy` | `uuid` | Nullable |
 
-### 17.3 Payslips.TotalReimbursements (Payroll Integration)
+### 18.3 Payslips.TotalReimbursements (Payroll Integration)
 
-One column added to the (otherwise undocumented — see §14 note) `Payslips` table: `TotalReimbursements` (`decimal`, required, default `0`). Sum of an employee's `Approved`, not-yet-`PayrollProcessed` reimbursements as of the run. Added to `NetPay`, not `GrossPay` — reimbursements are expense repayments, not taxable earnings. When a payroll run processes a reimbursement, that `Reimbursement` row is updated in the same unit of work: `Status` → `Paid`, `PayrollProcessed` → `true`, `PayrollRunId`/`PayrollDate` stamped — so a later run's query for "approved and unprocessed" can never select it again.
+One column added to the `Payslips` table (§15.5): `TotalReimbursements` (`decimal`, required, default `0`). Sum of an employee's `Approved`, not-yet-`PayrollProcessed` reimbursements as of the run. Added to `NetPay`, not `GrossPay` — reimbursements are expense repayments, not taxable earnings. When a payroll run processes a reimbursement, that `Reimbursement` row is updated in the same unit of work: `Status` → `Paid`, `PayrollProcessed` → `true`, `PayrollRunId`/`PayrollDate` stamped — so a later run's query for "approved and unprocessed" can never select it again.
 
