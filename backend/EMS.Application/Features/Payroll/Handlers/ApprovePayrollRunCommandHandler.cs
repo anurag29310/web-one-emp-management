@@ -11,11 +11,13 @@ namespace EMS.Application.Features.Payroll.Handlers
     public class ApprovePayrollRunCommandHandler : IRequestHandler<ApprovePayrollRunCommand>
     {
         private readonly IPayrollRepository _repo;
+        private readonly IAuditLogger _auditLogger;
         private readonly ILogger<ApprovePayrollRunCommandHandler> _logger;
 
-        public ApprovePayrollRunCommandHandler(IPayrollRepository repo, ILogger<ApprovePayrollRunCommandHandler> logger)
+        public ApprovePayrollRunCommandHandler(IPayrollRepository repo, IAuditLogger auditLogger, ILogger<ApprovePayrollRunCommandHandler> logger)
         {
             _repo = repo;
+            _auditLogger = auditLogger;
             _logger = logger;
         }
 
@@ -31,6 +33,8 @@ namespace EMS.Application.Features.Payroll.Handlers
             await _repo.SaveChangesAsync();
 
             _logger.LogInformation("Payroll run {PayrollRunId} approved by user {ApprovedBy}.", request.PayrollRunId, request.ApprovedBy);
+
+            await _auditLogger.LogAsync("PayrollRun", run.Id, "Approved", newValues: new { request.ApprovedBy }, ct: cancellationToken);
 
             return Unit.Value;
         }

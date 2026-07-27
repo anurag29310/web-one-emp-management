@@ -1,7 +1,8 @@
-using EMS.Application.Features.Payroll.Commands;
+﻿using EMS.Application.Features.Payroll.Commands;
 using EMS.Application.Features.Payroll.Handlers;
 using EMS.Application.Features.Payroll.Queries;
 using EMS.Application.Features.Payroll.Validators;
+using EMS.Application.Interfaces;
 using EMS.Domain.Entities;
 using EMS.Infrastructure.Pdf;
 using EMS.Infrastructure.Storage;
@@ -20,6 +21,12 @@ namespace EMS.Tests
 {
     public class PayrollTests
     {
+        private class RecordingAuditLogger : IAuditLogger
+        {
+            public Task LogAsync(string entityName, Guid? entityId, string action, object? oldValues = null, object? newValues = null, CancellationToken ct = default)
+                => Task.CompletedTask;
+        }
+
         private static ApplicationDbContext CreateDb()
         {
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -101,7 +108,7 @@ namespace EMS.Tests
             var storage = new LocalFileStorageService(tempBase);
             var logger = new NullLogger<EMS.Application.Features.Payroll.Handlers.ProcessPayrollCommandHandler>();
 
-            var handler = new EMS.Application.Features.Payroll.Handlers.ProcessPayrollCommandHandler(repo, reimbursementRepo, pdf, storage, logger);
+            var handler = new EMS.Application.Features.Payroll.Handlers.ProcessPayrollCommandHandler(repo, reimbursementRepo, pdf, storage, new RecordingAuditLogger(), logger);
 
             var cmd = new ProcessPayrollCommand { PeriodStart = DateTime.UtcNow.AddDays(-7), PeriodEnd = DateTime.UtcNow, ProcessedBy = Guid.NewGuid() };
             var runId = await handler.Handle(cmd, CancellationToken.None);
@@ -270,7 +277,7 @@ namespace EMS.Tests
             await db.SaveChangesAsync();
 
             var repo = new PayrollRepository(db);
-            var handler = new ApprovePayrollRunCommandHandler(repo, NullLogger<ApprovePayrollRunCommandHandler>.Instance);
+            var handler = new ApprovePayrollRunCommandHandler(repo, new RecordingAuditLogger(), NullLogger<ApprovePayrollRunCommandHandler>.Instance);
 
             await handler.Handle(new ApprovePayrollRunCommand { PayrollRunId = run.Id, ApprovedBy = Guid.NewGuid() }, CancellationToken.None);
 
@@ -287,7 +294,7 @@ namespace EMS.Tests
             await db.SaveChangesAsync();
 
             var repo = new PayrollRepository(db);
-            var handler = new ApprovePayrollRunCommandHandler(repo, NullLogger<ApprovePayrollRunCommandHandler>.Instance);
+            var handler = new ApprovePayrollRunCommandHandler(repo, new RecordingAuditLogger(), NullLogger<ApprovePayrollRunCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 handler.Handle(new ApprovePayrollRunCommand { PayrollRunId = run.Id, ApprovedBy = Guid.NewGuid() }, CancellationToken.None));
@@ -302,7 +309,7 @@ namespace EMS.Tests
             await db.SaveChangesAsync();
 
             var repo = new PayrollRepository(db);
-            var handler = new ApprovePayrollRunCommandHandler(repo, NullLogger<ApprovePayrollRunCommandHandler>.Instance);
+            var handler = new ApprovePayrollRunCommandHandler(repo, new RecordingAuditLogger(), NullLogger<ApprovePayrollRunCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 handler.Handle(new ApprovePayrollRunCommand { PayrollRunId = run.Id, ApprovedBy = Guid.NewGuid() }, CancellationToken.None));

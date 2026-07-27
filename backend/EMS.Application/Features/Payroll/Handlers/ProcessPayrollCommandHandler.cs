@@ -16,14 +16,16 @@ namespace EMS.Application.Features.Payroll.Handlers
         private readonly IReimbursementRepository _reimbursementRepo;
         private readonly IPdfService _pdf;
         private readonly IFileStorageService _storage;
+        private readonly IAuditLogger _auditLogger;
         private readonly ILogger<ProcessPayrollCommandHandler> _logger;
 
-        public ProcessPayrollCommandHandler(IPayrollRepository repo, IReimbursementRepository reimbursementRepo, IPdfService pdf, IFileStorageService storage, ILogger<ProcessPayrollCommandHandler> logger)
+        public ProcessPayrollCommandHandler(IPayrollRepository repo, IReimbursementRepository reimbursementRepo, IPdfService pdf, IFileStorageService storage, IAuditLogger auditLogger, ILogger<ProcessPayrollCommandHandler> logger)
         {
             _repo = repo;
             _reimbursementRepo = reimbursementRepo;
             _pdf = pdf;
             _storage = storage;
+            _auditLogger = auditLogger;
             _logger = logger;
         }
 
@@ -133,6 +135,14 @@ namespace EMS.Application.Features.Payroll.Handlers
             await _repo.SaveChangesAsync();
 
             _logger.LogInformation("Payroll run {PayrollRunId} completed for {EmployeeCount} employees.", run.Id, employees.Count());
+
+            await _auditLogger.LogAsync("PayrollRun", run.Id, "Processed", newValues: new
+            {
+                request.PeriodStart,
+                request.PeriodEnd,
+                request.ProcessedBy,
+                EmployeeCount = employees.Count()
+            }, ct: cancellationToken);
 
             return run.Id;
         }

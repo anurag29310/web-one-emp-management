@@ -338,7 +338,7 @@ namespace EMS.Tests
             var tempBase = Path.Combine(Path.GetTempPath(), "ems-reimbursement-payroll-tests", Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempBase);
             var storage = new LocalFileStorageService(tempBase);
-            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, pdf, storage, NullLogger<ProcessPayrollCommandHandler>.Instance);
+            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, pdf, storage, new RecordingAuditLogger(), NullLogger<ProcessPayrollCommandHandler>.Instance);
 
             var runId = await handler.Handle(new ProcessPayrollCommand { PeriodStart = DateTime.UtcNow.AddDays(-7), PeriodEnd = DateTime.UtcNow, ProcessedBy = Guid.NewGuid() }, CancellationToken.None);
 

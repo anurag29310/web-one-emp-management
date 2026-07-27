@@ -11,12 +11,14 @@ namespace EMS.Application.Features.Leave.Handlers
     {
         private readonly ILeaveRepository _repo;
         private readonly IAuthRepository _authRepo;
+        private readonly IAuditLogger _auditLogger;
         private readonly ILogger<ApproveLeaveCommandHandler> _logger;
 
-        public ApproveLeaveCommandHandler(ILeaveRepository repo, IAuthRepository authRepo, ILogger<ApproveLeaveCommandHandler> logger)
+        public ApproveLeaveCommandHandler(ILeaveRepository repo, IAuthRepository authRepo, IAuditLogger auditLogger, ILogger<ApproveLeaveCommandHandler> logger)
         {
             _repo = repo;
             _authRepo = authRepo;
+            _auditLogger = auditLogger;
             _logger = logger;
         }
 
@@ -51,6 +53,8 @@ namespace EMS.Application.Features.Leave.Handlers
             await _repo.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Leave request {LeaveId} approved by {ApproverId}", lr.Id, request.ApproverId);
+
+            await _auditLogger.LogAsync("LeaveRequest", lr.Id, "Approved", ct: cancellationToken);
         }
     }
 }

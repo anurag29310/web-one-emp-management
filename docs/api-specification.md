@@ -1056,6 +1056,8 @@ List query parameters:
 | `dateFrom` | date | Optional |
 | `dateTo` | date | Optional |
 
+An approver cannot approve/reject their own leave request, checked against the approver's own linked `employeeId` regardless of role. Every approve/reject decision is written to `AuditLogs` (entity `LeaveRequest`).
+
 ### 9.3 Leave Balances
 
 | Method | Endpoint | Access | Description |
@@ -1331,6 +1333,8 @@ Payroll run response:
 ```
 
 `status` is one of `Processing`, `Completed`, `Approved`.
+
+Processing a payroll run and approving it are both written to `AuditLogs` (entity `PayrollRun`, actions `Processed`/`Approved`) — money movement is treated as a sensitive operation on par with Leave approvals and employee lifecycle changes.
 
 ### 17.2 Salary Structures
 

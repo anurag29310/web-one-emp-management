@@ -1,4 +1,5 @@
 using EMS.Application.Features.Leave.Commands;
+using EMS.Application.Interfaces;
 using EMS.Domain.Entities;
 using EMS.Persistence.Context;
 using EMS.Persistence.Repositories;
@@ -13,6 +14,12 @@ namespace EMS.Tests
 {
     public class LeaveTests
     {
+        private class RecordingAuditLogger : IAuditLogger
+        {
+            public Task LogAsync(string entityName, Guid? entityId, string action, object? oldValues = null, object? newValues = null, CancellationToken ct = default)
+                => Task.CompletedTask;
+        }
+
         private static ApplicationDbContext CreateDb()
         {
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -203,7 +210,7 @@ namespace EMS.Tests
             var leaveRepo = new LeaveRepository(db);
             var authRepo = new AuthRepository(db);
             var handler = new EMS.Application.Features.Leave.Handlers.ApproveLeaveCommandHandler(
-                leaveRepo, authRepo, NullLogger<EMS.Application.Features.Leave.Handlers.ApproveLeaveCommandHandler>.Instance);
+                leaveRepo, authRepo, new RecordingAuditLogger(), NullLogger<EMS.Application.Features.Leave.Handlers.ApproveLeaveCommandHandler>.Instance);
 
             // The employee cannot approve their own request.
             await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(new ApproveLeaveCommand
@@ -226,6 +233,55 @@ namespace EMS.Tests
             var updatedRequest = await db.LeaveRequests.FindAsync(leaveRequest.Id);
             Assert.Equal(Domain.Enums.LeaveStatus.Approved, updatedRequest!.Status);
             Assert.Equal(approverEmployeeId, updatedRequest.ApproverEmployeeId);
+        }
+
+        [Fact]
+        public async Task RejectLeaveRequest_SetsRejectedStatusAndBlocksSelfRejection()
+        {
+            using var db = CreateDb();
+            var employeeId = Guid.NewGuid();
+            var employeeUser = await SeedUserAsync(db, employeeId);
+            var approverEmployeeId = Guid.NewGuid();
+            var approverUser = await SeedUserAsync(db, approverEmployeeId);
+
+            var leaveRequest = new LeaveRequest
+            {
+                Id = Guid.NewGuid(),
+                EmployeeId = employeeId,
+                LeaveTypeId = Guid.NewGuid(),
+                StartDate = new DateTime(DateTime.UtcNow.Year, 6, 1),
+                EndDate = new DateTime(DateTime.UtcNow.Year, 6, 2),
+                TotalDays = 2,
+                Status = Domain.Enums.LeaveStatus.Pending,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            await db.LeaveRequests.AddAsync(leaveRequest);
+            await db.SaveChangesAsync();
+
+            var leaveRepo = new LeaveRepository(db);
+            var authRepo = new AuthRepository(db);
+            var handler = new EMS.Application.Features.Leave.Handlers.RejectLeaveCommandHandler(
+                leaveRepo, authRepo, new RecordingAuditLogger(), NullLogger<EMS.Application.Features.Leave.Handlers.RejectLeaveCommandHandler>.Instance);
+
+            // The employee cannot reject their own request.
+            await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(new RejectLeaveCommand
+            {
+                Id = leaveRequest.Id,
+                ApproverId = employeeUser.Id,
+                Comments = "Trying to self-reject"
+            }, CancellationToken.None));
+
+            await handler.Handle(new RejectLeaveCommand
+            {
+                Id = leaveRequest.Id,
+                ApproverId = approverUser.Id,
+                Comments = "Insufficient notice period"
+            }, CancellationToken.None);
+
+            var updatedRequest = await db.LeaveRequests.FindAsync(leaveRequest.Id);
+            Assert.Equal(Domain.Enums.LeaveStatus.Rejected, updatedRequest!.Status);
+            Assert.Equal(approverEmployeeId, updatedRequest.ApproverEmployeeId);
+            Assert.Equal("Insufficient notice period", updatedRequest.DecisionComments);
         }
 
         [Fact]
