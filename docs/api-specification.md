@@ -865,11 +865,15 @@ Request:
 {
   "employeeId": "00000000-0000-0000-0000-000000000101",
   "checkInAtUtc": "2026-06-12T03:45:00Z",
-  "notes": "Office check-in"
+  "notes": "Office check-in",
+  "latitude": 12.9716,
+  "longitude": 77.5946
 }
 ```
 
 Employees can check in only for themselves. Admin and HR can record on behalf of an employee.
+
+GPS & Location Tracking (see [requirements.md](requirements.md#gps--location-tracking-planned-enhancement) and [database-design.md §6.3](database-design.md#63-attendancerecords)): `latitude`/`longitude` are required — captured by the client's Geolocation API and validated to `[-90, 90]`/`[-180, 180]`. `deviceInfo` and `ipAddress` are **not** part of the request body; the server derives them from the `User-Agent` header and the connection's remote IP respectively, and reverse-geocodes the coordinates into a human-readable `checkInAddress` (best-effort — a geocoding provider outage never blocks the check-in; the address is simply omitted). Office geofencing (rejecting a check-in outside a configurable radius) is a future enhancement, not enforced here.
 
 ### 8.2 Check Out
 
@@ -885,9 +889,13 @@ Request:
 {
   "employeeId": "00000000-0000-0000-0000-000000000101",
   "checkOutAtUtc": "2026-06-12T12:45:00Z",
-  "notes": "Office check-out"
+  "notes": "Office check-out",
+  "latitude": 13.0827,
+  "longitude": 80.2707
 }
 ```
+
+Same GPS semantics as Check In (§8.1). Check-out location is stored independently of check-in location — a check-out may legitimately happen off-premises (client visit, field work) and is always recorded regardless of where it occurs.
 
 ### 8.3 Get Attendance Records
 

@@ -16,6 +16,19 @@ namespace EMS.Application.Features.Attendance.DTOs
         public bool IsEarlyLeave { get; set; }
         public int? TotalWorkMinutes { get; set; }
         public string? Notes { get; set; }
+
+        public decimal? CheckInLatitude { get; set; }
+        public decimal? CheckInLongitude { get; set; }
+        public string? CheckInAddress { get; set; }
+        public string? CheckInDeviceInfo { get; set; }
+        public string? CheckInIpAddress { get; set; }
+
+        public decimal? CheckOutLatitude { get; set; }
+        public decimal? CheckOutLongitude { get; set; }
+        public string? CheckOutAddress { get; set; }
+        public string? CheckOutDeviceInfo { get; set; }
+        public string? CheckOutIpAddress { get; set; }
+
         public DateTime CreatedAtUtc { get; set; }
         public DateTime? UpdatedAtUtc { get; set; }
 
@@ -32,6 +45,16 @@ namespace EMS.Application.Features.Attendance.DTOs
             IsEarlyLeave = a.IsEarlyLeave,
             TotalWorkMinutes = a.TotalWorkMinutes,
             Notes = a.Notes,
+            CheckInLatitude = a.CheckInLatitude,
+            CheckInLongitude = a.CheckInLongitude,
+            CheckInAddress = a.CheckInAddress,
+            CheckInDeviceInfo = a.CheckInDeviceInfo,
+            CheckInIpAddress = a.CheckInIpAddress,
+            CheckOutLatitude = a.CheckOutLatitude,
+            CheckOutLongitude = a.CheckOutLongitude,
+            CheckOutAddress = a.CheckOutAddress,
+            CheckOutDeviceInfo = a.CheckOutDeviceInfo,
+            CheckOutIpAddress = a.CheckOutIpAddress,
             CreatedAtUtc = a.CreatedAtUtc,
             UpdatedAtUtc = a.UpdatedAtUtc
         };

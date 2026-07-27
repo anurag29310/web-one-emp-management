@@ -33,6 +33,8 @@ namespace EMS.API.Controllers
         {
             cmd.RequestingUserId = GetCurrentUserId();
             cmd.IsPrivileged = IsAdminOrHr();
+            cmd.IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            cmd.DeviceInfo = Request.Headers.UserAgent.ToString();
             var result = await _mediator.Send(cmd, ct);
             return Ok(ApiResponse<AttendanceRecordDto>.Success(AttendanceRecordDto.FromEntity(result), "Checked in successfully."));
         }
@@ -46,6 +48,8 @@ namespace EMS.API.Controllers
         {
             cmd.RequestingUserId = GetCurrentUserId();
             cmd.IsPrivileged = IsAdminOrHr();
+            cmd.IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            cmd.DeviceInfo = Request.Headers.UserAgent.ToString();
             var result = await _mediator.Send(cmd, ct);
             return Ok(ApiResponse<AttendanceRecordDto>.Success(AttendanceRecordDto.FromEntity(result), "Checked out successfully."));
         }

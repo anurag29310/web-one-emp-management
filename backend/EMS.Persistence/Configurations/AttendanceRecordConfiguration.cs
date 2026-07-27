@@ -14,6 +14,19 @@ namespace EMS.Persistence.Configurations
             builder.Property(x => x.AttendanceDate).HasColumnType("date").IsRequired();
             builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
             builder.Property(x => x.Notes).HasMaxLength(500);
+
+            builder.Property(x => x.CheckInLatitude).HasColumnType("decimal(9,6)");
+            builder.Property(x => x.CheckInLongitude).HasColumnType("decimal(9,6)");
+            builder.Property(x => x.CheckInAddress).HasMaxLength(500);
+            builder.Property(x => x.CheckInDeviceInfo).HasMaxLength(255);
+            builder.Property(x => x.CheckInIpAddress).HasMaxLength(64);
+
+            builder.Property(x => x.CheckOutLatitude).HasColumnType("decimal(9,6)");
+            builder.Property(x => x.CheckOutLongitude).HasColumnType("decimal(9,6)");
+            builder.Property(x => x.CheckOutAddress).HasMaxLength(500);
+            builder.Property(x => x.CheckOutDeviceInfo).HasMaxLength(255);
+            builder.Property(x => x.CheckOutIpAddress).HasMaxLength(64);
+
             builder.Property(x => x.IsDeleted).HasDefaultValue(false);
 
             builder.HasOne(x => x.Employee)

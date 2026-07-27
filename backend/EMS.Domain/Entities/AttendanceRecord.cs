@@ -16,6 +16,19 @@ namespace EMS.Domain.Entities
         public bool IsEarlyLeave { get; set; }
         public int? TotalWorkMinutes { get; set; }
         public string? Notes { get; set; }
+
+        public decimal? CheckInLatitude { get; set; }
+        public decimal? CheckInLongitude { get; set; }
+        public string? CheckInAddress { get; set; }
+        public string? CheckInDeviceInfo { get; set; }
+        public string? CheckInIpAddress { get; set; }
+
+        public decimal? CheckOutLatitude { get; set; }
+        public decimal? CheckOutLongitude { get; set; }
+        public string? CheckOutAddress { get; set; }
+        public string? CheckOutDeviceInfo { get; set; }
+        public string? CheckOutIpAddress { get; set; }
+
         public bool IsDeleted { get; set; }
         public DateTime CreatedAtUtc { get; set; }
         public DateTime? UpdatedAtUtc { get; set; }

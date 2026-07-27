@@ -317,9 +317,21 @@ Stores metadata for files stored in Azure Blob Storage.
 | `IsEarlyLeave` | `boolean` | Required |
 | `TotalWorkMinutes` | `int` | Nullable |
 | `Notes` | `varchar(500)` | Nullable |
+| `CheckInLatitude` | `decimal(9,6)` | Nullable. GPS captured by the client at check-in |
+| `CheckInLongitude` | `decimal(9,6)` | Nullable |
+| `CheckInAddress` | `varchar(500)` | Nullable. Reverse-geocoded from `CheckInLatitude`/`CheckInLongitude` (see implementation note below); best-effort — left `null` if the geocoding provider is unavailable |
+| `CheckInDeviceInfo` | `varchar(255)` | Nullable. Server-derived from the `User-Agent` request header, never client-supplied |
+| `CheckInIpAddress` | `varchar(64)` | Nullable. Server-derived from the request's remote IP, never client-supplied |
+| `CheckOutLatitude` | `decimal(9,6)` | Nullable. GPS captured by the client at check-out. Punch Out may legitimately be off-premises (client visit, field work) — always recorded regardless of location |
+| `CheckOutLongitude` | `decimal(9,6)` | Nullable |
+| `CheckOutAddress` | `varchar(500)` | Nullable. Reverse-geocoded, same best-effort semantics as `CheckInAddress` |
+| `CheckOutDeviceInfo` | `varchar(255)` | Nullable, server-derived |
+| `CheckOutIpAddress` | `varchar(64)` | Nullable, server-derived |
 | Audit fields | Shared | Include audit and soft delete fields |
 
 Unique constraint: `EmployeeId`, `AttendanceDate`.
+
+> **Implementation note (GPS & Location Tracking):** see [requirements.md](requirements.md#gps--location-tracking-planned-enhancement) for the source requirement. Check-in and check-out locations are stored as two independent column groups rather than one shared set, since an employee's punch-out location (e.g. a client site) is frequently different from their punch-in location (the office) and both must remain independently visible to Admin. Reverse geocoding uses Nominatim/OpenStreetMap (`IGeocodingService` / `NominatimGeocodingService`, configured under `Geocoding:BaseUrl`/`Geocoding:UserAgent`) — free, no API key, but a geocoding failure or timeout never blocks a punch; `Latitude`/`Longitude` are always saved and `Address` is simply left `null`. Office geofencing (rejecting a Punch In outside a configurable radius) is explicitly out of scope here — requirements.md lists it as a future "Nice To Have", not part of this pass.
 
 ### 6.4 AttendanceCorrections
 

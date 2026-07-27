@@ -10,6 +10,8 @@ namespace EMS.Application.Features.Attendance.Validators
             RuleFor(x => x.EmployeeId).NotEmpty();
             RuleFor(x => x.CheckInAtUtc).NotEqual(default(System.DateTime));
             RuleFor(x => x.Notes).MaximumLength(500);
+            RuleFor(x => x.Latitude).InclusiveBetween(-90m, 90m);
+            RuleFor(x => x.Longitude).InclusiveBetween(-180m, 180m);
         }
     }
 
@@ -20,6 +22,8 @@ namespace EMS.Application.Features.Attendance.Validators
             RuleFor(x => x.EmployeeId).NotEmpty();
             RuleFor(x => x.CheckOutAtUtc).NotEqual(default(System.DateTime));
             RuleFor(x => x.Notes).MaximumLength(500);
+            RuleFor(x => x.Latitude).InclusiveBetween(-90m, 90m);
+            RuleFor(x => x.Longitude).InclusiveBetween(-180m, 180m);
         }
     }
 }

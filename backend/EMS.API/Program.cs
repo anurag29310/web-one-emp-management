@@ -190,6 +190,15 @@ builder.Services.AddScoped<EMS.Application.Interfaces.IAuditLogger, EMS.Infrastr
 builder.Services.AddSingleton<EMS.Application.Interfaces.IFileStorageService>(sp => new EMS.Infrastructure.Storage.LocalFileStorageService(builder.Environment.ContentRootPath));
 builder.Services.AddSingleton<EMS.Application.Interfaces.IEmailSender>(sp => new EMS.Infrastructure.Email.LocalEmailSender(builder.Environment.ContentRootPath, sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<EMS.Infrastructure.Email.LocalEmailSender>>()));
 
+// Reverse geocoding for Attendance GPS tracking (Nominatim/OpenStreetMap — no API key required,
+// but its usage policy requires a descriptive User-Agent identifying the calling application).
+builder.Services.AddHttpClient<EMS.Application.Interfaces.IGeocodingService, EMS.Infrastructure.Services.NominatimGeocodingService>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Geocoding:BaseUrl"] ?? "https://nominatim.openstreetmap.org/");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd(builder.Configuration["Geocoding:UserAgent"] ?? "EMS-Attendance/1.0 (contact: admin@example.com)");
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
 builder.Services.AddSwaggerGen();
 
 // CORS: the frontend (a React SPA on a different origin) authenticates with a Bearer token in

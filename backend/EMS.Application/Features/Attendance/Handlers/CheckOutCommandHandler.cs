@@ -12,12 +12,14 @@ namespace EMS.Application.Features.Attendance.Handlers
     {
         private readonly IAttendanceRepository _repo;
         private readonly IAuthRepository _authRepo;
+        private readonly IGeocodingService _geocodingService;
         private readonly ILogger<CheckOutCommandHandler> _logger;
 
-        public CheckOutCommandHandler(IAttendanceRepository repo, IAuthRepository authRepo, ILogger<CheckOutCommandHandler> logger)
+        public CheckOutCommandHandler(IAttendanceRepository repo, IAuthRepository authRepo, IGeocodingService geocodingService, ILogger<CheckOutCommandHandler> logger)
         {
             _repo = repo;
             _authRepo = authRepo;
+            _geocodingService = geocodingService;
             _logger = logger;
         }
 
@@ -38,11 +40,17 @@ namespace EMS.Application.Features.Attendance.Handlers
                 throw new InvalidOperationException("Already checked out for this date.");
 
             var shift = existing.ShiftId.HasValue ? await _repo.GetShiftByIdAsync(existing.ShiftId.Value, cancellationToken) : null;
+            var address = await _geocodingService.ReverseGeocodeAsync(request.Latitude, request.Longitude, cancellationToken);
 
             existing.CheckOutAtUtc = request.CheckOutAtUtc;
             existing.IsEarlyLeave = AttendanceCalculator.IsEarlyLeave(request.CheckOutAtUtc, shift);
             existing.TotalWorkMinutes = AttendanceCalculator.WorkMinutes(existing.CheckInAtUtc, existing.CheckOutAtUtc);
             existing.Notes = request.Notes ?? existing.Notes;
+            existing.CheckOutLatitude = request.Latitude;
+            existing.CheckOutLongitude = request.Longitude;
+            existing.CheckOutAddress = address;
+            existing.CheckOutDeviceInfo = request.DeviceInfo;
+            existing.CheckOutIpAddress = request.IpAddress;
             existing.UpdatedAtUtc = DateTime.UtcNow;
 
             await _repo.UpdateRecordAsync(existing, cancellationToken);

@@ -13,12 +13,14 @@ namespace EMS.Application.Features.Attendance.Handlers
     {
         private readonly IAttendanceRepository _repo;
         private readonly IAuthRepository _authRepo;
+        private readonly IGeocodingService _geocodingService;
         private readonly ILogger<CheckInCommandHandler> _logger;
 
-        public CheckInCommandHandler(IAttendanceRepository repo, IAuthRepository authRepo, ILogger<CheckInCommandHandler> logger)
+        public CheckInCommandHandler(IAttendanceRepository repo, IAuthRepository authRepo, IGeocodingService geocodingService, ILogger<CheckInCommandHandler> logger)
         {
             _repo = repo;
             _authRepo = authRepo;
+            _geocodingService = geocodingService;
             _logger = logger;
         }
 
@@ -40,6 +42,7 @@ namespace EMS.Application.Features.Attendance.Handlers
             var shift = activeShift != null ? await _repo.GetShiftByIdAsync(activeShift.ShiftId, cancellationToken) : null;
             var isLate = AttendanceCalculator.IsLateArrival(request.CheckInAtUtc, shift);
             var status = isLate ? AttendanceStatus.Late : AttendanceStatus.Present;
+            var address = await _geocodingService.ReverseGeocodeAsync(request.Latitude, request.Longitude, cancellationToken);
 
             if (existing != null)
             {
@@ -48,6 +51,11 @@ namespace EMS.Application.Features.Attendance.Handlers
                 existing.IsLateArrival = isLate;
                 existing.Status = status;
                 existing.Notes = request.Notes ?? existing.Notes;
+                existing.CheckInLatitude = request.Latitude;
+                existing.CheckInLongitude = request.Longitude;
+                existing.CheckInAddress = address;
+                existing.CheckInDeviceInfo = request.DeviceInfo;
+                existing.CheckInIpAddress = request.IpAddress;
                 existing.UpdatedAtUtc = DateTime.UtcNow;
 
                 await _repo.UpdateRecordAsync(existing, cancellationToken);
@@ -67,6 +75,11 @@ namespace EMS.Application.Features.Attendance.Handlers
                 IsLateArrival = isLate,
                 IsEarlyLeave = false,
                 Notes = request.Notes,
+                CheckInLatitude = request.Latitude,
+                CheckInLongitude = request.Longitude,
+                CheckInAddress = address,
+                CheckInDeviceInfo = request.DeviceInfo,
+                CheckInIpAddress = request.IpAddress,
                 CreatedAtUtc = DateTime.UtcNow
             };
 

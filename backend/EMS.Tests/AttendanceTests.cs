@@ -1,12 +1,14 @@
-using EMS.Application.Features.Attendance.Commands;
+﻿using EMS.Application.Features.Attendance.Commands;
 using EMS.Application.Features.Attendance.Handlers;
 using EMS.Application.Features.Attendance.Queries;
+using EMS.Application.Interfaces;
 using EMS.Domain.Entities;
 using EMS.Domain.Enums;
 using EMS.Persistence.Context;
 using EMS.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using System;
 using System.Linq;
 using System.Threading;
@@ -24,6 +26,9 @@ namespace EMS.Tests
                 .Options;
             return new ApplicationDbContext(options);
         }
+
+        private static IGeocodingService CreateGeocodingStub(string? address = "123 Test St, Test City") =>
+            Mock.Of<IGeocodingService>(g => g.ReverseGeocodeAsync(It.IsAny<decimal>(), It.IsAny<decimal>(), It.IsAny<CancellationToken>()) == Task.FromResult(address));
 
         private static async Task<User> SeedUserAsync(ApplicationDbContext db, Guid? employeeId)
         {
@@ -66,7 +71,7 @@ namespace EMS.Tests
 
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
-            var handler = new CheckInCommandHandler(repo, authRepo, NullLogger<CheckInCommandHandler>.Instance);
+            var handler = new CheckInCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
 
             var checkInTime = new DateTime(2026, 6, 12, 3, 45, 0, DateTimeKind.Utc);
             var result = await handler.Handle(new CheckInCommand
@@ -90,7 +95,7 @@ namespace EMS.Tests
 
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
-            var handler = new CheckInCommandHandler(repo, authRepo, NullLogger<CheckInCommandHandler>.Instance);
+            var handler = new CheckInCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => handler.Handle(new CheckInCommand
             {
@@ -110,7 +115,7 @@ namespace EMS.Tests
 
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
-            var handler = new CheckInCommandHandler(repo, authRepo, NullLogger<CheckInCommandHandler>.Instance);
+            var handler = new CheckInCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
 
             var cmd = new CheckInCommand
             {
@@ -155,7 +160,7 @@ namespace EMS.Tests
 
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
-            var handler = new CheckInCommandHandler(repo, authRepo, NullLogger<CheckInCommandHandler>.Instance);
+            var handler = new CheckInCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
 
             // 9:20 is past the 9:00 + 10 minute grace window.
             var result = await handler.Handle(new CheckInCommand
@@ -179,7 +184,7 @@ namespace EMS.Tests
 
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
-            var handler = new CheckOutCommandHandler(repo, authRepo, NullLogger<CheckOutCommandHandler>.Instance);
+            var handler = new CheckOutCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckOutCommandHandler>.Instance);
 
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(new CheckOutCommand
             {
@@ -201,8 +206,8 @@ namespace EMS.Tests
 
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
-            var checkInHandler = new CheckInCommandHandler(repo, authRepo, NullLogger<CheckInCommandHandler>.Instance);
-            var checkOutHandler = new CheckOutCommandHandler(repo, authRepo, NullLogger<CheckOutCommandHandler>.Instance);
+            var checkInHandler = new CheckInCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
+            var checkOutHandler = new CheckOutCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckOutCommandHandler>.Instance);
 
             var checkInTime = new DateTime(2026, 6, 12, 9, 0, 0, DateTimeKind.Utc);
             await checkInHandler.Handle(new CheckInCommand
@@ -542,7 +547,7 @@ namespace EMS.Tests
             }, CancellationToken.None);
 
             var authRepo = new AuthRepository(db);
-            var checkInHandler = new CheckInCommandHandler(attendanceRepo, authRepo, NullLogger<CheckInCommandHandler>.Instance);
+            var checkInHandler = new CheckInCommandHandler(attendanceRepo, authRepo, CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
 
             var result = await checkInHandler.Handle(new CheckInCommand
             {
@@ -554,6 +559,112 @@ namespace EMS.Tests
 
             Assert.Equal(shift.Id, result.ShiftId);
             Assert.False(result.IsLateArrival);
+        }
+
+        [Fact]
+        public async Task CheckIn_ThenCheckOut_StoresIndependentGpsLocationsForEachPunch()
+        {
+            using var db = CreateDb();
+            var employeeId = Guid.NewGuid();
+            var user = await SeedUserAsync(db, employeeId);
+
+            var repo = new AttendanceRepository(db);
+            var authRepo = new AuthRepository(db);
+            var geocodingMock = new Mock<IGeocodingService>();
+            geocodingMock.Setup(g => g.ReverseGeocodeAsync(12.9716m, 77.5946m, It.IsAny<CancellationToken>()))
+                .ReturnsAsync("Office HQ, Bengaluru");
+            geocodingMock.Setup(g => g.ReverseGeocodeAsync(13.0827m, 80.2707m, It.IsAny<CancellationToken>()))
+                .ReturnsAsync("Client Site, Chennai");
+
+            var checkInHandler = new CheckInCommandHandler(repo, authRepo, geocodingMock.Object, NullLogger<CheckInCommandHandler>.Instance);
+            var checkOutHandler = new CheckOutCommandHandler(repo, authRepo, geocodingMock.Object, NullLogger<CheckOutCommandHandler>.Instance);
+
+            var checkInTime = new DateTime(2026, 6, 12, 9, 0, 0, DateTimeKind.Utc);
+            await checkInHandler.Handle(new CheckInCommand
+            {
+                EmployeeId = employeeId,
+                CheckInAtUtc = checkInTime,
+                Latitude = 12.9716m,
+                Longitude = 77.5946m,
+                DeviceInfo = "Mozilla/5.0 (Test Device)",
+                IpAddress = "10.0.0.1",
+                RequestingUserId = user.Id,
+                IsPrivileged = false
+            }, CancellationToken.None);
+
+            // Punch Out happens off-premises (client visit) — a different location than Punch In.
+            var result = await checkOutHandler.Handle(new CheckOutCommand
+            {
+                EmployeeId = employeeId,
+                CheckOutAtUtc = checkInTime.AddHours(8),
+                Latitude = 13.0827m,
+                Longitude = 80.2707m,
+                DeviceInfo = "EMS-Mobile/2.0",
+                IpAddress = "10.0.0.2",
+                RequestingUserId = user.Id,
+                IsPrivileged = false
+            }, CancellationToken.None);
+
+            Assert.Equal(12.9716m, result.CheckInLatitude);
+            Assert.Equal(77.5946m, result.CheckInLongitude);
+            Assert.Equal("Office HQ, Bengaluru", result.CheckInAddress);
+            Assert.Equal("Mozilla/5.0 (Test Device)", result.CheckInDeviceInfo);
+            Assert.Equal("10.0.0.1", result.CheckInIpAddress);
+
+            Assert.Equal(13.0827m, result.CheckOutLatitude);
+            Assert.Equal(80.2707m, result.CheckOutLongitude);
+            Assert.Equal("Client Site, Chennai", result.CheckOutAddress);
+            Assert.Equal("EMS-Mobile/2.0", result.CheckOutDeviceInfo);
+            Assert.Equal("10.0.0.2", result.CheckOutIpAddress);
+        }
+
+        [Fact]
+        public async Task CheckIn_WhenGeocodingProviderFails_StillSucceedsWithNullAddress()
+        {
+            using var db = CreateDb();
+            var employeeId = Guid.NewGuid();
+            var user = await SeedUserAsync(db, employeeId);
+
+            var repo = new AttendanceRepository(db);
+            var authRepo = new AuthRepository(db);
+            var failingGeocoder = new Mock<IGeocodingService>();
+            failingGeocoder.Setup(g => g.ReverseGeocodeAsync(It.IsAny<decimal>(), It.IsAny<decimal>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((string?)null);
+
+            var handler = new CheckInCommandHandler(repo, authRepo, failingGeocoder.Object, NullLogger<CheckInCommandHandler>.Instance);
+
+            var result = await handler.Handle(new CheckInCommand
+            {
+                EmployeeId = employeeId,
+                CheckInAtUtc = DateTime.UtcNow,
+                Latitude = 12.9716m,
+                Longitude = 77.5946m,
+                RequestingUserId = user.Id,
+                IsPrivileged = false
+            }, CancellationToken.None);
+
+            Assert.Equal(AttendanceStatus.Present, result.Status);
+            Assert.Equal(12.9716m, result.CheckInLatitude);
+            Assert.Null(result.CheckInAddress);
+        }
+
+        [Theory]
+        [InlineData(91, 0)]
+        [InlineData(-91, 0)]
+        [InlineData(0, 181)]
+        [InlineData(0, -181)]
+        public void CheckInCommandValidator_RejectsOutOfRangeCoordinates(decimal latitude, decimal longitude)
+        {
+            var validator = new EMS.Application.Features.Attendance.Validators.CheckInCommandValidator();
+            var result = validator.Validate(new CheckInCommand
+            {
+                EmployeeId = Guid.NewGuid(),
+                CheckInAtUtc = DateTime.UtcNow,
+                Latitude = latitude,
+                Longitude = longitude
+            });
+
+            Assert.False(result.IsValid);
         }
     }
 }
