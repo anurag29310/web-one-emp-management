@@ -1267,6 +1267,7 @@ Response: `200 OK`, `Content-Type: application/pdf`, file name `dashboard-summar
 | `CanManageAnnouncements` (`Admin,HR` roles) | Create and retract company-wide announcements |
 | `CanManageClients` (`Admin` role only) | Create, update, delete, activate, deactivate, archive, restore clients — deliberately not delegated to HR |
 | `CanManageTasks` (`Admin` role only) | Create, edit, reassign, cancel tasks — "Only Admin can assign tasks" per requirements.md. Accept/reject/start/progress/complete/comment/attach are open to any authenticated caller but scoped to the task's assignee at the handler level (see §21) |
+| `CanManageReimbursements` (`Admin` role only) | Start review, approve, reject, request changes on reimbursements. Self-approval is additionally blocked at the handler level even for Admin callers (see §22) |
 
 ## 16. Missing But Recommended APIs
 
@@ -1636,4 +1637,76 @@ Task response:
 Status values: `Assigned`, `Accepted`, `Rejected`, `InProgress`, `OnHold`, `Completed`, `Cancelled`. `Rejected` is one more than the six requirements.md names explicitly — see [database-design.md §16.1](database-design.md#161-tasks) for why. Priority values: `Low`, `Medium`, `High`, `Critical`.
 
 Business rules enforced: only Admin can create/edit/reassign/cancel a task; a non-Admin caller can only accept/reject/start/update-progress/complete/comment-on/attach-to a task assigned to their own employee record; a `Completed` or `Cancelled` task is read-only to every mutating endpoint in this module; `accept`/`reject` only from `Assigned`, `start` only from `Accepted`, `progress`/`complete` only from `InProgress`/`OnHold`; every status change is written to `AuditLogs` (entity `Task`).
+
+## 22. Reimbursement Management APIs
+
+Base path: `/reimbursements`. See [database-design.md §17](database-design.md#17-reimbursement-tables) for the underlying schema and [requirements.md](requirements.md#expense-management-employee-reimbursement-management) for the source requirement. Create/Edit/Submit/Delete/attach are **owner-only with no Admin override** — unlike Task Management, requirements.md never grants Admin the ability to edit an employee's claim on their behalf. Review actions (start-review/approve/reject/request-changes) require the `CanManageReimbursements` policy (`Admin` role only) and additionally block self-approval at the handler level: an Admin who is also the claimant on a reimbursement cannot approve/reject/request-changes on their own claim, checked against the caller's own linked `EmployeeId` regardless of role.
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/reimbursements` | Authenticated | List reimbursements — paginated, filterable by `employeeId`, `status`. Non-Admin callers are always scoped to their own reimbursements regardless of `employeeId` |
+| `GET` | `/reimbursements/{id}` | Authenticated | Get a single reimbursement. Returns `404` (not `403`) for a non-Admin, non-owner caller |
+| `POST` | `/reimbursements` | Authenticated | Create a Draft reimbursement for the caller. `employeeId` is derived from the caller's identity, never client-suppliable |
+| `PUT` | `/reimbursements/{id}` | Authenticated (owner only) | Edit a reimbursement. Only while `Draft` or `ChangesRequested` |
+| `DELETE` | `/reimbursements/{id}` | Authenticated (owner only) | Delete a reimbursement. Only while `Draft` |
+| `POST` | `/reimbursements/{id}/submit` | Authenticated (owner only) | `Draft`/`ChangesRequested` → `Submitted` |
+| `POST` | `/reimbursements/{id}/start-review` | `CanManageReimbursements` | `Submitted` → `UnderReview` |
+| `POST` | `/reimbursements/{id}/approve` | `CanManageReimbursements` | `UnderReview` → `Approved`. `409`-equivalent error if the caller is the claimant |
+| `POST` | `/reimbursements/{id}/reject` | `CanManageReimbursements` | `UnderReview` → `Rejected`. Body: `{ "remarks": "..." }` (required) |
+| `POST` | `/reimbursements/{id}/request-changes` | `CanManageReimbursements` | `UnderReview` → `ChangesRequested`, sending it back to the employee for editing. Body: `{ "remarks": "..." }` (required) |
+| `GET` | `/reimbursements/{id}/attachments` | Authenticated (owner or Admin) | List supporting documents |
+| `POST` | `/reimbursements/{id}/attachments` | Authenticated (owner only) | Upload a supporting document. Multipart form upload (`file`); PDF/JPEG/PNG only, magic-byte verified, 10 MB max — same constraints as [Employee Document upload](#62-upload-employee-document) and [Task attachment upload](#21-task-management-apis). Rejected once the reimbursement is `Approved`, `Rejected`, or `Paid` |
+| `GET` | `/reimbursements/attachments/{attachmentId}/download` | Authenticated (owner or Admin) | Download an attachment |
+
+Create/update request body:
+
+```json
+{
+  "expenseTitle": "Client dinner",
+  "expenseCategory": "Meals",
+  "expenseDate": "2026-07-24T00:00:00Z",
+  "amount": 120.50,
+  "currency": "USD",
+  "description": "Dinner with Acme Retail's finance team.",
+  "notes": null
+}
+```
+
+`expenseDate` cannot be in the future. `amount` must be greater than `0`. `currency` is free text (not validated against ISO 4217), defaulting to `USD`. `expenseCategory` is free text — requirements.md doesn't enumerate a fixed category list.
+
+Reimbursement response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000001401",
+  "reimbursementNumber": "REI-3F2A9B10",
+  "employeeId": "00000000-0000-0000-0000-000000000101",
+  "employeeName": "Jane Doe",
+  "expenseTitle": "Client dinner",
+  "expenseCategory": "Meals",
+  "expenseDate": "2026-07-24T00:00:00Z",
+  "amount": 120.50,
+  "currency": "USD",
+  "description": "Dinner with Acme Retail's finance team.",
+  "notes": null,
+  "status": "Submitted",
+  "submittedAtUtc": "2026-07-26T09:00:00Z",
+  "approvedAtUtc": null,
+  "approvedBy": null,
+  "reviewRemarks": null,
+  "payrollProcessed": false,
+  "payrollRunId": null,
+  "payrollDate": null,
+  "createdAtUtc": "2026-07-25T14:00:00Z",
+  "updatedAtUtc": "2026-07-26T09:00:00Z"
+}
+```
+
+Status values: `Draft`, `Submitted`, `UnderReview`, `Approved`, `Rejected`, `ChangesRequested`, `Paid` — matches the workflow diagram in requirements.md, including the `UnderReview` step between `Submitted` and the approve/reject/changes-requested branch.
+
+### 22.1 Payroll Integration
+
+No separate endpoint — this happens automatically inside `POST /payroll/process` ([§17.1](#171-payroll-runs)) and is previewable via `POST /payroll/dry-run`. For each employee, every `Approved` reimbursement with `payrollProcessed: false` is summed into that run's payslip as `totalReimbursements` (added to `netPay`, not `grossPay`), and then stamped `status: "Paid"`, `payrollProcessed: true`, `payrollRunId`, `payrollDate` in the same unit of work — so a later run's query for "approved and unprocessed" can never select it again, satisfying "Payroll can process approved reimbursement only once." `Draft`, `Submitted`, `UnderReview`, `Rejected`, and `ChangesRequested` reimbursements are never included.
+
+Business rules enforced: an employee cannot approve/reject/request-changes on their own reimbursement, checked against the reviewer's own `employeeId` regardless of role; edits/deletes/attachment-uploads are owner-only with no Admin override; a reimbursement is read-only to edits/deletes/new-attachments once `Approved`, `Rejected`, or `Paid`; every status change is written to `AuditLogs` (entity `Reimbursement`).
 

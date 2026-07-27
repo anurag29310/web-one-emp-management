@@ -41,6 +41,8 @@ namespace EMS.Persistence.Context
         public DbSet<EMS.Domain.Entities.TaskItem> Tasks => Set<EMS.Domain.Entities.TaskItem>();
         public DbSet<EMS.Domain.Entities.TaskComment> TaskComments => Set<EMS.Domain.Entities.TaskComment>();
         public DbSet<EMS.Domain.Entities.TaskAttachment> TaskAttachments => Set<EMS.Domain.Entities.TaskAttachment>();
+        public DbSet<EMS.Domain.Entities.Reimbursement> Reimbursements => Set<EMS.Domain.Entities.Reimbursement>();
+        public DbSet<EMS.Domain.Entities.ReimbursementAttachment> ReimbursementAttachments => Set<EMS.Domain.Entities.ReimbursementAttachment>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -77,6 +79,8 @@ namespace EMS.Persistence.Context
             modelBuilder.ApplyConfiguration(new Configurations.TaskItemConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.TaskCommentConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.TaskAttachmentConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.ReimbursementConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.ReimbursementAttachmentConfiguration());
         }
     }
 }

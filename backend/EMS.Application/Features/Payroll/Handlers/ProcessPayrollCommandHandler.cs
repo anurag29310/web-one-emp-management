@@ -13,13 +13,15 @@ namespace EMS.Application.Features.Payroll.Handlers
     public class ProcessPayrollCommandHandler : IRequestHandler<Commands.ProcessPayrollCommand, Guid>
     {
         private readonly IPayrollRepository _repo;
+        private readonly IReimbursementRepository _reimbursementRepo;
         private readonly IPdfService _pdf;
         private readonly IFileStorageService _storage;
         private readonly ILogger<ProcessPayrollCommandHandler> _logger;
 
-        public ProcessPayrollCommandHandler(IPayrollRepository repo, IPdfService pdf, IFileStorageService storage, ILogger<ProcessPayrollCommandHandler> logger)
+        public ProcessPayrollCommandHandler(IPayrollRepository repo, IReimbursementRepository reimbursementRepo, IPdfService pdf, IFileStorageService storage, ILogger<ProcessPayrollCommandHandler> logger)
         {
             _repo = repo;
+            _reimbursementRepo = reimbursementRepo;
             _pdf = pdf;
             _storage = storage;
             _logger = logger;
@@ -52,7 +54,14 @@ namespace EMS.Application.Features.Payroll.Handlers
                 var totalAllow = structure.Allowances?.Sum(a => a.Amount) ?? 0m;
                 var totalDeduct = structure.Deductions?.Sum(d => d.Amount) ?? 0m;
                 var gross = structure.BasicSalary + totalAllow;
-                var net = gross - totalDeduct;
+
+                // Approved, not-yet-processed reimbursements are added to NetPay (not GrossPay —
+                // they're expense repayments, not taxable earnings) and then stamped Paid so a
+                // later run can never pick them up again. See requirements.md's Payroll Integration
+                // rule: "Payroll can process approved reimbursement only once."
+                var approvedReimbursements = (await _reimbursementRepo.GetApprovedUnprocessedByEmployeeAsync(emp.Id, cancellationToken)).ToList();
+                var totalReimbursements = approvedReimbursements.Sum(r => r.Amount);
+                var net = gross - totalDeduct + totalReimbursements;
 
                 var payslip = new Payslip
                 {
@@ -62,6 +71,7 @@ namespace EMS.Application.Features.Payroll.Handlers
                     Basic = structure.BasicSalary,
                     TotalAllowances = totalAllow,
                     TotalDeductions = totalDeduct,
+                    TotalReimbursements = totalReimbursements,
                     GrossPay = gross,
                     NetPay = net,
                     GeneratedAtUtc = DateTime.UtcNow
@@ -69,6 +79,16 @@ namespace EMS.Application.Features.Payroll.Handlers
 
                 // persist payslip
                 await _repo.SavePayslipAsync(payslip);
+
+                foreach (var reimbursement in approvedReimbursements)
+                {
+                    reimbursement.Status = EMS.Domain.Enums.ReimbursementStatus.Paid;
+                    reimbursement.PayrollProcessed = true;
+                    reimbursement.PayrollRunId = run.Id;
+                    reimbursement.PayrollDate = payslip.GeneratedAtUtc;
+                    reimbursement.UpdatedAtUtc = DateTime.UtcNow;
+                    await _reimbursementRepo.UpdateAsync(reimbursement, cancellationToken);
+                }
 
                 // generate PDF and store
                 try
@@ -88,6 +108,9 @@ namespace EMS.Application.Features.Payroll.Handlers
                             .ToList(),
                         Deductions = (structure.Deductions ?? new List<Deduction>())
                             .Select(d => new PayslipLineItem { Name = d.Name, Amount = d.Amount })
+                            .ToList(),
+                        Reimbursements = approvedReimbursements
+                            .Select(r => new PayslipLineItem { Name = r.ExpenseTitle, Amount = r.Amount })
                             .ToList(),
                         GrossPay = payslip.GrossPay,
                         NetPay = payslip.NetPay

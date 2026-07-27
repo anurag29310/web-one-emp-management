@@ -555,6 +555,11 @@ Unique constraint: `AnnouncementId`, `UserId`.
 | `Tasks` | `IX_Tasks_Status` | Non-unique | Status filter on the task list |
 | `TaskComments` | `IX_TaskComments_TaskId_CreatedAtUtc` | Non-unique | Chronological comment feed per task |
 | `TaskAttachments` | `IX_TaskAttachments_TaskId` | Non-unique | Attachment list per task |
+| `Reimbursements` | `IX_Reimbursements_ReimbursementNumber` | Unique | Reimbursement lookup |
+| `Reimbursements` | `IX_Reimbursements_EmployeeId` | Non-unique | "My reimbursements" list and self-scoping checks |
+| `Reimbursements` | `IX_Reimbursements_Status` | Non-unique | Status filter on the admin review queue |
+| `Reimbursements` | `IX_Reimbursements_EmployeeId_Status_PayrollProcessed` | Non-unique | The exact predicate Payroll queries: approved, unprocessed, per employee |
+| `ReimbursementAttachments` | `IX_ReimbursementAttachments_ReimbursementId` | Non-unique | Attachment list per reimbursement |
 
 ### 11.3 Attendance Indexes
 
@@ -621,6 +626,7 @@ Soft-deleted tables:
 - `Notifications`
 - `Announcements`
 - `Clients`
+- `Reimbursements`
 
 Not normally soft-deleted:
 
@@ -631,6 +637,7 @@ Not normally soft-deleted:
 - `AnnouncementReads`: append-only read receipts — a row is inserted once per `(AnnouncementId, UserId)` and never updated or soft-deleted.
 - `Tasks`: no soft delete — deliberately. There is no "Delete Task" action; `Cancel Task` is a status transition (`Status = Cancelled`), not a deletion, so a task is never removed from the table at all. See §16.1.
 - `TaskComments`, `TaskAttachments`: append-only child records of `Tasks` — never updated or deleted, matching `AnnouncementReads`.
+- `ReimbursementAttachments`: append-only child records of `Reimbursements` — never updated or deleted.
 
 Implementation rules:
 
@@ -658,6 +665,9 @@ Phase 2 and Phase 3 modules should be added in separate bounded table groups:
 - Announcements: `Announcements` and `Notifications` are implemented — see §9. `EmailLogs` remains a future extension point.
 - Client Master: `Clients` is implemented — see §15.
 - Tasks: `Tasks`, `TaskComments`, `TaskAttachments` are implemented — see §16. (No separate `TaskAssignments` table: a task has exactly one assignee at a time, tracked directly on `Tasks.AssignedEmployeeId`; reassignment overwrites it and is itself audited via `AuditLogs`, so a full assignment-history table wasn't needed.)
+- Expenses: `Reimbursements`, `ReimbursementAttachments` are implemented — see §17. (No separate `ExpenseClaims`/`ExpenseClaimItems` tables: requirements.md describes one flat reimbursement request per expense, not a multi-line claim, so one table covers it.)
+
+**Note on Payroll** (`SalaryStructures`, `Allowances`, `Deductions`, `PayrollRuns`, `Payslips`): these tables are implemented in code but were never added to this document when Payroll was built — a pre-existing documentation gap, not something introduced here. §17.2 below documents the one column added to `Payslips` for Reimbursement integration; the rest of the Payroll schema still needs to be backfilled into this document separately.
 - Recruitment: `Candidates`, `Interviews`, `Offers`, `OnboardingChecklists`.
 - Assets: `Assets`, `AssetAssignments`, `AssetReturns`.
 - Performance: `Goals`, `Kpis`, `PerformanceReviews`, `Promotions`.
@@ -747,4 +757,54 @@ Uploaded photo/document evidence for a task ("Upload photos"). Mirrors `Employee
 | `BlobPath` | `varchar(500)` | Required |
 | `UploadedAtUtc` | `timestamptz` | Required |
 | `UploadedBy` | `uuid` | Nullable |
+
+## 17. Reimbursement Tables
+
+See [requirements.md](requirements.md#expense-management-employee-reimbursement-management) for the source requirement.
+
+### 17.1 Reimbursements
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `ReimbursementNumber` | `varchar(20)` | Required, unique. Derived from `Id` (e.g. `REI-3F2A9B10`), not user-editable |
+| `EmployeeId` | `uuid` | Required FK to `Employees`, `Restrict` on delete. Always the caller's own employee record — never client-suppliable |
+| `ExpenseTitle` | `varchar(200)` | Required |
+| `ExpenseCategory` | `varchar(100)` | Required. Free text — requirements.md doesn't enumerate a fixed category list (unlike Leave Types), so this isn't an enum |
+| `ExpenseDate` | `timestamptz` | Required. Cannot be in the future |
+| `Amount` | `decimal(18,2)` | Required, must be `> 0` |
+| `Currency` | `varchar(10)` | Required, default `USD`. Free text, not validated against an ISO 4217 list |
+| `Description` | `varchar(2000)` | Nullable |
+| `Notes` | `varchar(1000)` | Nullable |
+| `Status` | `varchar(20)` | Required, default `Draft`. `Draft`, `Submitted`, `UnderReview`, `Approved`, `Rejected`, `ChangesRequested`, `Paid` — matches the workflow diagram in requirements.md exactly, including the `UnderReview` step between `Submitted` and the approve/reject/changes-requested branch |
+| `SubmittedAtUtc` | `timestamptz` | Nullable. Set when `Status` becomes `Submitted` |
+| `ApprovedAtUtc` | `timestamptz` | Nullable. Set when `Status` becomes `Approved` |
+| `ApprovedBy` | `uuid` | Nullable. The reviewing Admin's user id |
+| `ReviewRemarks` | `varchar(1000)` | Nullable. Set on Reject or Request Changes — "View approval remarks" for the employee |
+| `PayrollProcessed` | `boolean` | Required, default `false`. Set once folded into a payroll run — prevents double payment |
+| `PayrollRunId` | `uuid` | Nullable. Not FK-enforced (loose reference to `PayrollRuns`, matching `Tasks.AssignedByUserId`'s style) |
+| `PayrollDate` | `timestamptz` | Nullable |
+| Audit fields | Shared | Include audit and soft delete fields — "Delete Draft reimbursement" is a real action here (unlike Tasks), so soft delete applies |
+
+Business rules enforced in the application layer, not the schema: an employee cannot approve their own reimbursement (checked against the reviewer's own `EmployeeId`, regardless of role); edits are only accepted while `Draft` or `ChangesRequested`; delete is only accepted while `Draft`; review actions (`start-review`/`approve`/`reject`/`request-changes`) all require `UnderReview` except `start-review` itself, which requires `Submitted`.
+
+### 17.2 ReimbursementAttachments
+
+Uploaded receipt/supporting document for a reimbursement ("Upload one or more supporting documents"). Mirrors `TaskAttachments` (§16.3) exactly, under a separate `reimbursement-attachments` container.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `ReimbursementId` | `uuid` | Required FK to `Reimbursements`, `Cascade` on delete |
+| `OriginalFileName` | `varchar(255)` | Required |
+| `ContentType` | `varchar(100)` | Required. Restricted to `application/pdf`, `image/jpeg`, `image/png` — magic-byte verified |
+| `FileSizeBytes` | `bigint` | Required. 10 MB max |
+| `BlobContainer` | `varchar(100)` | Required |
+| `BlobPath` | `varchar(500)` | Required |
+| `UploadedAtUtc` | `timestamptz` | Required |
+| `UploadedBy` | `uuid` | Nullable |
+
+### 17.3 Payslips.TotalReimbursements (Payroll Integration)
+
+One column added to the (otherwise undocumented — see §14 note) `Payslips` table: `TotalReimbursements` (`decimal`, required, default `0`). Sum of an employee's `Approved`, not-yet-`PayrollProcessed` reimbursements as of the run. Added to `NetPay`, not `GrossPay` — reimbursements are expense repayments, not taxable earnings. When a payroll run processes a reimbursement, that `Reimbursement` row is updated in the same unit of work: `Status` → `Paid`, `PayrollProcessed` → `true`, `PayrollRunId`/`PayrollDate` stamped — so a later run's query for "approved and unprocessed" can never select it again.
 

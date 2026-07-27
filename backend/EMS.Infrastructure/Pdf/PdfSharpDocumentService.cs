@@ -58,13 +58,22 @@ namespace EMS.Infrastructure.Pdf
                 ? new List<(string, string)> { ("None", Format(0m)) }
                 : document.Deductions.Select(d => (d.Name, Format(d.Amount))).ToList());
 
+            if (document.Reimbursements.Count > 0)
+            {
+                w.Spacer(6);
+                w.Table("Approved Reimbursements", document.Reimbursements.Select(r => (r.Name, Format(r.Amount))).ToList());
+            }
+
             w.Spacer(6);
             w.Rule();
             w.Spacer(6);
 
             var totalDeductions = document.Deductions.Sum(d => d.Amount);
+            var totalReimbursements = document.Reimbursements.Sum(r => r.Amount);
             w.LineRight($"Gross Pay: {Format(document.GrossPay)}");
             w.LineRight($"Total Deductions: {Format(totalDeductions)}");
+            if (totalReimbursements > 0)
+                w.LineRight($"Approved Reimbursements: {Format(totalReimbursements)}");
             w.LineRight($"Net Pay: {Format(document.NetPay)}", w.FontBoldLarge);
 
             w.Footer("This is a system-generated payslip and does not require a signature.");

@@ -16,6 +16,7 @@ namespace EMS.Application.Features.Payroll.Queries
         public decimal Basic { get; set; }
         public decimal TotalAllowances { get; set; }
         public decimal TotalDeductions { get; set; }
+        public decimal TotalReimbursements { get; set; }
         public decimal GrossPay { get; set; }
         public decimal NetPay { get; set; }
     }

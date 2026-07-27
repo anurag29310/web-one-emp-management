@@ -96,11 +96,12 @@ namespace EMS.Tests
             await db.SaveChangesAsync();
 
             var repo = new PayrollRepository(db);
+            var reimbursementRepo = new ReimbursementRepository(db);
             var pdf = new PdfSharpDocumentService();
             var storage = new LocalFileStorageService(tempBase);
             var logger = new NullLogger<EMS.Application.Features.Payroll.Handlers.ProcessPayrollCommandHandler>();
 
-            var handler = new EMS.Application.Features.Payroll.Handlers.ProcessPayrollCommandHandler(repo, pdf, storage, logger);
+            var handler = new EMS.Application.Features.Payroll.Handlers.ProcessPayrollCommandHandler(repo, reimbursementRepo, pdf, storage, logger);
 
             var cmd = new ProcessPayrollCommand { PeriodStart = DateTime.UtcNow.AddDays(-7), PeriodEnd = DateTime.UtcNow, ProcessedBy = Guid.NewGuid() };
             var runId = await handler.Handle(cmd, CancellationToken.None);

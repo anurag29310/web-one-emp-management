@@ -18,6 +18,7 @@ namespace EMS.Application.Interfaces
         public decimal Basic { get; set; }
         public IReadOnlyList<PayslipLineItem> Allowances { get; set; } = Array.Empty<PayslipLineItem>();
         public IReadOnlyList<PayslipLineItem> Deductions { get; set; } = Array.Empty<PayslipLineItem>();
+        public IReadOnlyList<PayslipLineItem> Reimbursements { get; set; } = Array.Empty<PayslipLineItem>();
         public decimal GrossPay { get; set; }
         public decimal NetPay { get; set; }
     }

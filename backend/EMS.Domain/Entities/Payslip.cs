@@ -10,6 +10,10 @@ namespace EMS.Domain.Entities
         public decimal Basic { get; set; }
         public decimal TotalAllowances { get; set; }
         public decimal TotalDeductions { get; set; }
+
+        /// <summary>Sum of the employee's Approved, not-yet-processed reimbursements as of this run. Added to NetPay, not GrossPay — reimbursements are expense repayments, not taxable earnings.</summary>
+        public decimal TotalReimbursements { get; set; }
+
         public decimal GrossPay { get; set; }
         public decimal NetPay { get; set; }
         public DateTime GeneratedAtUtc { get; set; }
