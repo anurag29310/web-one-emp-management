@@ -6,6 +6,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System;
 using System.IO;
 using System.Security.Claims;
@@ -24,6 +25,7 @@ namespace EMS.API.Controllers
     [Route("api/v1/tasks")]
     [Authorize]
     [Produces("application/json")]
+    [EnableRateLimiting("WriteActionPolicy")]
     public class TaskController : ControllerBase
     {
         private readonly IMediator _mediator;
@@ -194,6 +196,7 @@ namespace EMS.API.Controllers
 
         /// <summary>Upload an attachment ("Upload photos"). Multipart form upload; PDF/JPEG/PNG only, 10 MB max.</summary>
         [HttpPost("{id:guid}/attachments")]
+        [EnableRateLimiting("AttachmentUploadPolicy")]
         [ProducesResponseType(typeof(ApiResponse<Guid>), 201)]
         public async Task<IActionResult> UploadAttachment(Guid id, IFormFile file, CancellationToken ct)
         {

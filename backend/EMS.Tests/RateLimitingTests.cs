@@ -47,6 +47,10 @@ namespace EMS.Tests
                         ["RateLimiting:Register:WindowSeconds"] = windowSeconds.ToString(),
                         ["RateLimiting:MfaVerify:PermitLimit"] = permitLimit.ToString(),
                         ["RateLimiting:MfaVerify:WindowSeconds"] = windowSeconds.ToString(),
+                        ["RateLimiting:WriteAction:PermitLimit"] = permitLimit.ToString(),
+                        ["RateLimiting:WriteAction:WindowSeconds"] = windowSeconds.ToString(),
+                        ["RateLimiting:AttachmentUpload:PermitLimit"] = permitLimit.ToString(),
+                        ["RateLimiting:AttachmentUpload:WindowSeconds"] = windowSeconds.ToString(),
                     });
                 });
 
@@ -87,6 +91,21 @@ namespace EMS.Tests
             new(HttpMethod.Post, "/api/v1/auth/mfa/verify")
             {
                 Content = JsonContent.Create(new { mfaChallengeId = Guid.NewGuid(), code = "000000" })
+            };
+
+        // No Authorization header is supplied — the request resolves to 401 further down the
+        // pipeline, but the rate limiter runs before UseAuthentication (see Program.cs), so the
+        // attempt still counts, exactly like the unauthenticated LoginRequest() above.
+        private static HttpRequestMessage ClientListRequest() =>
+            new(HttpMethod.Get, "/api/v1/clients");
+
+        private static HttpRequestMessage TaskListRequest() =>
+            new(HttpMethod.Get, "/api/v1/tasks");
+
+        private static HttpRequestMessage TaskAttachmentUploadRequest() =>
+            new(HttpMethod.Post, $"/api/v1/tasks/{Guid.NewGuid()}/attachments")
+            {
+                Content = new MultipartFormDataContent()
             };
 
         [Fact]
@@ -198,6 +217,62 @@ namespace EMS.Tests
 
             using var registerStillAllowed = await client.SendAsync(RegisterRequest());
             Assert.NotEqual(HttpStatusCode.TooManyRequests, registerStillAllowed.StatusCode);
+        }
+
+        [Fact]
+        public async Task ClientEndpoints_ExceedingWriteActionPermitLimit_Returns429()
+        {
+            using var factory = CreateFactory(permitLimit: 3);
+            using var client = factory.CreateClient();
+
+            for (var i = 0; i < 3; i++)
+            {
+                using var response = await client.SendAsync(ClientListRequest());
+                Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
+            }
+
+            using var blocked = await client.SendAsync(ClientListRequest());
+            Assert.Equal(HttpStatusCode.TooManyRequests, blocked.StatusCode);
+        }
+
+        [Fact]
+        public async Task WriteActionPolicy_BudgetIsSharedAcrossClientAndTaskControllers()
+        {
+            // Client Master, Task Management, and Reimbursement Management deliberately share one
+            // combined "WriteActionPolicy" budget per IP rather than one each — a caller can't evade
+            // the limit by round-robining across the three newer modules.
+            using var factory = CreateFactory(permitLimit: 3);
+            using var client = factory.CreateClient();
+
+            for (var i = 0; i < 3; i++)
+            {
+                using var response = await client.SendAsync(ClientListRequest());
+                Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
+            }
+
+            using var taskBlocked = await client.SendAsync(TaskListRequest());
+            Assert.Equal(HttpStatusCode.TooManyRequests, taskBlocked.StatusCode);
+        }
+
+        [Fact]
+        public async Task TaskAttachmentUpload_HasIndependentTighterBudgetThanOtherTaskEndpoints()
+        {
+            using var factory = CreateFactory(permitLimit: 2);
+            using var client = factory.CreateClient();
+
+            for (var i = 0; i < 2; i++)
+            {
+                using var response = await client.SendAsync(TaskAttachmentUploadRequest());
+                Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
+            }
+
+            using var uploadBlocked = await client.SendAsync(TaskAttachmentUploadRequest());
+            Assert.Equal(HttpStatusCode.TooManyRequests, uploadBlocked.StatusCode);
+
+            // Attachment uploads use the tighter, independent AttachmentUploadPolicy budget, not the
+            // controller's general WriteActionPolicy — exhausting one must not exhaust the other.
+            using var listStillAllowed = await client.SendAsync(TaskListRequest());
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, listStillAllowed.StatusCode);
         }
     }
 }

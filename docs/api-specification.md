@@ -109,7 +109,7 @@ List resource:
 | `404 Not Found` | Resource not found |
 | `409 Conflict` | Duplicate or conflicting state |
 | `422 Unprocessable Entity` | Business rule violation |
-| `429 Too Many Requests` | Rate limit exceeded (see [3.1](#31-login) and [3.10](#310-register)); response includes a `Retry-After` header |
+| `429 Too Many Requests` | Rate limit exceeded (see [3.1](#31-login), [3.10](#310-register), and [§20](#20-client-master-apis)/[§21](#21-task-management-apis)/[§22](#22-reimbursement-management-apis)); response includes a `Retry-After` header |
 | `500 Internal Server Error` | Unexpected server error |
 
 ### 2.6 Pagination, Sorting, And Filtering
@@ -1505,6 +1505,8 @@ Delivery is poll-based, not real-time: the frontend fetches `GET /announcements`
 ## 20. Client Master APIs
 
 Base path: `/clients`. See [database-design.md §16](database-design.md#16-client-tables) for the underlying schema and [requirements.md](requirements.md#client-master-new-module--supports-task-management) for the source requirement. `GET` endpoints require only authentication — Employees will be scoped to clients linked to their assigned tasks once Task Management ships, but that scoping isn't implemented yet, so every authenticated caller currently sees every client. All mutating endpoints require the `CanManageClients` policy (`Admin` role only — intentionally not delegated to HR, unlike every other master-data module in this API).
+
+Every endpoint in this controller (all of §20, §21, and §22) shares one `WriteActionPolicy` rate-limit budget per client IP (default: 100 requests / 60 seconds, configurable via `RateLimiting:WriteAction`) — deliberately combined across all three of these newer modules rather than one budget each, so a caller can't dodge the limit by round-robining across them. Exceeding it returns `429 Too Many Requests`, same response shape as [Login](#31-login). File-upload endpoints (`POST /tasks/{id}/attachments`, `POST /reimbursements/{id}/attachments`) instead use a separate, tighter `AttachmentUploadPolicy` budget (default: 20 requests / 60 seconds, configurable via `RateLimiting:AttachmentUpload`), independent of the shared write budget.
 
 | Method | Endpoint | Access | Description |
 | --- | --- | --- | --- |

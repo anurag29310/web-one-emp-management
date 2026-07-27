@@ -5,6 +5,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System;
 using System.IO;
 using System.Security.Claims;
@@ -24,6 +25,7 @@ namespace EMS.API.Controllers
     [Route("api/v1/reimbursements")]
     [Authorize]
     [Produces("application/json")]
+    [EnableRateLimiting("WriteActionPolicy")]
     public class ReimbursementController : ControllerBase
     {
         private readonly IMediator _mediator;
@@ -157,6 +159,7 @@ namespace EMS.API.Controllers
 
         /// <summary>Upload a supporting document. Multipart form upload; PDF/JPEG/PNG only, 10 MB max. Owner-only, blocked once Approved/Rejected/Paid.</summary>
         [HttpPost("{id:guid}/attachments")]
+        [EnableRateLimiting("AttachmentUploadPolicy")]
         [ProducesResponseType(typeof(ApiResponse<Guid>), 201)]
         public async Task<IActionResult> UploadAttachment(Guid id, IFormFile file, CancellationToken ct)
         {

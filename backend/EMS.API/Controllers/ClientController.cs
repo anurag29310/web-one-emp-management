@@ -4,6 +4,7 @@ using EMS.Application.Features.Clients.DTOs;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,6 +20,7 @@ namespace EMS.API.Controllers
     [Route("api/v1/clients")]
     [Authorize]
     [Produces("application/json")]
+    [EnableRateLimiting("WriteActionPolicy")]
     public class ClientController : ControllerBase
     {
         private readonly IMediator _mediator;

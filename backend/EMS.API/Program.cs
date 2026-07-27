@@ -284,6 +284,15 @@ builder.Services.AddRateLimiter(options =>
     // within its validity window is a realistic attack, not just a theoretical one.
     AddFixedWindowIpPolicy(options, "MfaVerifyPolicy", "MfaVerify", defaultPermitLimit: 10, defaultWindowSeconds: 60);
 
+    // Client Master / Task Management / Reimbursement Management are the newest, least battle-tested
+    // controllers, so they get a shared budget too — defense in depth against a compromised/buggy
+    // authenticated client hammering create/update/status-transition endpoints (e.g. a retry-loop bug
+    // spamming duplicate records), not just the two unauthenticated auth endpoints above.
+    AddFixedWindowIpPolicy(options, "WriteActionPolicy", "WriteAction", defaultPermitLimit: 100, defaultWindowSeconds: 60);
+    // File uploads (task/reimbursement attachments) are disk- and storage-I/O-heavy per request, so
+    // they get a tighter budget than other writes — same reasoning as MfaVerify's tighter budget above.
+    AddFixedWindowIpPolicy(options, "AttachmentUploadPolicy", "AttachmentUpload", defaultPermitLimit: 20, defaultWindowSeconds: 60);
+
     options.OnRejected = async (context, cancellationToken) =>
     {
         if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
