@@ -11,6 +11,10 @@ namespace EMS.Application.Features.Payroll.Dtos
         public decimal Basic { get; set; }
         public decimal TotalAllowances { get; set; }
         public decimal TotalDeductions { get; set; }
+        public decimal TotalReimbursements { get; set; }
+        public decimal TotalBonus { get; set; }
+        public decimal TotalOvertime { get; set; }
+        public decimal OvertimeHours { get; set; }
         public decimal GrossPay { get; set; }
         public decimal NetPay { get; set; }
         public DateTime GeneratedAtUtc { get; set; }
@@ -24,6 +28,10 @@ namespace EMS.Application.Features.Payroll.Dtos
             Basic = p.Basic,
             TotalAllowances = p.TotalAllowances,
             TotalDeductions = p.TotalDeductions,
+            TotalReimbursements = p.TotalReimbursements,
+            TotalBonus = p.TotalBonus,
+            TotalOvertime = p.TotalOvertime,
+            OvertimeHours = p.OvertimeHours,
             GrossPay = p.GrossPay,
             NetPay = p.NetPay,
             GeneratedAtUtc = p.GeneratedAtUtc,

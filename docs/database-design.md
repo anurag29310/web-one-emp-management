@@ -758,8 +758,11 @@ Same shape as `Allowances` (§15.2):
 | `TotalAllowances` | `numeric` | Required |
 | `TotalDeductions` | `numeric` | Required |
 | `TotalReimbursements` | `numeric` | Required, default `0`. Added by Reimbursement Management — see §18.3 |
-| `GrossPay` | `numeric` | Required |
-| `NetPay` | `numeric` | Required. `Basic + TotalAllowances - TotalDeductions + TotalReimbursements` |
+| `TotalBonus` | `numeric` | Required, default `0`. Discretionary, manual-entry only (`ProcessPayrollCommand.Adjustments[].BonusAmount`) — there's no basis to auto-calculate a discretionary amount. Included in `GrossPay` (taxable earnings, unlike `TotalReimbursements`) |
+| `TotalOvertime` | `numeric` | Required, default `0`. Auto-calculated from `AttendanceRecords.TotalWorkMinutes` vs. the employee's assigned `Shift` for each day in the period by default; a per-employee `Adjustments[].OvertimeAmount` override always wins. Included in `GrossPay` |
+| `OvertimeHours` | `numeric` | Required, default `0`. The overtime hours behind `TotalOvertime` when auto-calculated; `0` when `TotalOvertime` came from a manual override (an amount, not a derived hour count) |
+| `GrossPay` | `numeric` | Required. `Basic + TotalAllowances + TotalBonus + TotalOvertime` |
+| `NetPay` | `numeric` | Required. `GrossPay - TotalDeductions + TotalReimbursements` |
 | `GeneratedAtUtc` | `timestamptz` | Required |
 | `BlobPath` | `text` | Nullable |
 | `BlobContainer` | `text` | Nullable |
@@ -768,6 +771,14 @@ Same shape as `Allowances` (§15.2):
 > **Implementation note — fixed, and remaining known gap:**
 > - **Fixed** (migration `FixPayrollRelationshipsAndForeignKeys`): `SalaryStructures.EmployeeId` and `Payslips.EmployeeId` now have real FK constraints to `Employees` (`Restrict`), with `SalaryStructures.EmployeeId` also indexed for the first time. Separately, `SalaryStructureConfiguration`/`PayrollRunConfiguration` originally declared the parent side of the Allowances/Deductions/Payslips relationships as `HasMany<Allowance>().WithOne()` (etc.) without pointing at the entity's own navigation collection — EF Core read that as *two* independent relationships (the explicit `HasForeignKey` one, plus a second by-convention one inferred from the orphaned navigation) and materialized the second as an extra, always-`NULL` shadow FK column (`SalaryStructureId1`/`PayrollRunId1`) that the application never populated. Against the real (relational) provider, `.Include(s => s.Allowances)` joined on that dead shadow column, so **`GetEffectiveSalaryStructureAsync` silently returned zero allowances/deductions for every employee** — Payroll would compute correct `Basic` but always `$0` `TotalAllowances`/`TotalDeductions`. It also meant `UpdateSalaryStructureCommandHandler`'s "replace children" only cleared the shadow FK (an optional relationship, so EF nulls rather than deletes) instead of the real one, permanently orphaning every prior Allowance/Deduction row on each edit. Fixed by binding the relationships to the real navigation properties (`HasMany(s => s.Allowances)`); the migration drops the three dead shadow columns. See `SalaryStructureConfiguration.cs`/`PayrollRunConfiguration.cs` and `EMS.Tests/PayrollTests.cs`'s `SalaryStructure_AllowancesAndDeductions_RoundTripThroughRealNavigation` regression test.
 > - **Remaining gap, not fixed**: no audit fields or soft delete on any of the five tables, unlike every other business table in this document (§3); records are hard-updated in place. Left as-is — retrofitting audit/soft-delete columns onto live Payroll data is separate follow-up work, out of scope for this fix.
+
+> **Implementation note (Bonus & Overtime, migration `AddPayrollBonusAndOvertime`):** requirements.md lists "Bonus" and "Overtime" under Payroll Management with no further detail — no formula, no input mechanism. Bonus is treated as manual-entry-only (a discretionary amount has no basis for auto-calculation); Overtime auto-calculates by default but always accepts a manual override, since attendance-derived overtime can be wrong (missed punch, uncorrected attendance record, etc.) and there's no attendance-independent way to detect that. The overtime formula, entirely invented here since requirements.md specifies none:
+> 1. For each `AttendanceRecord` in the pay period with a `TotalWorkMinutes` value, look up the employee's assigned `Shift` for that day (via `EmployeeShift`/`AttendanceRecord.ShiftId`) and take `(Shift.EndTime - Shift.StartTime)` in minutes as the standard for that day (wrapping across midnight for night shifts); with no shift assigned, use a configurable default (`Payroll:DefaultDailyShiftMinutes`, default 480 = 8 hours).
+> 2. Sum `max(0, TotalWorkMinutes - standard)` across the period → total overtime minutes → hours.
+> 3. Hourly rate = `SalaryStructure.BasicSalary / Payroll:StandardMonthlyHours` (default 208).
+> 4. `TotalOvertime = OvertimeHours × HourlyRate × Payroll:OvertimeMultiplier` (default 1.5).
+>
+> All three constants are configuration, not hardcoded (`appsettings.json` → `Payroll` section). See `EMS.Application/Features/Payroll/OvertimeCalculator.cs` for the pure calculation logic and `ProcessPayrollCommandHandler.CalculateOvertimeAsync`/`DryRunPayrollQueryHandler.CalculateOvertimeAsync` for how it's wired into a run.
 
 ## 16. Client Tables
 

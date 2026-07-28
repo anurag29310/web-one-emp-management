@@ -1310,11 +1310,16 @@ Process payroll request:
 ```json
 {
   "periodStart": "2026-06-01",
-  "periodEnd": "2026-06-30"
+  "periodEnd": "2026-06-30",
+  "adjustments": [
+    { "employeeId": "00000000-0000-0000-0000-000000000101", "bonusAmount": 200.00, "overtimeAmount": null }
+  ]
 }
 ```
 
 `processedBy` is derived from the authenticated caller and is not accepted from the client. `periodEnd` must not be in the future — payroll cannot be processed for a period that has not yet ended.
+
+`adjustments` is optional and per-employee. `bonusAmount` is the *only* way Bonus gets onto a payslip — it's discretionary, so there's nothing to auto-calculate; employees not listed (or with `bonusAmount` omitted) get `totalBonus: 0`. `overtimeAmount`, when supplied, **overrides** the auto-calculated overtime for that employee (see §17.3 for the auto-calculation); when omitted, Overtime is auto-calculated from Attendance vs. the employee's assigned shift. Both amounts must be `>= 0` when supplied.
 
 Payroll run response:
 
@@ -1335,6 +1340,8 @@ Payroll run response:
 `status` is one of `Processing`, `Completed`, `Approved`.
 
 Processing a payroll run and approving it are both written to `AuditLogs` (entity `PayrollRun`, actions `Processed`/`Approved`) — money movement is treated as a sensitive operation on par with Leave approvals and employee lifecycle changes.
+
+`POST /payroll/dry-run` accepts the same `adjustments` field, previewing exactly what `/payroll/process` would produce for that input.
 
 ### 17.2 Salary Structures
 
@@ -1376,12 +1383,18 @@ Payslip response:
   "basic": 5000.00,
   "totalAllowances": 500.00,
   "totalDeductions": 250.00,
-  "grossPay": 5500.00,
-  "netPay": 5250.00,
+  "totalReimbursements": 75.00,
+  "totalBonus": 200.00,
+  "totalOvertime": 45.00,
+  "overtimeHours": 3.0,
+  "grossPay": 5745.00,
+  "netPay": 5570.00,
   "generatedAtUtc": "2026-07-01T02:00:01Z",
   "hasDocument": true
 }
 ```
+
+`grossPay = basic + totalAllowances + totalBonus + totalOvertime` (Bonus and Overtime are taxable earnings). `netPay = grossPay - totalDeductions + totalReimbursements` (Reimbursements are expense repayments, not earnings — see §22.1). `overtimeHours` is the hour count behind an auto-calculated `totalOvertime`; it's `0` when `totalOvertime` came from a manual `adjustments[].overtimeAmount` override (an amount, not a derived hour count) — see §17.1 for how Bonus/Overtime get onto a run, and [database-design.md §15.5](database-design.md#155-payslips) for the auto-calculation formula.
 
 ## 18. Reports APIs
 

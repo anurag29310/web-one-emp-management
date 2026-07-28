@@ -18,6 +18,13 @@ namespace EMS.Application.Features.Payroll.Validators
             RuleFor(x => x.PeriodEnd)
                 .LessThanOrEqualTo(_ => DateTime.UtcNow)
                 .WithMessage("Payroll cannot be processed for a period that has not yet ended.");
+
+            RuleForEach(x => x.Adjustments).ChildRules(a =>
+            {
+                a.RuleFor(x => x.EmployeeId).NotEmpty();
+                a.RuleFor(x => x.BonusAmount).GreaterThanOrEqualTo(0).When(x => x.BonusAmount.HasValue);
+                a.RuleFor(x => x.OvertimeAmount).GreaterThanOrEqualTo(0).When(x => x.OvertimeAmount.HasValue);
+            });
         }
     }
 }

@@ -51,6 +51,10 @@ namespace EMS.Infrastructure.Pdf
 
             var earnings = new List<(string, string)> { ("Basic", Format(document.Basic)) };
             earnings.AddRange(document.Allowances.Select(a => (a.Name, Format(a.Amount))));
+            if (document.TotalBonus > 0)
+                earnings.Add(("Bonus", Format(document.TotalBonus)));
+            if (document.TotalOvertime > 0)
+                earnings.Add((document.OvertimeHours > 0 ? $"Overtime ({document.OvertimeHours:0.##} hrs)" : "Overtime", Format(document.TotalOvertime)));
             w.Table("Earnings", earnings);
 
             w.Spacer(6);

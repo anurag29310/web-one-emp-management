@@ -9,6 +9,7 @@ using EMS.Infrastructure.Storage;
 using EMS.Persistence.Context;
 using EMS.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using System;
@@ -105,11 +106,13 @@ namespace EMS.Tests
 
             var repo = new PayrollRepository(db);
             var reimbursementRepo = new ReimbursementRepository(db);
+            var attendanceRepo = new AttendanceRepository(db);
             var pdf = new PdfSharpDocumentService();
             var storage = new LocalFileStorageService(tempBase);
             var logger = new NullLogger<EMS.Application.Features.Payroll.Handlers.ProcessPayrollCommandHandler>();
+            var config = new ConfigurationBuilder().Build();
 
-            var handler = new EMS.Application.Features.Payroll.Handlers.ProcessPayrollCommandHandler(repo, reimbursementRepo, pdf, storage, new RecordingAuditLogger(), logger);
+            var handler = new EMS.Application.Features.Payroll.Handlers.ProcessPayrollCommandHandler(repo, reimbursementRepo, attendanceRepo, pdf, storage, new RecordingAuditLogger(), config, logger);
 
             var cmd = new ProcessPayrollCommand { PeriodStart = DateTime.UtcNow.AddDays(-7), PeriodEnd = DateTime.UtcNow, ProcessedBy = Guid.NewGuid() };
             var runId = await handler.Handle(cmd, CancellationToken.None);
@@ -435,6 +438,196 @@ namespace EMS.Tests
             Assert.Equal(1, await db.Allowances.CountAsync());
             Assert.Equal("Transport", (await db.Allowances.SingleAsync()).Name);
             Assert.Equal(0, await db.Deductions.CountAsync());
+        }
+
+        // ─── Bonus & Overtime (requirements.md Payroll Management) ────────────────────
+
+        private static async Task<(Employee Employee, Shift Shift)> SeedEmployeeWithShiftAsync(ApplicationDbContext db, DateTime effectiveFrom)
+        {
+            var designation = new Designation { Id = Guid.NewGuid(), Name = "Staff", Code = "STF-" + Guid.NewGuid().ToString("N")[..6], CreatedAtUtc = DateTime.UtcNow };
+            await db.Designations.AddAsync(designation);
+            var employee = new Employee { Id = Guid.NewGuid(), EmployeeCode = "EMP-" + Guid.NewGuid().ToString("N")[..6], FirstName = "Test", LastName = "User", IsActive = true, JoinDate = DateTime.UtcNow, DesignationId = designation.Id };
+            await db.Employees.AddAsync(employee);
+
+            var shift = new Shift { Id = Guid.NewGuid(), Name = "Day Shift", StartTime = new TimeSpan(9, 0, 0), EndTime = new TimeSpan(17, 0, 0), GraceMinutes = 10, CreatedAtUtc = DateTime.UtcNow };
+            await db.Shifts.AddAsync(shift);
+            await db.EmployeeShifts.AddAsync(new EmployeeShift { Id = Guid.NewGuid(), EmployeeId = employee.Id, ShiftId = shift.Id, EffectiveFrom = effectiveFrom, CreatedAtUtc = DateTime.UtcNow });
+
+            await db.SaveChangesAsync();
+            return (employee, shift);
+        }
+
+        [Fact]
+        public async Task ProcessPayroll_AutoCalculatesOvertimeFromAttendanceVsShift()
+        {
+            using var db = CreateDb();
+            var periodStart = DateTime.UtcNow.Date.AddDays(-7);
+            var periodEnd = DateTime.UtcNow.Date;
+            var (employee, shift) = await SeedEmployeeWithShiftAsync(db, periodStart.AddDays(-30));
+
+            // 2080 / 208 standard monthly hours = $10/hr. Shift is 9:00-17:00 (480 standard minutes);
+            // the employee worked 600 minutes (10 hours) that day, so 120 minutes = 2 hours of overtime.
+            await db.SalaryStructures.AddAsync(new SalaryStructure { Id = Guid.NewGuid(), EmployeeId = employee.Id, BasicSalary = 2080m, EffectiveFrom = periodStart.AddDays(-30) });
+            await db.AttendanceRecords.AddAsync(new AttendanceRecord
+            {
+                Id = Guid.NewGuid(),
+                EmployeeId = employee.Id,
+                ShiftId = shift.Id,
+                AttendanceDate = periodStart.AddDays(2),
+                CheckInAtUtc = periodStart.AddDays(2).AddHours(9),
+                CheckOutAtUtc = periodStart.AddDays(2).AddHours(19),
+                TotalWorkMinutes = 600,
+                Status = EMS.Domain.Enums.AttendanceStatus.Present,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+
+            var payrollRepo = new PayrollRepository(db);
+            var reimbursementRepo = new ReimbursementRepository(db);
+            var attendanceRepo = new AttendanceRepository(db);
+            var tempBase = Path.Combine(Path.GetTempPath(), "ems-payroll-overtime-tests", Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tempBase);
+            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, new PdfSharpDocumentService(), new LocalFileStorageService(tempBase), new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<ProcessPayrollCommandHandler>.Instance);
+
+            await handler.Handle(new ProcessPayrollCommand { PeriodStart = periodStart, PeriodEnd = periodEnd, ProcessedBy = Guid.NewGuid() }, CancellationToken.None);
+
+            var payslip = await db.Payslips.SingleAsync(p => p.EmployeeId == employee.Id);
+            Assert.Equal(2m, payslip.OvertimeHours);
+            Assert.Equal(30m, payslip.TotalOvertime); // 2 hours * $10/hr * 1.5x
+            Assert.Equal(0m, payslip.TotalBonus); // no Adjustment supplied
+            Assert.Equal(2080m + 30m, payslip.GrossPay);
+            Assert.Equal(2080m + 30m, payslip.NetPay);
+
+            try { Directory.Delete(tempBase, true); } catch { }
+        }
+
+        [Fact]
+        public async Task ProcessPayroll_AdjustmentOvertimeOverride_WinsOverAutoCalculation()
+        {
+            using var db = CreateDb();
+            var periodStart = DateTime.UtcNow.Date.AddDays(-7);
+            var periodEnd = DateTime.UtcNow.Date;
+            var (employee, shift) = await SeedEmployeeWithShiftAsync(db, periodStart.AddDays(-30));
+
+            await db.SalaryStructures.AddAsync(new SalaryStructure { Id = Guid.NewGuid(), EmployeeId = employee.Id, BasicSalary = 2080m, EffectiveFrom = periodStart.AddDays(-30) });
+            await db.AttendanceRecords.AddAsync(new AttendanceRecord
+            {
+                Id = Guid.NewGuid(),
+                EmployeeId = employee.Id,
+                ShiftId = shift.Id,
+                AttendanceDate = periodStart.AddDays(2),
+                TotalWorkMinutes = 600, // would auto-calculate to $30, same as the test above
+                Status = EMS.Domain.Enums.AttendanceStatus.Present,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+
+            var payrollRepo = new PayrollRepository(db);
+            var reimbursementRepo = new ReimbursementRepository(db);
+            var attendanceRepo = new AttendanceRepository(db);
+            var tempBase = Path.Combine(Path.GetTempPath(), "ems-payroll-overtime-tests", Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tempBase);
+            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, new PdfSharpDocumentService(), new LocalFileStorageService(tempBase), new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<ProcessPayrollCommandHandler>.Instance);
+
+            await handler.Handle(new ProcessPayrollCommand
+            {
+                PeriodStart = periodStart,
+                PeriodEnd = periodEnd,
+                ProcessedBy = Guid.NewGuid(),
+                Adjustments = new() { new() { EmployeeId = employee.Id, OvertimeAmount = 999m, BonusAmount = 200m } }
+            }, CancellationToken.None);
+
+            var payslip = await db.Payslips.SingleAsync(p => p.EmployeeId == employee.Id);
+            Assert.Equal(999m, payslip.TotalOvertime); // override wins over the $30 auto-calculation
+            Assert.Equal(0m, payslip.OvertimeHours); // not derived from hours when manually overridden
+            Assert.Equal(200m, payslip.TotalBonus); // manual-only, applied because an Adjustment was supplied
+            Assert.Equal(2080m + 999m + 200m, payslip.GrossPay);
+
+            try { Directory.Delete(tempBase, true); } catch { }
+        }
+
+        [Fact]
+        public async Task ProcessPayroll_EmployeeWithoutAdjustmentOrOvertimeAttendance_GetsZeroBonusAndOvertime()
+        {
+            using var db = CreateDb();
+            var periodStart = DateTime.UtcNow.Date.AddDays(-7);
+            var periodEnd = DateTime.UtcNow.Date;
+            var (employee, _) = await SeedEmployeeWithShiftAsync(db, periodStart.AddDays(-30));
+            await db.SalaryStructures.AddAsync(new SalaryStructure { Id = Guid.NewGuid(), EmployeeId = employee.Id, BasicSalary = 2080m, EffectiveFrom = periodStart.AddDays(-30) });
+            await db.SaveChangesAsync();
+
+            var payrollRepo = new PayrollRepository(db);
+            var reimbursementRepo = new ReimbursementRepository(db);
+            var attendanceRepo = new AttendanceRepository(db);
+            var tempBase = Path.Combine(Path.GetTempPath(), "ems-payroll-overtime-tests", Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tempBase);
+            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, new PdfSharpDocumentService(), new LocalFileStorageService(tempBase), new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<ProcessPayrollCommandHandler>.Instance);
+
+            await handler.Handle(new ProcessPayrollCommand { PeriodStart = periodStart, PeriodEnd = periodEnd, ProcessedBy = Guid.NewGuid() }, CancellationToken.None);
+
+            var payslip = await db.Payslips.SingleAsync(p => p.EmployeeId == employee.Id);
+            Assert.Equal(0m, payslip.TotalBonus);
+            Assert.Equal(0m, payslip.TotalOvertime);
+            Assert.Equal(2080m, payslip.GrossPay);
+
+            try { Directory.Delete(tempBase, true); } catch { }
+        }
+
+        [Fact]
+        public async Task DryRunPayroll_MirrorsProcessPayroll_ForAutoCalculatedOvertime()
+        {
+            using var db = CreateDb();
+            var periodStart = DateTime.UtcNow.Date.AddDays(-7);
+            var periodEnd = DateTime.UtcNow.Date;
+            var (employee, shift) = await SeedEmployeeWithShiftAsync(db, periodStart.AddDays(-30));
+            await db.SalaryStructures.AddAsync(new SalaryStructure { Id = Guid.NewGuid(), EmployeeId = employee.Id, BasicSalary = 2080m, EffectiveFrom = periodStart.AddDays(-30) });
+            await db.AttendanceRecords.AddAsync(new AttendanceRecord
+            {
+                Id = Guid.NewGuid(),
+                EmployeeId = employee.Id,
+                ShiftId = shift.Id,
+                AttendanceDate = periodStart.AddDays(2),
+                TotalWorkMinutes = 600,
+                Status = EMS.Domain.Enums.AttendanceStatus.Present,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+
+            var payrollRepo = new PayrollRepository(db);
+            var reimbursementRepo = new ReimbursementRepository(db);
+            var attendanceRepo = new AttendanceRepository(db);
+            var handler = new DryRunPayrollQueryHandler(payrollRepo, reimbursementRepo, attendanceRepo, new ConfigurationBuilder().Build());
+
+            var previews = await handler.Handle(new DryRunPayrollQuery { PeriodStart = periodStart, PeriodEnd = periodEnd }, CancellationToken.None);
+            var preview = previews.Single(p => p.EmployeeId == employee.Id);
+
+            Assert.Equal(2m, preview.OvertimeHours);
+            Assert.Equal(30m, preview.TotalOvertime);
+            Assert.Equal(2080m + 30m, preview.GrossPay);
+        }
+
+        [Theory]
+        [InlineData(9, 0, 17, 0, 480)]   // day shift, 8 hours
+        [InlineData(22, 0, 6, 0, 480)]   // night shift wrapping past midnight, 8 hours
+        public void OvertimeCalculator_StandardDailyMinutes_HandlesNightShifts(int startH, int startM, int endH, int endM, int expectedMinutes)
+        {
+            var shift = new Shift { StartTime = new TimeSpan(startH, startM, 0), EndTime = new TimeSpan(endH, endM, 0) };
+            Assert.Equal(expectedMinutes, EMS.Application.Features.Payroll.OvertimeCalculator.StandardDailyMinutes(shift, 480));
+        }
+
+        [Fact]
+        public void OvertimeCalculator_NoShift_FallsBackToDefaultDailyMinutes()
+        {
+            Assert.Equal(480, EMS.Application.Features.Payroll.OvertimeCalculator.StandardDailyMinutes(null, 480));
+        }
+
+        [Theory]
+        [InlineData(600, 480, 120)]
+        [InlineData(400, 480, 0)]  // under standard — never negative overtime
+        [InlineData(null, 480, 0)] // never checked out
+        public void OvertimeCalculator_OvertimeMinutesForDay_NeverGoesNegative(int? totalWorkMinutes, int standardMinutes, int expected)
+        {
+            Assert.Equal(expected, EMS.Application.Features.Payroll.OvertimeCalculator.OvertimeMinutesForDay(totalWorkMinutes, standardMinutes));
         }
     }
 }

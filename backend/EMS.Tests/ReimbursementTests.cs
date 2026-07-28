@@ -11,6 +11,7 @@ using EMS.Infrastructure.Storage;
 using EMS.Persistence.Context;
 using EMS.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using System;
@@ -334,11 +335,13 @@ namespace EMS.Tests
             await db.SaveChangesAsync();
 
             var payrollRepo = new PayrollRepository(db);
+            var attendanceRepo = new AttendanceRepository(db);
             var pdf = new PdfSharpDocumentService();
             var tempBase = Path.Combine(Path.GetTempPath(), "ems-reimbursement-payroll-tests", Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempBase);
             var storage = new LocalFileStorageService(tempBase);
-            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, pdf, storage, new RecordingAuditLogger(), NullLogger<ProcessPayrollCommandHandler>.Instance);
+            var config = new ConfigurationBuilder().Build();
+            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, pdf, storage, new RecordingAuditLogger(), config, NullLogger<ProcessPayrollCommandHandler>.Instance);
 
             var runId = await handler.Handle(new ProcessPayrollCommand { PeriodStart = DateTime.UtcNow.AddDays(-7), PeriodEnd = DateTime.UtcNow, ProcessedBy = Guid.NewGuid() }, CancellationToken.None);
 

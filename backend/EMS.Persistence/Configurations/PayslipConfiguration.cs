@@ -13,6 +13,9 @@ namespace EMS.Persistence.Configurations
             builder.Property(p => p.EmployeeId).IsRequired();
             builder.Property(p => p.GeneratedAtUtc).IsRequired();
             builder.Property(p => p.NetPay).IsRequired();
+            builder.Property(p => p.TotalBonus).HasDefaultValue(0m);
+            builder.Property(p => p.TotalOvertime).HasDefaultValue(0m);
+            builder.Property(p => p.OvertimeHours).HasDefaultValue(0m);
 
             builder.HasOne(p => p.Employee)
                 .WithMany()

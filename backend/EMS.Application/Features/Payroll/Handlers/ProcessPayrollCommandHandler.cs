@@ -1,6 +1,8 @@
+using EMS.Application.Features.Attendance.DTOs;
 using EMS.Application.Interfaces;
 using EMS.Domain.Entities;
 using MediatR;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -14,19 +16,55 @@ namespace EMS.Application.Features.Payroll.Handlers
     {
         private readonly IPayrollRepository _repo;
         private readonly IReimbursementRepository _reimbursementRepo;
+        private readonly IAttendanceRepository _attendanceRepo;
         private readonly IPdfService _pdf;
         private readonly IFileStorageService _storage;
         private readonly IAuditLogger _auditLogger;
         private readonly ILogger<ProcessPayrollCommandHandler> _logger;
+        private readonly decimal _standardMonthlyHours;
+        private readonly decimal _overtimeMultiplier;
+        private readonly int _defaultDailyShiftMinutes;
 
-        public ProcessPayrollCommandHandler(IPayrollRepository repo, IReimbursementRepository reimbursementRepo, IPdfService pdf, IFileStorageService storage, IAuditLogger auditLogger, ILogger<ProcessPayrollCommandHandler> logger)
+        public ProcessPayrollCommandHandler(IPayrollRepository repo, IReimbursementRepository reimbursementRepo, IAttendanceRepository attendanceRepo, IPdfService pdf, IFileStorageService storage, IAuditLogger auditLogger, IConfiguration config, ILogger<ProcessPayrollCommandHandler> logger)
         {
             _repo = repo;
             _reimbursementRepo = reimbursementRepo;
+            _attendanceRepo = attendanceRepo;
             _pdf = pdf;
             _storage = storage;
             _auditLogger = auditLogger;
             _logger = logger;
+            _standardMonthlyHours = decimal.TryParse(config["Payroll:StandardMonthlyHours"], out var hours) ? hours : 208m;
+            _overtimeMultiplier = decimal.TryParse(config["Payroll:OvertimeMultiplier"], out var multiplier) ? multiplier : 1.5m;
+            _defaultDailyShiftMinutes = int.TryParse(config["Payroll:DefaultDailyShiftMinutes"], out var minutes) ? minutes : 480;
+        }
+
+        // Auto-calculates overtime for one employee's period from Attendance vs. their assigned
+        // shift for each day worked; a per-employee Adjustments.OvertimeAmount override always wins
+        // over this (see ProcessPayrollCommand.Adjustments — there's no attendance-independent way
+        // to know when the auto-calculation is wrong, so Payroll always allows overriding it).
+        private async Task<(decimal Amount, decimal Hours)> CalculateOvertimeAsync(Guid employeeId, decimal basicSalary, DateTime periodStart, DateTime periodEnd, CancellationToken ct)
+        {
+            var records = await _attendanceRepo.GetAllRecordsAsync(new AttendanceRecordFilter
+            {
+                EmployeeId = employeeId,
+                DateFrom = periodStart,
+                DateTo = periodEnd
+            }, ct);
+
+            var overtimeMinutes = 0;
+            foreach (var record in records)
+            {
+                if (!record.TotalWorkMinutes.HasValue) continue;
+                var shift = record.ShiftId.HasValue ? await _attendanceRepo.GetShiftByIdAsync(record.ShiftId.Value, ct) : null;
+                var standardMinutes = OvertimeCalculator.StandardDailyMinutes(shift, _defaultDailyShiftMinutes);
+                overtimeMinutes += OvertimeCalculator.OvertimeMinutesForDay(record.TotalWorkMinutes, standardMinutes);
+            }
+
+            var overtimeHours = Math.Round(overtimeMinutes / 60m, 2, MidpointRounding.AwayFromZero);
+            var hourlyRate = OvertimeCalculator.HourlyRate(basicSalary, _standardMonthlyHours);
+            var amount = OvertimeCalculator.OvertimeAmount(overtimeHours, hourlyRate, _overtimeMultiplier);
+            return (amount, overtimeHours);
         }
 
         public async Task<Guid> Handle(Commands.ProcessPayrollCommand request, CancellationToken cancellationToken)
@@ -55,7 +93,25 @@ namespace EMS.Application.Features.Payroll.Handlers
 
                 var totalAllow = structure.Allowances?.Sum(a => a.Amount) ?? 0m;
                 var totalDeduct = structure.Deductions?.Sum(d => d.Amount) ?? 0m;
-                var gross = structure.BasicSalary + totalAllow;
+
+                // Bonus is manual-only (discretionary — there's no basis to auto-calculate it).
+                // Overtime auto-calculates from Attendance by default, but an Adjustments override
+                // for this employee always wins over the auto-calculation.
+                var adjustment = request.Adjustments?.FirstOrDefault(a => a.EmployeeId == emp.Id);
+                var totalBonus = adjustment?.BonusAmount ?? 0m;
+                decimal totalOvertime;
+                decimal overtimeHours;
+                if (adjustment?.OvertimeAmount.HasValue == true)
+                {
+                    totalOvertime = adjustment.OvertimeAmount.Value;
+                    overtimeHours = 0m;
+                }
+                else
+                {
+                    (totalOvertime, overtimeHours) = await CalculateOvertimeAsync(emp.Id, structure.BasicSalary, request.PeriodStart, request.PeriodEnd, cancellationToken);
+                }
+
+                var gross = structure.BasicSalary + totalAllow + totalBonus + totalOvertime;
 
                 // Approved, not-yet-processed reimbursements are added to NetPay (not GrossPay —
                 // they're expense repayments, not taxable earnings) and then stamped Paid so a
@@ -74,6 +130,9 @@ namespace EMS.Application.Features.Payroll.Handlers
                     TotalAllowances = totalAllow,
                     TotalDeductions = totalDeduct,
                     TotalReimbursements = totalReimbursements,
+                    TotalBonus = totalBonus,
+                    TotalOvertime = totalOvertime,
+                    OvertimeHours = overtimeHours,
                     GrossPay = gross,
                     NetPay = net,
                     GeneratedAtUtc = DateTime.UtcNow
@@ -114,6 +173,9 @@ namespace EMS.Application.Features.Payroll.Handlers
                         Reimbursements = approvedReimbursements
                             .Select(r => new PayslipLineItem { Name = r.ExpenseTitle, Amount = r.Amount })
                             .ToList(),
+                        TotalBonus = payslip.TotalBonus,
+                        TotalOvertime = payslip.TotalOvertime,
+                        OvertimeHours = payslip.OvertimeHours,
                         GrossPay = payslip.GrossPay,
                         NetPay = payslip.NetPay
                     };
