@@ -2,6 +2,7 @@ using EMS.Domain.Entities;
 using EMS.Infrastructure.Services;
 using EMS.Persistence.Context;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -32,6 +33,7 @@ namespace EMS.Tests
     /// verifies a plain "Employee" role caller is rejected — automatically covering every current
     /// endpoint and any future one, without needing to update this file when a new controller ships.
     /// </summary>
+    [Collection("WebApplicationFactory")]
     public class SecurityTests
     {
         private const string JwtKey = "this-test-signing-key-is-at-least-32-bytes-long!";
@@ -78,7 +80,7 @@ namespace EMS.Tests
             return jwtService.GenerateAccessToken(user);
         }
 
-        private sealed record DiscoveredEndpoint(HttpMethod Method, string Route, string Description);
+        private sealed record DiscoveredEndpoint(HttpMethod Method, string Route, string Description, bool RequiresMultipart);
 
         // Picks whichever restriction actually governs the action: the method's own [Authorize],
         // or (if the method has none) the controller's class-level [Authorize] — matching ASP.NET
@@ -151,20 +153,36 @@ namespace EMS.Tests
                     // real data, so any well-formed placeholder reaches the [Authorize] check.
                     fullRoute = Regex.Replace(fullRoute, @"\{[^}]+\}", _ => Guid.NewGuid().ToString());
 
+                    // File-upload actions bind an IFormFile parameter, which requires
+                    // multipart/form-data — sending JSON there gets rejected as 415 by content
+                    // negotiation before authorization even runs, which would otherwise look like a
+                    // false failure below.
+                    var requiresMultipart = method.GetParameters().Any(p => p.ParameterType == typeof(IFormFile));
+
                     var description = $"{controllerType.Name}.{method.Name} [{verb} {fullRoute}] (policy: {auth.Policy}, roles: {auth.Roles})";
-                    endpoints.Add(new DiscoveredEndpoint(new HttpMethod(verb), fullRoute, description));
+                    endpoints.Add(new DiscoveredEndpoint(new HttpMethod(verb), fullRoute, description, requiresMultipart));
                 }
             }
 
             return endpoints;
         }
 
+        private static HttpContent? BuildBody(DiscoveredEndpoint endpoint)
+        {
+            if (endpoint.Method != HttpMethod.Post && endpoint.Method != HttpMethod.Put && endpoint.Method.Method != "PATCH")
+                return null;
+
+            if (endpoint.RequiresMultipart)
+                return new MultipartFormDataContent();
+
+            return new StringContent("{}", Encoding.UTF8, "application/json");
+        }
+
         private static HttpRequestMessage BuildRequest(DiscoveredEndpoint endpoint, string token)
         {
             var request = new HttpRequestMessage(endpoint.Method, endpoint.Route);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            if (endpoint.Method == HttpMethod.Post || endpoint.Method == HttpMethod.Put || endpoint.Method.Method == "PATCH")
-                request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+            request.Content = BuildBody(endpoint);
             return request;
         }
 
@@ -214,8 +232,7 @@ namespace EMS.Tests
             foreach (var endpoint in endpoints)
             {
                 var request = new HttpRequestMessage(endpoint.Method, endpoint.Route);
-                if (endpoint.Method == HttpMethod.Post || endpoint.Method == HttpMethod.Put || endpoint.Method.Method == "PATCH")
-                    request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+                request.Content = BuildBody(endpoint);
 
                 using var response = await client.SendAsync(request);
                 if (response.StatusCode != HttpStatusCode.Unauthorized)

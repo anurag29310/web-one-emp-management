@@ -360,7 +360,7 @@ namespace EMS.Tests
             }, CancellationToken.None);
 
             var created = await db.SalaryStructures.FindAsync(structureId);
-            Assert.NotNull(created!.CreatedAtUtc);
+            Assert.NotEqual(default, created!.CreatedAtUtc);
             Assert.False(created.IsDeleted);
 
             await deleteHandler.Handle(new EMS.Application.Features.Payroll.Commands.DeleteSalaryStructureCommand { Id = structureId }, CancellationToken.None);

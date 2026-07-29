@@ -85,6 +85,49 @@ namespace EMS.Infrastructure.Pdf
             return Task.FromResult(Render(pdf));
         }
 
+        public Task<byte[]> GenerateOfferLetterPdfAsync(OfferLetterDocument document)
+        {
+            using var pdf = new PdfDocument();
+            var page = pdf.AddPage();
+            page.Size = PdfSharp.PageSize.A4;
+            using var gfx = XGraphics.FromPdfPage(page);
+            var w = new PdfPageWriter(gfx, PageMargin, ContentWidth);
+
+            w.Title("Employee Management System", "Offer Letter");
+
+            w.Line($"Offer Number: {document.OfferNumber}", w.FontBold);
+            w.Line($"Issued: {document.IssuedAtUtc:yyyy-MM-dd}");
+
+            w.Spacer(6);
+            w.Rule();
+            w.Spacer(6);
+
+            w.Line($"Dear {document.CandidateName},");
+            w.Spacer(6);
+            w.Line("We are pleased to offer you the following position:");
+            w.Spacer(6);
+
+            var details = new System.Collections.Generic.List<(string, string)>
+            {
+                ("Designation", document.DesignationName),
+                ("Department", document.DepartmentName ?? "-"),
+                ("Offered Salary", Format(document.OfferedSalary)),
+                ("Joining Date", document.JoiningDate.ToString("yyyy-MM-dd"))
+            };
+            w.Table("Offer Details", details);
+
+            if (!string.IsNullOrWhiteSpace(document.Notes))
+            {
+                w.Spacer(6);
+                w.Line("Notes", w.FontBold);
+                w.Line(document.Notes);
+            }
+
+            w.Footer("This is a system-generated offer letter and does not require a signature.");
+
+            return Task.FromResult(Render(pdf));
+        }
+
         public Task<byte[]> GenerateDashboardSummaryPdfAsync(DashboardSummaryDto summary, DateTime asOfDate, Guid? departmentId)
         {
             using var pdf = new PdfDocument();

@@ -15,6 +15,17 @@ using Xunit;
 
 namespace EMS.Tests
 {
+    // Every WebApplicationFactory<Program>-backed test class shares this collection so xUnit runs
+    // them sequentially relative to each other (xUnit parallelizes across different collections by
+    // default). Building multiple full in-process hosts at the same wall-clock moment races on
+    // process-global state — Program.cs's static Serilog bootstrap logger reassignment and
+    // PdfSharpDocumentService's static font-resolver guard both being one-time, unsynchronized
+    // writes — which surfaced as an intermittent WebApplicationBuilder.Build() failure only when
+    // the full suite ran multiple such classes in parallel, never when a class ran alone.
+    [CollectionDefinition("WebApplicationFactory", DisableParallelization = true)]
+    public class WebApplicationFactoryCollection { }
+
+    [Collection("WebApplicationFactory")]
     public class RateLimitingTests
     {
         // Each factory gets its own in-memory database name so it doesn't leak state into the shared

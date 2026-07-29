@@ -1278,6 +1278,7 @@ Response: `200 OK`, `Content-Type: application/pdf`, file name `dashboard-summar
 | `CanManageClients` (`Admin` role only) | Create, update, delete, activate, deactivate, archive, restore clients — deliberately not delegated to HR |
 | `CanManageTasks` (`Admin` role only) | Create, edit, reassign, cancel tasks — "Only Admin can assign tasks" per requirements.md. Accept/reject/start/progress/complete/comment/attach are open to any authenticated caller but scoped to the task's assignee at the handler level (see §21) |
 | `CanManageReimbursements` (`Admin` role only) | Start review, approve, reject, request changes on reimbursements. Self-approval is additionally blocked at the handler level even for Admin callers (see §22) |
+| `CanManageRecruitment` (`Admin,HR` roles) | Candidates, interview scheduling/cancel/reschedule, offers, onboarding checklist, convert-to-employee. Interview feedback submission is open to any authenticated caller but scoped to the interview's assigned interviewer at the handler level (see §23) |
 
 ## 16. Missing But Recommended APIs
 
@@ -1743,4 +1744,188 @@ Status values: `Draft`, `Submitted`, `UnderReview`, `Approved`, `Rejected`, `Cha
 No separate endpoint — this happens automatically inside `POST /payroll/process` ([§17.1](#171-payroll-runs)) and is previewable via `POST /payroll/dry-run`. For each employee, every `Approved` reimbursement with `payrollProcessed: false` is summed into that run's payslip as `totalReimbursements` (added to `netPay`, not `grossPay`), and then stamped `status: "Paid"`, `payrollProcessed: true`, `payrollRunId`, `payrollDate` in the same unit of work — so a later run's query for "approved and unprocessed" can never select it again, satisfying "Payroll can process approved reimbursement only once." `Draft`, `Submitted`, `UnderReview`, `Rejected`, and `ChangesRequested` reimbursements are never included.
 
 Business rules enforced: an employee cannot approve/reject/request-changes on their own reimbursement, checked against the reviewer's own `employeeId` regardless of role; edits/deletes/attachment-uploads are owner-only with no Admin override; a reimbursement is read-only to edits/deletes/new-attachments once `Approved`, `Rejected`, or `Paid`; every status change is written to `AuditLogs` (entity `Reimbursement`).
+
+## 23. Recruitment & Onboarding APIs
+
+See [database-design.md §19](database-design.md#19-recruitment-tables) for the underlying schema and [requirements.md](requirements.md#recruitment--onboarding) for the source requirement — four bullets (Candidate Management, Interview Scheduling, Offer Generation, Joining Checklist) with no endpoint list, field list, or status workflow specified. Everything below was designed to fit this codebase's existing conventions (Client Master's CRUD+soft-delete shape, Task Management's self-scoping pattern, Payroll's PDF-generation pattern), not specified upstream.
+
+All endpoints require the `CanManageRecruitment` policy (`Admin`, `HR` roles) except interview feedback submission, which is open to any authenticated caller but scoped at the handler level to the interview's assigned interviewer (`RequestingUserId`/`IsPrivileged`, same pattern as Task Management, §21), with an Admin/HR override.
+
+### 23.1 Candidates
+
+Base path: `/candidates`.
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/candidates` | List candidates — paginated, filterable by `status`, `designationId`, `search` (matches first name, last name, or email) |
+| `GET` | `/candidates/{id}` | Get a single candidate |
+| `POST` | `/candidates` | Register a new candidate application. `status` always starts at `Applied` |
+| `PUT` | `/candidates/{id}` | Update candidate details |
+| `DELETE` | `/candidates/{id}` | Soft-delete a candidate |
+| `POST` | `/candidates/{id}/restore` | Restore a soft-deleted candidate |
+| `POST` | `/candidates/{id}/reject` | The company's decision. Terminal. Optional `{ "reason": "..." }` body, appended to `notes` |
+| `POST` | `/candidates/{id}/withdraw` | The candidate's own decision. Terminal. Same optional body shape as Reject |
+| `GET` | `/candidates/{id}/attachments` | List uploaded attachments (resume, etc.) |
+| `POST` | `/candidates/{id}/attachments` | Upload an attachment. Multipart form upload (`file`); PDF/JPEG/PNG only, magic-byte verified, 10 MB max — same constraints as [Employee Document upload](#62-upload-employee-document) |
+| `GET` | `/candidates/attachments/{attachmentId}/download` | Download an attachment |
+
+Create/update request body:
+
+```json
+{
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "email": "jane.doe@example.com",
+  "phoneNumber": "+1-555-0101",
+  "designationId": "00000000-0000-0000-0000-000000000401",
+  "departmentId": "00000000-0000-0000-0000-000000000301",
+  "source": "LinkedIn",
+  "appliedDate": "2026-07-20",
+  "notes": null
+}
+```
+
+`designationId` must reference an existing designation (the position applied for); `departmentId`, when supplied, must reference an existing department. `email` is not required to be unique — the same person can apply more than once over time.
+
+Candidate response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000001401",
+  "candidateNumber": "CAN-3F2A9B10",
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "email": "jane.doe@example.com",
+  "phoneNumber": "+1-555-0101",
+  "designationId": "00000000-0000-0000-0000-000000000401",
+  "designationName": "Software Engineer",
+  "departmentId": "00000000-0000-0000-0000-000000000301",
+  "departmentName": "Engineering",
+  "source": "LinkedIn",
+  "appliedDate": "2026-07-20T00:00:00Z",
+  "status": "Applied",
+  "notes": null,
+  "convertedEmployeeId": null,
+  "isDeleted": false,
+  "createdAtUtc": "2026-07-20T09:00:00Z",
+  "updatedAtUtc": null
+}
+```
+
+Status values: `Applied`, `Screening`, `Interviewing`, `Offered`, `Hired`, `Rejected`, `Withdrawn`. `Interviewing` is set automatically the moment the first interview is scheduled (§23.2); `Offered` when an offer is sent (§23.3); `Hired` only by Convert-to-Employee (§23.5), not by the candidate accepting an offer. `Rejected`/`Withdrawn`/`Hired` are terminal — every mutating endpoint in this module rejects a candidate already in one of those states.
+
+### 23.2 Interviews
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/candidates/{id}/interviews` | `CanManageRecruitment` | List a candidate's interviews, chronological |
+| `POST` | `/candidates/{id}/interviews` | `CanManageRecruitment` | Schedule an interview round |
+| `POST` | `/interviews/{id}/reschedule` | `CanManageRecruitment` | Updates `scheduledAtUtc`/`durationMinutes` in place; only from `Scheduled` |
+| `POST` | `/interviews/{id}/cancel` | `CanManageRecruitment` | `Scheduled` → `Cancelled` |
+| `POST` | `/interviews/{id}/no-show` | `CanManageRecruitment` | `Scheduled` → `NoShow` |
+| `POST` | `/interviews/{id}/feedback` | Authenticated (assigned interviewer or Admin/HR) | `Scheduled` → `Completed`. Records `feedback`, `rating` (1–5), and `outcome` |
+
+Schedule request:
+
+```json
+{
+  "interviewerEmployeeId": "00000000-0000-0000-0000-000000000101",
+  "round": "Technical Round 1",
+  "mode": "VideoCall",
+  "scheduledAtUtc": "2026-07-28T10:00:00Z",
+  "durationMinutes": 45
+}
+```
+
+Feedback request:
+
+```json
+{
+  "feedback": "Strong on system design, needs more depth on databases.",
+  "rating": 4,
+  "outcome": "Passed"
+}
+```
+
+`mode`: `Onsite`, `Phone`, `VideoCall`. `status`: `Scheduled`, `Completed`, `Cancelled`, `NoShow`. `outcome`: `Pending`, `Passed`, `Failed`, `OnHold` — `feedback`/`rating`/`outcome` submission is rejected with `409` if the interview isn't `Scheduled`, and with `403` if the caller is neither the assigned interviewer nor Admin/HR.
+
+### 23.3 Offers
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/candidates/{id}/offers` | List a candidate's offers, most recent first. A candidate can have more than one over time (e.g. a renegotiated offer after a rejection) |
+| `POST` | `/candidates/{id}/offers` | Create a `Draft` offer |
+| `POST` | `/offers/{id}/send` | `Draft` → `Sent`. Generates the offer letter PDF and moves the candidate to `Offered` |
+| `POST` | `/offers/{id}/accept` | `Sent` → `Accepted`. Recorded by Admin/HR on the candidate's behalf (there's no candidate-facing portal). Seeds the default onboarding checklist (§23.4) |
+| `POST` | `/offers/{id}/reject` | `Sent` → `Rejected`. Optional `{ "reason": "..." }` body |
+| `POST` | `/offers/{id}/withdraw` | `Draft`/`Sent` → `Withdrawn` — the company pulling the offer back |
+| `GET` | `/offers/{id}/download` | Download the offer letter PDF (available once `Sent`) |
+
+Create request:
+
+```json
+{
+  "designationId": "00000000-0000-0000-0000-000000000401",
+  "departmentId": "00000000-0000-0000-0000-000000000301",
+  "offeredSalary": 90000.00,
+  "joiningDate": "2026-09-01",
+  "notes": null
+}
+```
+
+Offer response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000001501",
+  "offerNumber": "OFR-3F2A9B10",
+  "candidateId": "00000000-0000-0000-0000-000000001401",
+  "designationId": "00000000-0000-0000-0000-000000000401",
+  "designationName": "Software Engineer",
+  "departmentId": "00000000-0000-0000-0000-000000000301",
+  "departmentName": "Engineering",
+  "offeredSalary": 90000.00,
+  "joiningDate": "2026-09-01T00:00:00Z",
+  "status": "Sent",
+  "issuedAtUtc": "2026-07-29T10:00:00Z",
+  "respondedAtUtc": null,
+  "notes": null,
+  "hasDocument": true,
+  "createdAtUtc": "2026-07-28T09:00:00Z"
+}
+```
+
+Status values: `Draft`, `Sent`, `Accepted`, `Rejected`, `Withdrawn`, `Expired` (`Expired` is defined but nothing sets it automatically yet — no expiry-date field or background job).
+
+### 23.4 Onboarding Checklist
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/candidates/{id}/checklist` | List a candidate's onboarding checklist items |
+| `POST` | `/candidates/{id}/checklist` | Add a custom item on top of the default set |
+| `POST` | `/checklist/{itemId}/complete` | Mark an item complete. Optional `{ "reason": "..." }` body, stored as the item's `notes` |
+
+A default 5-item set — "Offer Letter Signed", "ID Proof Submitted", "Bank Details Collected", "Laptop/Asset Allocated", "Induction Completed" (an invented default; requirements.md names the feature but not its items) — is auto-created the instant an offer is accepted (§23.3).
+
+### 23.5 Convert to Employee
+
+```text
+POST /candidates/{id}/convert-to-employee
+```
+
+Creates the real `Employees` row (see [database-design.md §5.1](database-design.md#51-employees)) for a candidate whose most recent offer is `Accepted`. Request body:
+
+```json
+{
+  "employeeCode": "EMP-1042",
+  "officeLocationId": "00000000-0000-0000-0000-000000000201",
+  "teamId": null,
+  "managerId": "00000000-0000-0000-0000-000000000102",
+  "joinDate": null
+}
+```
+
+`employeeCode` and `officeLocationId` are required — `Employees.OfficeLocationId`/`EmployeeCode` have no equivalent anywhere on `Candidates`/`Offers`, so they're supplied here, the same way they're supplied to [Create Employee](#53-create-employee) directly. Everything else (`firstName`/`lastName`/`email`/`phoneNumber` from the candidate; `designationId`/`departmentId`/join date from the accepted offer, unless `joinDate` is explicitly overridden here) is copied automatically. Rejected with `409` if there's no `Accepted` offer, or if the candidate was already converted. On success, `candidates.status` becomes `Hired` and `convertedEmployeeId` is set — both are then permanent.
+
+Business rules enforced: `Reject`/`Withdraw`/`Hired` are terminal for a candidate — every mutating endpoint in this module rejects a candidate already in one of those states; interview feedback is rejected with `403` for anyone but the assigned interviewer or Admin/HR; every status change (candidate, interview, offer) and the Convert-to-Employee action are written to `AuditLogs`.
 

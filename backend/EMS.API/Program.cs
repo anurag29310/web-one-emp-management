@@ -58,6 +58,7 @@ builder.Services.AddScoped<EMS.Application.Interfaces.IHealthCheckRepository, EM
 builder.Services.AddScoped<EMS.Application.Interfaces.IClientRepository, EMS.Persistence.Repositories.ClientRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.ITaskRepository, EMS.Persistence.Repositories.TaskRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IReimbursementRepository, EMS.Persistence.Repositories.ReimbursementRepository>();
+builder.Services.AddScoped<EMS.Application.Interfaces.IRecruitmentRepository, EMS.Persistence.Repositories.RecruitmentRepository>();
 // Payroll services
 builder.Services.AddScoped<EMS.Application.Interfaces.IPayrollRepository, EMS.Persistence.Repositories.PayrollRepository>();
 builder.Services.AddSingleton<EMS.Application.Interfaces.IPdfService, EMS.Infrastructure.Pdf.PdfSharpDocumentService>();
@@ -266,6 +267,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanManageClients", policy => policy.RequireRole("Admin"));
     options.AddPolicy("CanManageTasks", policy => policy.RequireRole("Admin"));
     options.AddPolicy("CanManageReimbursements", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("CanManageRecruitment", policy => policy.RequireRole("Admin", "HR"));
 });
 
 // Rate limiting: login and register are the two unauthenticated endpoints an attacker can hammer

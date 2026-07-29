@@ -43,6 +43,11 @@ namespace EMS.Persistence.Context
         public DbSet<EMS.Domain.Entities.TaskAttachment> TaskAttachments => Set<EMS.Domain.Entities.TaskAttachment>();
         public DbSet<EMS.Domain.Entities.Reimbursement> Reimbursements => Set<EMS.Domain.Entities.Reimbursement>();
         public DbSet<EMS.Domain.Entities.ReimbursementAttachment> ReimbursementAttachments => Set<EMS.Domain.Entities.ReimbursementAttachment>();
+        public DbSet<EMS.Domain.Entities.Candidate> Candidates => Set<EMS.Domain.Entities.Candidate>();
+        public DbSet<EMS.Domain.Entities.CandidateAttachment> CandidateAttachments => Set<EMS.Domain.Entities.CandidateAttachment>();
+        public DbSet<EMS.Domain.Entities.Interview> Interviews => Set<EMS.Domain.Entities.Interview>();
+        public DbSet<EMS.Domain.Entities.Offer> Offers => Set<EMS.Domain.Entities.Offer>();
+        public DbSet<EMS.Domain.Entities.OnboardingChecklistItem> OnboardingChecklistItems => Set<EMS.Domain.Entities.OnboardingChecklistItem>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -81,6 +86,11 @@ namespace EMS.Persistence.Context
             modelBuilder.ApplyConfiguration(new Configurations.TaskAttachmentConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.ReimbursementConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.ReimbursementAttachmentConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.CandidateConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.CandidateAttachmentConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.InterviewConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.OfferConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.OnboardingChecklistItemConfiguration());
         }
     }
 }

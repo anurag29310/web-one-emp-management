@@ -626,6 +626,24 @@ Unique constraint: `AnnouncementId`, `UserId`.
 
 `PayrollRuns` has no indexes beyond its primary key.
 
+### 11.8 Recruitment Indexes
+
+| Table | Index | Type | Purpose |
+| --- | --- | --- | --- |
+| `Candidates` | `IX_Candidates_CandidateNumber` | Unique | Candidate lookup |
+| `Candidates` | `IX_Candidates_Email` | Non-unique | Lookup — not unique, since re-applications are allowed |
+| `Candidates` | `IX_Candidates_Status` | Non-unique | Pipeline-stage filter on the candidate list |
+| `Candidates` | `IX_Candidates_DesignationId` | Non-unique | Candidates-by-position filter |
+| `Candidates` | `IX_Candidates_IsDeleted` | Non-unique | Excluding soft-deleted rows from every read path |
+| `CandidateAttachments` | `IX_CandidateAttachments_CandidateId` | Non-unique | Attachment list per candidate |
+| `Interviews` | `IX_Interviews_CandidateId` | Non-unique | Interview list per candidate |
+| `Interviews` | `IX_Interviews_InterviewerEmployeeId` | Non-unique | "My interviews to conduct" and self-scoping checks |
+| `Interviews` | `IX_Interviews_ScheduledAtUtc` | Non-unique | Calendar/upcoming-interview ordering |
+| `Offers` | `IX_Offers_OfferNumber` | Unique | Offer lookup |
+| `Offers` | `IX_Offers_CandidateId` | Non-unique | Offer history per candidate |
+| `Offers` | `IX_Offers_Status` | Non-unique | Status filter on the offer list |
+| `OnboardingChecklistItems` | `IX_OnboardingChecklistItems_CandidateId` | Non-unique | Checklist per candidate |
+
 ## 12. Soft Delete Strategy
 
 Soft delete should be implemented for business data where historical traceability matters.
@@ -653,6 +671,7 @@ Soft-deleted tables:
 - `Clients`
 - `Reimbursements`
 - `SalaryStructures`
+- `Candidates`
 
 Not normally soft-deleted:
 
@@ -666,6 +685,9 @@ Not normally soft-deleted:
 - `ReimbursementAttachments`: append-only child records of `Reimbursements` — never updated or deleted.
 - `Allowances`, `Deductions`: no independent update/delete lifecycle — recreated wholesale by `UpdateSalaryStructureCommandHandler`, matching `TaskComments`/`ReimbursementAttachments`. `SalaryStructures` itself *is* soft-deleted (added to the list above) since it has real Create/Update/Delete/Restore actions. See the implementation note in §15.
 - `PayrollRuns`, `Payslips`: no soft delete — deliberately. Neither has a Delete action; both are immutable records of payroll actually processed/paid. See the implementation note in §15.
+- `CandidateAttachments`: append-only child records of `Candidates` — never updated or deleted, matching `ReimbursementAttachments`.
+- `Interviews`, `Offers`: no soft delete — deliberately, matching `Tasks`. Neither has a Delete action; `Cancel`/`Withdraw` are status transitions, not deletions. See §19.3/§19.4.
+- `OnboardingChecklistItems`: no soft delete or update beyond `IsCompleted: false → true` — an item has exactly one state change, tracked by `CompletedAtUtc`/`CompletedBy` directly. See §19.5.
 
 Implementation rules:
 
@@ -694,7 +716,7 @@ Phase 2 and Phase 3 modules should be added in separate bounded table groups:
 - Client Master: `Clients` is implemented — see §16.
 - Tasks: `Tasks`, `TaskComments`, `TaskAttachments` are implemented — see §17. (No separate `TaskAssignments` table: a task has exactly one assignee at a time, tracked directly on `Tasks.AssignedEmployeeId`; reassignment overwrites it and is itself audited via `AuditLogs`, so a full assignment-history table wasn't needed.)
 - Expenses: `Reimbursements`, `ReimbursementAttachments` are implemented — see §18. (No separate `ExpenseClaims`/`ExpenseClaimItems` tables: requirements.md describes one flat reimbursement request per expense, not a multi-line claim, so one table covers it.)
-- Recruitment: `Candidates`, `Interviews`, `Offers`, `OnboardingChecklists`.
+- Recruitment: `Candidates`, `CandidateAttachments`, `Interviews`, `Offers`, `OnboardingChecklistItems` are implemented — see §19.
 - Assets: `Assets`, `AssetAssignments`, `AssetReturns`.
 - Performance: `Goals`, `Kpis`, `PerformanceReviews`, `Promotions`.
 - Messaging: `Conversations`, `Messages`, `MessageParticipants`.
@@ -928,4 +950,117 @@ Uploaded receipt/supporting document for a reimbursement ("Upload one or more su
 ### 18.3 Payslips.TotalReimbursements (Payroll Integration)
 
 One column added to the `Payslips` table (§15.5): `TotalReimbursements` (`decimal`, required, default `0`). Sum of an employee's `Approved`, not-yet-`PayrollProcessed` reimbursements as of the run. Added to `NetPay`, not `GrossPay` — reimbursements are expense repayments, not taxable earnings. When a payroll run processes a reimbursement, that `Reimbursement` row is updated in the same unit of work: `Status` → `Paid`, `PayrollProcessed` → `true`, `PayrollRunId`/`PayrollDate` stamped — so a later run's query for "approved and unprocessed" can never select it again.
+
+## 19. Recruitment Tables
+
+See [requirements.md](requirements.md#recruitment--onboarding) for the source requirement — four bullets (Candidate Management, Interview Scheduling, Offer Generation, Joining Checklist) with no further detail (no field list, no status workflow, no formula). Everything below beyond the four bullet points themselves — the status enums, the default checklist items, the Reject-vs-Withdraw distinction, the Convert-to-Employee design — was designed from scratch to fit this codebase's existing conventions, not specified upstream.
+
+### 19.1 Candidates
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `CandidateNumber` | `varchar(20)` | Required, unique. Derived from `Id` (e.g. `CAN-3F2A9B10`), not user-editable — same pattern as `Tasks.TaskNumber`/`Reimbursements.ReimbursementNumber` |
+| `FirstName` | `varchar(100)` | Required |
+| `LastName` | `varchar(100)` | Required |
+| `Email` | `varchar(256)` | Required. Not unique — a person can legitimately apply more than once over time |
+| `PhoneNumber` | `varchar(30)` | Nullable |
+| `DesignationId` | `uuid` | Required FK to `Designations`, `Restrict` on delete. The position applied for |
+| `DepartmentId` | `uuid` | Nullable FK to `Departments`, `Restrict` on delete |
+| `Source` | `varchar(100)` | Nullable. Free text (e.g. Referral, Job Portal, LinkedIn) — requirements.md doesn't enumerate a fixed list, matching `Clients`/`Reimbursements`' free-text category fields |
+| `AppliedDate` | `timestamptz` | Required |
+| `Status` | `varchar(20)` | Required, default `Applied`. `Applied`, `Screening`, `Interviewing`, `Offered`, `Hired`, `Rejected`, `Withdrawn` — `Interviewing` is set automatically the moment the first interview is scheduled; `Hired` is set only by the Convert-to-Employee action, not by an offer being accepted |
+| `Notes` | `varchar(1000)` | Nullable |
+| `ConvertedEmployeeId` | `uuid` | Nullable FK to `Employees`, `Restrict` on delete. Set once by Convert-to-Employee; a candidate can only be converted once |
+| Audit fields | Shared | Include audit and soft delete fields (§3) — the only Recruitment table with an independent Create/Update/Delete/Restore lifecycle, so the only one that gets the full set. See §19.6 |
+
+Unique index on `CandidateNumber`. Non-unique indexes on `Email` (lookup), `Status`, `DesignationId`, `IsDeleted`.
+
+**Reject vs. Withdraw** (both terminal, both implemented as status transitions, not deletions): `Reject` is the company's decision; `Withdraw` is the candidate's own. Both are blocked once a candidate is already `Hired`, `Rejected`, or `Withdrawn`.
+
+### 19.2 CandidateAttachments
+
+Resume/supporting documents. Mirrors `TaskAttachments`/`ReimbursementAttachments` (§17.3/§18.2) exactly, under a separate `candidate-attachments` container — same magic-byte-verified PDF/JPEG/PNG restriction, 10 MB max.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `CandidateId` | `uuid` | Required FK to `Candidates`, `Cascade` on delete |
+| `OriginalFileName` | `varchar(255)` | Required |
+| `ContentType` | `varchar(100)` | Required |
+| `FileSizeBytes` | `bigint` | Required |
+| `BlobContainer` | `varchar(100)` | Required |
+| `BlobPath` | `varchar(500)` | Required |
+| `UploadedAtUtc` | `timestamptz` | Required |
+| `UploadedBy` | `uuid` | Nullable |
+
+### 19.3 Interviews
+
+A candidate can have any number of `Interviews` rows (one per round); there's no separate "rounds" table since a round is just a free-text label on the row.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `CandidateId` | `uuid` | Required FK to `Candidates`, `Cascade` on delete |
+| `InterviewerEmployeeId` | `uuid` | Required FK to `Employees`, `Restrict` on delete |
+| `Round` | `varchar(150)` | Required. Free text (e.g. "Technical Round 1", "HR Round") |
+| `Mode` | `varchar(20)` | Required. `Onsite`, `Phone`, `VideoCall` |
+| `ScheduledAtUtc` | `timestamptz` | Required |
+| `DurationMinutes` | `int` | Nullable |
+| `Status` | `varchar(20)` | Required, default `Scheduled`. `Scheduled`, `Completed`, `Cancelled`, `NoShow` |
+| `Feedback` | `varchar(2000)` | Nullable. Set together with `Rating`/`Outcome` when the interviewer submits their review |
+| `Rating` | `int` | Nullable, 1–5 |
+| `Outcome` | `varchar(20)` | Required, default `Pending`. `Pending`, `Passed`, `Failed`, `OnHold` |
+| Audit fields | Partial | `CreatedAtUtc`/`CreatedBy`/`UpdatedAtUtc`/`UpdatedBy` only — **no soft delete**, matching `Tasks`' rationale: there's no "Delete Interview" action, `Cancel` is a status transition |
+
+`Reschedule` updates `ScheduledAtUtc`/`DurationMinutes` in place (`Status` stays `Scheduled`) rather than creating a new row or a distinct `Rescheduled` status — there's exactly one active interview record per round either way.
+
+Feedback submission is scoped to the assigned interviewer (any authenticated employee, checked against `InterviewerEmployeeId` via the same `RequestingUserId`/`IsPrivileged` pattern used by Attendance check-in/out and Task actions), with an Admin/HR override.
+
+### 19.4 Offers
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `OfferNumber` | `varchar(20)` | Required, unique. Derived from `Id` (e.g. `OFR-3F2A9B10`) |
+| `CandidateId` | `uuid` | Required FK to `Candidates`, `Cascade` on delete. Not unique — a candidate can receive more than one offer over time (e.g. a renegotiated offer after a rejection) |
+| `DesignationId` | `uuid` | Required FK to `Designations`, `Restrict` on delete |
+| `DepartmentId` | `uuid` | Nullable FK to `Departments`, `Restrict` on delete |
+| `OfferedSalary` | `decimal(18,2)` | Required, must be `> 0` |
+| `JoiningDate` | `timestamptz` | Required |
+| `Status` | `varchar(20)` | Required, default `Draft`. `Draft`, `Sent`, `Accepted`, `Rejected`, `Withdrawn`, `Expired` (`Expired` is defined but nothing sets it automatically yet — no expiry-date field or background job; a future extension point) |
+| `IssuedAtUtc` | `timestamptz` | Nullable. Set when `Status` becomes `Sent` — also when the offer letter PDF is generated |
+| `RespondedAtUtc` | `timestamptz` | Nullable. Set when the candidate's Accept/Reject response is recorded |
+| `Notes` | `varchar(1000)` | Nullable |
+| `BlobContainer` | `varchar(100)` | Nullable. Set once the offer letter PDF is generated (on Send) |
+| `BlobPath` | `varchar(500)` | Nullable |
+| Audit fields | Partial | `CreatedAtUtc`/`CreatedBy`/`UpdatedAtUtc`/`UpdatedBy` only — no soft delete; `Withdraw` (company pulls the offer back) is the only removal-like action and it's a status transition, matching `Tasks`/`Interviews` |
+
+Unique index on `OfferNumber`. Non-unique indexes on `CandidateId`, `Status`.
+
+The candidate isn't a system user, so their Accept/Reject response is *recorded* by Admin/HR (`CanManageRecruitment`), not submitted by the candidate directly — there's no candidate-facing portal in this system.
+
+### 19.5 OnboardingChecklistItems
+
+The "Joining Checklist." A default 5-item set (Offer Letter Signed, ID Proof Submitted, Bank Details Collected, Laptop/Asset Allocated, Induction Completed — an invented default, since requirements.md names the feature but not its items) is auto-created the moment an offer's `Status` becomes `Accepted`; Admin/HR can add further custom items on top.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `CandidateId` | `uuid` | Required FK to `Candidates`, `Cascade` on delete |
+| `ItemName` | `varchar(200)` | Required |
+| `IsCompleted` | `boolean` | Required, default `false` |
+| `CompletedAtUtc` | `timestamptz` | Nullable |
+| `CompletedBy` | `uuid` | Nullable |
+| `Notes` | `varchar(500)` | Nullable |
+| `CreatedAtUtc` | `timestamptz` | Required |
+| `CreatedBy` | `uuid` | Nullable |
+
+No soft delete or `UpdatedAtUtc` — a checklist item has exactly one state change (`IsCompleted: false → true`), tracked by `CompletedAtUtc`/`CompletedBy` directly; there's no edit or delete action on an item.
+
+### 19.6 Convert-to-Employee
+
+Not a table — the action (`POST /candidates/{id}/convert-to-employee`) that turns an accepted-offer candidate into a real `Employees` row, invented here since requirements.md names "Joining Checklist" as the last Recruitment step but doesn't specify how a candidate actually becomes an employee. Requires the candidate's most recent `Offer` to be `Accepted`; blocked if the candidate was already converted (`ConvertedEmployeeId` already set, or `Status` already `Hired`).
+
+`Employee.OfficeLocationId` and `Employee.EmployeeCode` are required columns (§5.1) with no equivalent anywhere in `Candidates`/`Offers`, so the conversion command takes them as explicit inputs (plus optional `TeamId`/`ManagerId`/`JoinDate` override) — the same fields `CreateEmployeeCommand` needs and Candidate/Offer data alone can't supply. Everything else (`FirstName`/`LastName`/`Email`/`PhoneNumber` from the candidate; `DesignationId`/`DepartmentId`/`JoinDate` default from the accepted offer) is copied across automatically. `EmployeeCode` and `Email` uniqueness are checked the same way `CreateEmployeeCommandHandler` already checks them.
 
