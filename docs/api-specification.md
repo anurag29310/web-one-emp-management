@@ -1280,6 +1280,8 @@ Response: `200 OK`, `Content-Type: application/pdf`, file name `dashboard-summar
 | `CanManageReimbursements` (`Admin` role only) | Start review, approve, reject, request changes on reimbursements. Self-approval is additionally blocked at the handler level even for Admin callers (see §22) |
 | `CanManageRecruitment` (`Admin,HR` roles) | Candidates, interview scheduling/cancel/reschedule, offers, onboarding checklist, convert-to-employee. Interview feedback submission is open to any authenticated caller but scoped to the interview's assigned interviewer at the handler level (see §23) |
 | `CanManageAssets` (`Admin,HR` roles) | Assets, allocation, return tracking (see §24) — no self-service angle, unlike Task Management or Reimbursements |
+| `CanManagePerformance` (`Admin,HR,Manager` roles) | Create/edit Goals, add KPIs, start Reviews, propose Promotions (see §25) — the first policy to include `Manager`, gated further at the handler level to a caller's own direct reports unless Admin/HR |
+| `CanApprovePromotions` (`Admin,HR` roles) | Approve/Reject/Delete/Restore Promotions (see §25.3) — stricter than `CanManagePerformance` so a Manager cannot approve their own proposal |
 
 ## 16. Missing But Recommended APIs
 
@@ -2049,4 +2051,194 @@ Assignment response:
 `returnedDate: null` means the asset is currently out with that employee. `assignedByUserId` is resolved server-side from the caller's JWT, not supplied by the client.
 
 Business rules enforced: an asset can only be assigned to one employee at a time (`Assign` rejected unless `status = Available`); `status` can never be set to `Assigned` directly through `/assets/{id}/status` — only the Assign action does that; an asset can't be deleted, updated in a way that bypasses these rules, or have its status changed while `Assigned` — it must be returned first; every create/update/delete/restore/status-change/assign/return action is written to `AuditLogs`.
+
+## 25. Performance Management APIs
+
+See [database-design.md §21](database-design.md#21-performance-management-tables) for the underlying schema and [requirements.md](requirements.md#performance-management) for the source requirement — four bullets (Goals, KPI Tracking, Performance Reviews, Promotions) with no endpoint list, field list, status workflow, or authorization model specified. This is the first module built with a Manager tier: it extends the manager-scoping pattern already used by Attendance (`ManagerId`/direct-report checks, §12) instead of the Admin/HR-only pattern used by Recruitment/Assets, since Goals/Reviews/Promotions naturally involve a line manager, not just HR.
+
+Every endpoint requires authentication. `GET` endpoints and self-service actions (progress updates, self-assessment) are open to any authenticated caller and scoped inside the handler — an employee sees/acts on their own records, a Manager additionally sees/acts on their own direct reports', Admin/HR see and act on everything. Creating or fully editing a record requires the `CanManagePerformance` policy (`Admin`, `HR`, `Manager`); a Manager who isn't privileged is further restricted to their own direct reports at the handler level. Promotion approve/reject/delete/restore require the stricter `CanApprovePromotions` policy (`Admin`, `HR` only — a Manager cannot approve their own proposal).
+
+### 25.1 Goals
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/goals` | Authenticated (self-scoped) | List goals — paginated, filterable by `employeeId`/`status`/`category`. Employees see their own; Managers see their own and their reports'; Admin/HR see all |
+| `GET` | `/goals/{id}` | Authenticated (self-scoped) | Get a single goal |
+| `POST` | `/goals` | `CanManagePerformance` | Set a goal for an employee. A Manager may only set goals for their own direct reports |
+| `PUT` | `/goals/{id}` | `CanManagePerformance` | Update a goal's `title`/`description`/`category`/`targetDate`/`weight`/`status`. Does not change `employeeId` |
+| `POST` | `/goals/{id}/progress` | Authenticated (self-scoped) | Update `progressPercent` (0–100). The goal's own employee, their manager, or Admin/HR |
+| `DELETE` | `/goals/{id}` | `CanManagePerformance` | Soft-delete a goal |
+| `POST` | `/goals/{id}/restore` | `CanManagePerformance` | Restore a soft-deleted goal |
+| `POST` | `/goals/{id}/kpis` | `CanManagePerformance` | Add a KPI to a goal ("KPI Tracking") |
+| `POST` | `/kpis/{kpiId}/progress` | Authenticated (self-scoped) | Update a KPI's `currentValue`. The goal's own employee, their manager, or Admin/HR |
+
+Create/update request body:
+
+```json
+{
+  "employeeId": "00000000-0000-0000-0000-000000000103",
+  "title": "Ship the Q3 roadmap",
+  "description": "Deliver the three committed features on schedule.",
+  "category": "Engineering",
+  "startDate": "2026-01-01",
+  "targetDate": "2026-03-31",
+  "weight": 30,
+  "status": "InProgress"
+}
+```
+
+`employeeId` is only accepted on create — a goal's owner can't be changed afterward. `status` is one of `NotStarted`, `InProgress`, `Completed`, `Cancelled`, set explicitly here (it is not auto-derived from `progressPercent`).
+
+Goal response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000001801",
+  "goalNumber": "GOL-3F2A9B10",
+  "employeeId": "00000000-0000-0000-0000-000000000103",
+  "employeeName": "Jane Doe",
+  "title": "Ship the Q3 roadmap",
+  "description": "Deliver the three committed features on schedule.",
+  "category": "Engineering",
+  "startDate": "2026-01-01T00:00:00Z",
+  "targetDate": "2026-03-31T00:00:00Z",
+  "weight": 30,
+  "status": "InProgress",
+  "progressPercent": 40,
+  "kpis": [
+    {
+      "id": "00000000-0000-0000-0000-000000001901",
+      "goalId": "00000000-0000-0000-0000-000000001801",
+      "name": "Features shipped",
+      "targetValue": 3,
+      "currentValue": 1,
+      "unit": "features",
+      "notes": null,
+      "createdAtUtc": "2026-01-05T09:00:00Z",
+      "updatedAtUtc": "2026-02-01T09:00:00Z"
+    }
+  ],
+  "isDeleted": false,
+  "createdAtUtc": "2026-01-05T09:00:00Z",
+  "updatedAtUtc": "2026-02-01T09:00:00Z"
+}
+```
+
+Add-KPI request: `{ "name": "Features shipped", "targetValue": 3, "unit": "features", "notes": null }`. Update-KPI-progress request: `{ "currentValue": 2, "notes": null }`.
+
+### 25.2 Performance Reviews
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/reviews` | Authenticated (self-scoped) | List reviews — paginated, filterable by `employeeId`/`reviewerEmployeeId`/`status`. An employee sees reviews where they're the subject or reviewer; a Manager additionally sees their reports'; Admin/HR see all |
+| `GET` | `/reviews/{id}` | Authenticated (self-scoped) | Get a single review |
+| `POST` | `/reviews` | `CanManagePerformance` | Start a review cycle for an employee (`Draft`). A Manager may only start reviews for their own direct reports, and must set themselves as `reviewerEmployeeId` — only Admin/HR can assign an arbitrary reviewer |
+| `POST` | `/reviews/{id}/self-assessment` | Authenticated (self-scoped) | `Draft` → `SelfAssessmentSubmitted`. Only the reviewed employee (or Admin/HR) |
+| `POST` | `/reviews/{id}/manager-review` | Authenticated (self-scoped) | `Draft`/`SelfAssessmentSubmitted` → `Completed`. Records `managerAssessment`/`overallRating`. Only the assigned reviewer (or Admin/HR) |
+| `POST` | `/reviews/{id}/cancel` | `CanManagePerformance` | Cancel a review that hasn't completed yet. Only the assigned reviewer (or Admin/HR) |
+| `DELETE` | `/reviews/{id}` | `CanManagePerformance` | Soft-delete a review. Only the assigned reviewer (or Admin/HR) |
+| `POST` | `/reviews/{id}/restore` | `CanManagePerformance` | Restore a soft-deleted review |
+
+Create request:
+
+```json
+{
+  "employeeId": "00000000-0000-0000-0000-000000000103",
+  "reviewerEmployeeId": "00000000-0000-0000-0000-000000000102",
+  "reviewPeriodStart": "2026-01-01",
+  "reviewPeriodEnd": "2026-06-30",
+  "notes": null
+}
+```
+
+Self-assessment request: `{ "selfAssessment": "I delivered the roadmap on time and mentored two juniors." }`. Manager-review request: `{ "managerAssessment": "Strong half, exceeded targets.", "overallRating": 4.5 }`.
+
+Review response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000002001",
+  "reviewNumber": "REV-3F2A9B10",
+  "employeeId": "00000000-0000-0000-0000-000000000103",
+  "employeeName": "Jane Doe",
+  "reviewerEmployeeId": "00000000-0000-0000-0000-000000000102",
+  "reviewerName": "John Manager",
+  "reviewPeriodStart": "2026-01-01T00:00:00Z",
+  "reviewPeriodEnd": "2026-06-30T00:00:00Z",
+  "status": "Completed",
+  "selfAssessment": "I delivered the roadmap on time and mentored two juniors.",
+  "managerAssessment": "Strong half, exceeded targets.",
+  "overallRating": 4.5,
+  "selfSubmittedAtUtc": "2026-06-25T09:00:00Z",
+  "completedAtUtc": "2026-06-28T09:00:00Z",
+  "notes": null,
+  "isDeleted": false,
+  "createdAtUtc": "2026-06-01T09:00:00Z",
+  "updatedAtUtc": "2026-06-28T09:00:00Z"
+}
+```
+
+Status values: `Draft`, `SelfAssessmentSubmitted`, `Completed`, `Cancelled`. There's no separate "manager review submitted" status between the manager's submission and `Completed` — submitting the manager review completes the cycle in one step. No `PUT` — a review's fields besides the workflow ones are fixed at creation, matching `Interviews`/`Offers`.
+
+### 25.3 Promotions
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/promotions` | Authenticated (self-scoped) | List promotions — paginated, filterable by `employeeId`/`status`. Employees see their own; Managers see their own and their reports'; Admin/HR see all |
+| `GET` | `/promotions/{id}` | Authenticated (self-scoped) | Get a single promotion |
+| `POST` | `/promotions` | `CanManagePerformance` | Propose a promotion. A Manager may only propose for their own direct reports |
+| `POST` | `/promotions/{id}/approve` | `CanApprovePromotions` | `Proposed` → `Approved` — applies `toDesignationId`/`toDepartmentId` to the employee's record **immediately** (no background job for `effectiveDate` — same "defined but not automated" gap as `Offers.Expired`) |
+| `POST` | `/promotions/{id}/reject` | `CanApprovePromotions` | `Proposed` → `Rejected` |
+| `POST` | `/promotions/{id}/withdraw` | `CanManagePerformance` | `Proposed` → `Withdrawn` — the proposer pulling it back. Only the original proposer (or Admin/HR) |
+| `DELETE` | `/promotions/{id}` | `CanApprovePromotions` | Soft-delete a promotion record |
+| `POST` | `/promotions/{id}/restore` | `CanApprovePromotions` | Restore a soft-deleted promotion record |
+
+Propose request:
+
+```json
+{
+  "employeeId": "00000000-0000-0000-0000-000000000103",
+  "toDesignationId": "00000000-0000-0000-0000-000000000402",
+  "toDepartmentId": null,
+  "effectiveDate": "2026-04-01",
+  "reason": "Consistently exceeding expectations across two review cycles."
+}
+```
+
+`fromDesignationId`/`fromDepartmentId` are not accepted from the client — they're captured automatically from the employee's current designation/department at proposal time. Rejected with `409` if `toDesignationId`/`toDepartmentId` are unchanged from the employee's current ones.
+
+Approve/reject request (optional): `{ "decisionNotes": "Approved effective next cycle." }`.
+
+Promotion response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000002101",
+  "promotionNumber": "PRO-3F2A9B10",
+  "employeeId": "00000000-0000-0000-0000-000000000103",
+  "employeeName": "Jane Doe",
+  "fromDesignationId": "00000000-0000-0000-0000-000000000401",
+  "fromDesignationName": "Software Engineer",
+  "toDesignationId": "00000000-0000-0000-0000-000000000402",
+  "toDesignationName": "Senior Software Engineer",
+  "fromDepartmentId": "00000000-0000-0000-0000-000000000301",
+  "fromDepartmentName": "Engineering",
+  "toDepartmentId": null,
+  "toDepartmentName": null,
+  "effectiveDate": "2026-04-01T00:00:00Z",
+  "reason": "Consistently exceeding expectations across two review cycles.",
+  "status": "Approved",
+  "proposedByUserId": "00000000-0000-0000-0000-000000000002",
+  "decidedByUserId": "00000000-0000-0000-0000-000000000001",
+  "decidedAtUtc": "2026-03-20T09:00:00Z",
+  "decisionNotes": "Approved effective next cycle.",
+  "isDeleted": false,
+  "createdAtUtc": "2026-03-15T09:00:00Z",
+  "updatedAtUtc": "2026-03-20T09:00:00Z"
+}
+```
+
+Status values: `Proposed`, `Approved`, `Rejected`, `Withdrawn` — all except `Proposed` are terminal. No `PUT` — a proposal's terms are fixed at creation, matching `Offers`.
+
+Business rules enforced: a Manager may only Create/Propose for their own direct reports and must set themselves as reviewer when creating a Review; only the assigned reviewer may submit a manager review or cancel/delete/restore a Review; only the original proposer (or Admin/HR) may Withdraw a Promotion; only Admin/HR may Approve/Reject a Promotion, even though a Manager can Propose one; every create/update/status-change/delete/restore action across Goals, Reviews, and Promotions is written to `AuditLogs`.
 

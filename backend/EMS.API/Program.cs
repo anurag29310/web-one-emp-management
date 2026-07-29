@@ -60,6 +60,7 @@ builder.Services.AddScoped<EMS.Application.Interfaces.ITaskRepository, EMS.Persi
 builder.Services.AddScoped<EMS.Application.Interfaces.IReimbursementRepository, EMS.Persistence.Repositories.ReimbursementRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IRecruitmentRepository, EMS.Persistence.Repositories.RecruitmentRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IAssetRepository, EMS.Persistence.Repositories.AssetRepository>();
+builder.Services.AddScoped<EMS.Application.Interfaces.IPerformanceRepository, EMS.Persistence.Repositories.PerformanceRepository>();
 // Payroll services
 builder.Services.AddScoped<EMS.Application.Interfaces.IPayrollRepository, EMS.Persistence.Repositories.PayrollRepository>();
 builder.Services.AddSingleton<EMS.Application.Interfaces.IPdfService, EMS.Infrastructure.Pdf.PdfSharpDocumentService>();
@@ -174,6 +175,40 @@ builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Reimbursements.RequestChangesReimbursementCommand>, EMS.Application.Features.Reimbursements.Validators.RequestChangesReimbursementCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Reimbursements.UploadReimbursementAttachmentCommand>, EMS.Application.Features.Reimbursements.Validators.UploadReimbursementAttachmentCommandValidator>();
 
+// Recruitment validators (previously missing — see AI_CONTRACT/CLAUDE.md "FluentValidation for all input
+// validation": ValidationBehavior resolves IEnumerable<IValidator<T>>, so an unregistered validator is
+// silently never invoked rather than erroring, which let this go unnoticed).
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Recruitment.Commands.CreateCandidateCommand>, EMS.Application.Features.Recruitment.Validators.CreateCandidateCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Recruitment.Commands.UpdateCandidateCommand>, EMS.Application.Features.Recruitment.Validators.UpdateCandidateCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Recruitment.Commands.UploadCandidateAttachmentCommand>, EMS.Application.Features.Recruitment.Validators.UploadCandidateAttachmentCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Recruitment.Commands.ScheduleInterviewCommand>, EMS.Application.Features.Recruitment.Validators.ScheduleInterviewCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Recruitment.Commands.RescheduleInterviewCommand>, EMS.Application.Features.Recruitment.Validators.RescheduleInterviewCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Recruitment.Commands.SubmitInterviewFeedbackCommand>, EMS.Application.Features.Recruitment.Validators.SubmitInterviewFeedbackCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Recruitment.Commands.CreateOfferCommand>, EMS.Application.Features.Recruitment.Validators.CreateOfferCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Recruitment.Commands.RejectOfferCommand>, EMS.Application.Features.Recruitment.Validators.RejectOfferCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Recruitment.Commands.AddChecklistItemCommand>, EMS.Application.Features.Recruitment.Validators.AddChecklistItemCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Recruitment.Commands.ConvertCandidateToEmployeeCommand>, EMS.Application.Features.Recruitment.Validators.ConvertCandidateToEmployeeCommandValidator>();
+
+// Asset Management validators (same previously-missing registration gap as Recruitment above).
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Assets.Commands.CreateAssetCommand>, EMS.Application.Features.Assets.Validators.CreateAssetCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Assets.Commands.UpdateAssetCommand>, EMS.Application.Features.Assets.Validators.UpdateAssetCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Assets.Commands.AssignAssetCommand>, EMS.Application.Features.Assets.Validators.AssignAssetCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Assets.Commands.ReturnAssetCommand>, EMS.Application.Features.Assets.Validators.ReturnAssetCommandValidator>();
+
+// Performance Management validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.CreateGoalCommand>, EMS.Application.Features.Performance.Validators.CreateGoalCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.UpdateGoalCommand>, EMS.Application.Features.Performance.Validators.UpdateGoalCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.UpdateGoalProgressCommand>, EMS.Application.Features.Performance.Validators.UpdateGoalProgressCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.AddGoalKpiCommand>, EMS.Application.Features.Performance.Validators.AddGoalKpiCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.UpdateGoalKpiProgressCommand>, EMS.Application.Features.Performance.Validators.UpdateGoalKpiProgressCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.CreateReviewCommand>, EMS.Application.Features.Performance.Validators.CreateReviewCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.SubmitSelfAssessmentCommand>, EMS.Application.Features.Performance.Validators.SubmitSelfAssessmentCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.SubmitManagerReviewCommand>, EMS.Application.Features.Performance.Validators.SubmitManagerReviewCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.CancelReviewCommand>, EMS.Application.Features.Performance.Validators.CancelReviewCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.ProposePromotionCommand>, EMS.Application.Features.Performance.Validators.ProposePromotionCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.ApprovePromotionCommand>, EMS.Application.Features.Performance.Validators.ApprovePromotionCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.RejectPromotionCommand>, EMS.Application.Features.Performance.Validators.RejectPromotionCommandValidator>();
+
 // Infrastructure services
 builder.Services.AddSingleton<IPasswordHashService, PasswordHashService>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
@@ -270,6 +305,8 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanManageReimbursements", policy => policy.RequireRole("Admin"));
     options.AddPolicy("CanManageRecruitment", policy => policy.RequireRole("Admin", "HR"));
     options.AddPolicy("CanManageAssets", policy => policy.RequireRole("Admin", "HR"));
+    options.AddPolicy("CanManagePerformance", policy => policy.RequireRole("Admin", "HR", "Manager"));
+    options.AddPolicy("CanApprovePromotions", policy => policy.RequireRole("Admin", "HR"));
 });
 
 // Rate limiting: login and register are the two unauthenticated endpoints an attacker can hammer

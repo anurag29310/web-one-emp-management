@@ -656,6 +656,25 @@ Unique constraint: `AnnouncementId`, `UserId`.
 | `AssetAssignments` | `IX_AssetAssignments_EmployeeId` | Non-unique | Assignment history per employee (offboarding checks) |
 | `AssetAssignments` | `IX_AssetAssignments_ReturnedDate` | Non-unique | Outstanding-assignment filter |
 
+### 11.10 Performance Indexes
+
+| Table | Index | Type | Purpose |
+| --- | --- | --- | --- |
+| `PerformanceGoals` | `IX_PerformanceGoals_GoalNumber` | Unique | Goal lookup |
+| `PerformanceGoals` | `IX_PerformanceGoals_EmployeeId` | Non-unique | An employee's/report's goal list |
+| `PerformanceGoals` | `IX_PerformanceGoals_Status` | Non-unique | Status filter |
+| `PerformanceGoals` | `IX_PerformanceGoals_IsDeleted` | Non-unique | Excluding soft-deleted rows from every read path |
+| `PerformanceGoalKpis` | `IX_PerformanceGoalKpis_GoalId` | Non-unique | KPIs for a goal |
+| `PerformanceReviews` | `IX_PerformanceReviews_ReviewNumber` | Unique | Review lookup |
+| `PerformanceReviews` | `IX_PerformanceReviews_EmployeeId` | Non-unique | An employee's/report's review list |
+| `PerformanceReviews` | `IX_PerformanceReviews_ReviewerEmployeeId` | Non-unique | A reviewer's assigned reviews |
+| `PerformanceReviews` | `IX_PerformanceReviews_Status` | Non-unique | Status filter |
+| `PerformanceReviews` | `IX_PerformanceReviews_IsDeleted` | Non-unique | Excluding soft-deleted rows from every read path |
+| `Promotions` | `IX_Promotions_PromotionNumber` | Unique | Promotion lookup |
+| `Promotions` | `IX_Promotions_EmployeeId` | Non-unique | An employee's/report's promotion history |
+| `Promotions` | `IX_Promotions_Status` | Non-unique | Status filter |
+| `Promotions` | `IX_Promotions_IsDeleted` | Non-unique | Excluding soft-deleted rows from every read path |
+
 ## 12. Soft Delete Strategy
 
 Soft delete should be implemented for business data where historical traceability matters.
@@ -685,6 +704,9 @@ Soft-deleted tables:
 - `SalaryStructures`
 - `Candidates`
 - `Assets`
+- `PerformanceGoals`
+- `PerformanceReviews`
+- `Promotions`
 
 Not normally soft-deleted:
 
@@ -702,6 +724,7 @@ Not normally soft-deleted:
 - `Interviews`, `Offers`: no soft delete — deliberately, matching `Tasks`. Neither has a Delete action; `Cancel`/`Withdraw` are status transitions, not deletions. See §19.3/§19.4.
 - `OnboardingChecklistItems`: no soft delete or update beyond `IsCompleted: false → true` — an item has exactly one state change, tracked by `CompletedAtUtc`/`CompletedBy` directly. See §19.5.
 - `AssetAssignments`: no soft delete — deliberately, matching `Interviews`/`Offers`. There is no "Delete Assignment" action; Return is the only close-out path and it's a field update, not a deletion. See §20.2.
+- `PerformanceGoalKpis`: no soft delete or independent lifecycle beyond Add/update-progress, matching `OnboardingChecklistItems`. See §21.2.
 
 Implementation rules:
 
@@ -732,7 +755,7 @@ Phase 2 and Phase 3 modules should be added in separate bounded table groups:
 - Expenses: `Reimbursements`, `ReimbursementAttachments` are implemented — see §18. (No separate `ExpenseClaims`/`ExpenseClaimItems` tables: requirements.md describes one flat reimbursement request per expense, not a multi-line claim, so one table covers it.)
 - Recruitment: `Candidates`, `CandidateAttachments`, `Interviews`, `Offers`, `OnboardingChecklistItems` are implemented — see §19.
 - Assets: `Assets`, `AssetAssignments` are implemented — see §20. (No separate `AssetReturns` table: a return is a field update on the same `AssetAssignments` row — `ReturnedDate`/`ConditionAtReturn` — not a new record, matching how Task reassignment overwrites in place rather than spawning a history table.)
-- Performance: `Goals`, `Kpis`, `PerformanceReviews`, `Promotions`.
+- Performance: `PerformanceGoals`, `PerformanceGoalKpis`, `PerformanceReviews`, `Promotions` are implemented — see §21. First module where a Manager (not just Admin/HR) gets elevated access to a subordinate's records, extending Attendance's manager-tier pattern (§7) rather than Recruitment/Assets' Admin/HR-only pattern.
 - Messaging: `Conversations`, `Messages`, `MessageParticipants`.
 
 Each future module should follow the same audit, soft delete, indexing, and ownership rules unless there is a clear compliance reason to do otherwise.
@@ -1126,4 +1149,94 @@ Non-unique indexes on `AssetId`, `EmployeeId`, `ReturnedDate` (the last one supp
 No soft delete — deliberately, matching `Tasks`/`Interviews`/`Offers`. There is no "Delete Assignment" action; Return is the only close-out path and it's a field update (`ReturnedDate`/`ConditionAtReturn` set), not a deletion, so the full allocation history for an asset or an employee stays queryable forever — including for offboarding checks ("does this employee still have any company assets outstanding").
 
 An asset can only be assigned to one employee at a time: Assign is rejected unless `Assets.Status = Available`, and Return always writes a resulting status (defaulting to `Available`, but the caller can instead record `UnderRepair`/`Retired`/`Lost` if the returned condition warrants it) — so `Assets.Status = Assigned` and "has exactly one `AssetAssignments` row with `ReturnedDate: null`" stay in sync by construction, not by a database constraint.
+
+## 21. Performance Management Tables
+
+See [requirements.md](requirements.md#performance-management) for the source requirement — four bullets (Goals, KPI Tracking, Performance Reviews, Promotions) with no field list, status workflow, or authorization model specified. This is the first module to give a Manager (not just Admin/HR) elevated access to a subordinate's records — extending the manager-tier pattern already used by Attendance (`ManagerId`/`GetDirectReportIdsAsync`/`IsDirectReportAsync`, see §7) rather than the Admin/HR-only pattern used by Recruitment/Assets.
+
+### 21.1 PerformanceGoals
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `GoalNumber` | `varchar(20)` | Required, unique. Derived from `Id` (e.g. `GOL-3F2A9B10`), matching `Tasks.TaskNumber`/`Candidates.CandidateNumber` precedent |
+| `EmployeeId` | `uuid` | Required FK to `Employees`, `Restrict` on delete |
+| `Title` | `varchar(200)` | Required |
+| `Description` | `varchar(2000)` | Nullable |
+| `Category` | `varchar(100)` | Nullable. Free text — no fixed taxonomy given, matching `Assets.Category`'s precedent |
+| `StartDate` | `timestamptz` | Required |
+| `TargetDate` | `timestamptz` | Required, must be on or after `StartDate` |
+| `Weight` | `numeric(5,2)` | Nullable. Optional 0–100 weighting of this goal within a review period — invented; requirements.md doesn't specify how goals feed into review scoring |
+| `Status` | `varchar(20)` | Required, default `NotStarted`. `NotStarted`, `InProgress`, `Completed`, `Cancelled` — set explicitly via the update action, not auto-derived from `ProgressPercent` |
+| `ProgressPercent` | `integer` | Required, default `0`, 0–100 |
+| Audit fields | Shared | Full CRUD lifecycle (Create/Update/Delete/Restore), same as `SalaryStructures`/`Clients`/`Candidates`/`Assets` |
+
+Unique index on `GoalNumber`. Non-unique indexes on `EmployeeId`, `Status`, `IsDeleted`.
+
+A goal's full details (`Title`/`Description`/`Category`/`TargetDate`/`Weight`/`Status`) can only be edited by the employee's manager or Admin/HR. `ProgressPercent` has its own narrower update action open to the goal's own employee as well, so day-to-day progress updates don't require manager involvement.
+
+### 21.2 PerformanceGoalKpis
+
+"KPI Tracking" — modeled as one or more measurable metrics attached to a Goal (the standard goal/KPI relationship), not a standalone table unlinked to any goal, since requirements.md names it directly alongside Goals with no separate detail.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `GoalId` | `uuid` | Required FK to `PerformanceGoals`, `Cascade` on delete — a true compositional child, unlike the `Restrict` used for independently-owned entity references elsewhere in this schema |
+| `Name` | `varchar(200)` | Required |
+| `TargetValue` | `numeric(18,2)` | Required |
+| `CurrentValue` | `numeric(18,2)` | Required, default `0` |
+| `Unit` | `varchar(30)` | Nullable (e.g. "%", "$", "deals") |
+| `Notes` | `varchar(1000)` | Nullable |
+| `CreatedAtUtc` | `timestamptz` | Required |
+| `UpdatedAtUtc` | `timestamptz` | Nullable. Stamped whenever `CurrentValue` is updated — its only other lifecycle event besides creation |
+
+Non-unique index on `GoalId`. No soft delete and no independent lifecycle beyond Add/update-progress — matching `OnboardingChecklistItems`. Tracking progress is a field update on `CurrentValue`, not a new record, the same pattern as `AssetAssignments.Return`.
+
+### 21.3 PerformanceReviews
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `ReviewNumber` | `varchar(20)` | Required, unique. Derived from `Id` (e.g. `REV-3F2A9B10`) |
+| `EmployeeId` | `uuid` | Required FK to `Employees`, `Restrict` on delete — the employee being reviewed |
+| `ReviewerEmployeeId` | `uuid` | Required FK to `Employees`, `Restrict` on delete — usually the employee's manager, but not enforced to be, so Admin/HR can assign any reviewer (e.g. a peer review) |
+| `ReviewPeriodStart` | `timestamptz` | Required |
+| `ReviewPeriodEnd` | `timestamptz` | Required, must be on or after `ReviewPeriodStart` |
+| `Status` | `varchar(30)` | Required, default `Draft`. `Draft`, `SelfAssessmentSubmitted`, `Completed`, `Cancelled` |
+| `SelfAssessment` | `varchar(4000)` | Nullable |
+| `ManagerAssessment` | `varchar(4000)` | Nullable |
+| `OverallRating` | `numeric(3,2)` | Nullable, 1–5. Set only when the manager review is submitted (`Status` becomes `Completed`) |
+| `SelfSubmittedAtUtc` | `timestamptz` | Nullable |
+| `CompletedAtUtc` | `timestamptz` | Nullable |
+| `Notes` | `varchar(1000)` | Nullable |
+| Audit fields | Shared | Full CRUD lifecycle (Create/Delete/Restore, no `Update` — see below), same set as §21.1 |
+
+Unique index on `ReviewNumber`. Non-unique indexes on `EmployeeId`, `ReviewerEmployeeId`, `Status`, `IsDeleted`.
+
+No `PUT` update action — matching `Interviews`/`Offers`, a review's fields are set once at creation and then only change through the workflow actions: the employee submits their self-assessment (`Draft` → `SelfAssessmentSubmitted`, only the reviewed employee), the manager submits their review (`Draft`/`SelfAssessmentSubmitted` → `Completed`, only the assigned `ReviewerEmployeeId`, setting `ManagerAssessment`/`OverallRating`), or either the reviewer or Admin/HR cancels it. There's no separate "manager review submitted, awaiting sign-off" status between the manager's submission and `Completed` — submitting the manager review completes the cycle in one step, since nothing further happens after it in this scope.
+
+### 21.4 Promotions
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `PromotionNumber` | `varchar(20)` | Required, unique. Derived from `Id` (e.g. `PRO-3F2A9B10`) |
+| `EmployeeId` | `uuid` | Required FK to `Employees`, `Restrict` on delete |
+| `FromDesignationId` | `uuid` | Required FK to `Designations`, `Restrict` on delete. Captured automatically from the employee's current designation at proposal time |
+| `ToDesignationId` | `uuid` | Required FK to `Designations`, `Restrict` on delete |
+| `FromDepartmentId` | `uuid` | Nullable FK to `Departments`, `Restrict` on delete. Captured automatically, same as `FromDesignationId` |
+| `ToDepartmentId` | `uuid` | Nullable FK to `Departments`, `Restrict` on delete — a promotion doesn't have to change department |
+| `EffectiveDate` | `timestamptz` | Required |
+| `Reason` | `varchar(1000)` | Required |
+| `Status` | `varchar(20)` | Required, default `Proposed`. `Proposed`, `Approved`, `Rejected`, `Withdrawn` |
+| `ProposedByUserId` | `uuid` | Required. Not FK-enforced, matching `AssetAssignments.AssignedByUserId`'s loose-reference style |
+| `DecidedByUserId` | `uuid` | Nullable, same loose-reference style |
+| `DecidedAtUtc` | `timestamptz` | Nullable |
+| `DecisionNotes` | `varchar(1000)` | Nullable |
+| Audit fields | Shared | Full CRUD lifecycle (Create/Delete/Restore, no `Update`), same set as §21.1 |
+
+Unique index on `PromotionNumber`. Non-unique indexes on `EmployeeId`, `FromDesignationId`, `ToDesignationId`, `FromDepartmentId`, `ToDepartmentId`, `Status`, `IsDeleted`.
+
+Approving a promotion applies `ToDesignationId`/`ToDepartmentId` to the employee's `Employees` row **immediately**, not on `EffectiveDate` — there's no background job to apply it later, the same "defined but not automated" gap as `Offers.Expired` (§19.4). Only Admin/HR can Approve/Reject (a stricter policy than Propose, which a Manager can also do for their own direct reports) — a Manager cannot approve their own proposal. No `PUT` update action, matching `Offers`: a proposal's terms are fixed at creation; only the proposer (or Admin/HR) can Withdraw it, and only while still `Proposed`.
 

@@ -50,6 +50,10 @@ namespace EMS.Persistence.Context
         public DbSet<EMS.Domain.Entities.OnboardingChecklistItem> OnboardingChecklistItems => Set<EMS.Domain.Entities.OnboardingChecklistItem>();
         public DbSet<EMS.Domain.Entities.Asset> Assets => Set<EMS.Domain.Entities.Asset>();
         public DbSet<EMS.Domain.Entities.AssetAssignment> AssetAssignments => Set<EMS.Domain.Entities.AssetAssignment>();
+        public DbSet<EMS.Domain.Entities.PerformanceGoal> PerformanceGoals => Set<EMS.Domain.Entities.PerformanceGoal>();
+        public DbSet<EMS.Domain.Entities.PerformanceGoalKpi> PerformanceGoalKpis => Set<EMS.Domain.Entities.PerformanceGoalKpi>();
+        public DbSet<EMS.Domain.Entities.PerformanceReview> PerformanceReviews => Set<EMS.Domain.Entities.PerformanceReview>();
+        public DbSet<EMS.Domain.Entities.Promotion> Promotions => Set<EMS.Domain.Entities.Promotion>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -95,6 +99,10 @@ namespace EMS.Persistence.Context
             modelBuilder.ApplyConfiguration(new Configurations.OnboardingChecklistItemConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.AssetConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.AssetAssignmentConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.PerformanceGoalConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.PerformanceGoalKpiConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.PerformanceReviewConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.PromotionConfiguration());
         }
     }
 }
