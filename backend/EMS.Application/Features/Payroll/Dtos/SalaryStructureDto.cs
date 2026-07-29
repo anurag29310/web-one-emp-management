@@ -12,6 +12,9 @@ namespace EMS.Application.Features.Payroll.Dtos
         public List<DeductionDto> Deductions { get; set; } = new();
         public DateTime EffectiveFrom { get; set; }
         public DateTime? EffectiveTo { get; set; }
+        public bool IsDeleted { get; set; }
+        public DateTime CreatedAtUtc { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
     }
 
     public class AllowanceDto { public Guid Id { get; set; } public string Name { get; set; } = null!; public decimal Amount { get; set; } }

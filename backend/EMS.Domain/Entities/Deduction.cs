@@ -8,5 +8,8 @@ namespace EMS.Domain.Entities
         public Guid SalaryStructureId { get; set; }
         public string Name { get; set; } = null!;
         public decimal Amount { get; set; }
+
+        // See Allowance.CreatedAtUtc — same rationale, recreated wholesale on every parent update.
+        public DateTime CreatedAtUtc { get; set; }
     }
 }

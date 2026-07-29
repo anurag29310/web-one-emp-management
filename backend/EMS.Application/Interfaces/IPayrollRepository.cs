@@ -15,9 +15,10 @@ namespace EMS.Application.Interfaces
         // Salary structure CRUD
         Task CreateSalaryStructureAsync(SalaryStructure structure);
         Task<SalaryStructure?> GetSalaryStructureByIdAsync(Guid id);
+        Task<SalaryStructure?> GetSalaryStructureByIdIncludingDeletedAsync(Guid id);
         Task<IEnumerable<SalaryStructure>> GetSalaryStructuresAsync();
         Task UpdateSalaryStructureAsync(SalaryStructure structure);
-        Task<bool> DeleteSalaryStructureAsync(Guid id);
+        Task DeleteSalaryStructureAsync(SalaryStructure structure);
 
         // Payroll runs
         Task<IEnumerable<PayrollRun>> GetPayrollRunsAsync();

@@ -1331,11 +1331,15 @@ Payroll run response:
   "processedAtUtc": "2026-07-01T02:00:00Z",
   "processedBy": "00000000-0000-0000-0000-000000000010",
   "status": "Completed",
+  "updatedAtUtc": null,
+  "updatedBy": null,
   "payslipCount": 42,
   "totalNetPay": 168400.00,
   "payslips": []
 }
 ```
+
+`updatedAtUtc`/`updatedBy` are `null` until the run is approved, then hold the approval timestamp and the approver's user ID (redundant with nothing else on this record — `processedBy` is who ran payroll, `updatedBy` is who approved it, and they're often different people).
 
 `status` is one of `Processing`, `Completed`, `Approved`.
 
@@ -1351,7 +1355,8 @@ Processing a payroll run and approving it are both written to `AuditLogs` (entit
 | `GET` | `/payroll/salary-structures/{id}` | `CanManagePayroll` | Get a salary structure |
 | `POST` | `/payroll/salary-structures` | `CanManagePayroll` | Create a salary structure for an employee |
 | `PUT` | `/payroll/salary-structures/{id}` | `CanManagePayroll` | Update a salary structure |
-| `DELETE` | `/payroll/salary-structures/{id}` | `CanManagePayroll` | Delete a salary structure (404 if it does not exist) |
+| `DELETE` | `/payroll/salary-structures/{id}` | `CanManagePayroll` | Delete (soft) a salary structure (404 if it does not exist) |
+| `POST` | `/payroll/salary-structures/{id}/restore` | `CanManagePayroll` | Restore a soft-deleted salary structure (404 if it does not exist) |
 
 Salary structure request:
 
@@ -1365,6 +1370,8 @@ Salary structure request:
   "effectiveTo": null
 }
 ```
+
+Salary structure response adds `isDeleted`, `createdAtUtc`, `updatedAtUtc` (see [database-design.md §15.1](database-design.md#151-salarystructures)). `DELETE` soft-deletes rather than removing the row — a deleted structure is excluded from `GET`/list, and from the effective-salary-structure lookup Payroll processing uses, until restored. This is the only Payroll table with a full audit + soft-delete lifecycle; `Allowances`/`Deductions`/`PayrollRuns`/`Payslips` don't have one, for reasons documented in database-design.md §15's implementation note.
 
 ### 17.3 Payslips
 

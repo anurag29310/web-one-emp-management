@@ -29,6 +29,13 @@ namespace EMS.Tests
                 => Task.CompletedTask;
         }
 
+        private class FakeCurrentUserService : ICurrentUserService
+        {
+            public Guid? UserId => Guid.NewGuid();
+            public string? IpAddress => null;
+            public string? UserAgent => null;
+        }
+
         private static ApplicationDbContext CreateDb()
         {
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -324,10 +331,107 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new PayrollRepository(db);
-            var handler = new EMS.Application.Features.Payroll.Handlers.DeleteSalaryStructureCommandHandler(repo);
+            var handler = new EMS.Application.Features.Payroll.Handlers.DeleteSalaryStructureCommandHandler(repo, new FakeCurrentUserService(), new RecordingAuditLogger(), NullLogger<EMS.Application.Features.Payroll.Handlers.DeleteSalaryStructureCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 handler.Handle(new EMS.Application.Features.Payroll.Commands.DeleteSalaryStructureCommand { Id = Guid.NewGuid() }, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task SalaryStructure_SoftDeleteThenRestore_ExcludesThenReincludesFromQueries()
+        {
+            using var db = CreateDb();
+            var designation = new Designation { Id = Guid.NewGuid(), Name = "Staff", Code = "STF-" + Guid.NewGuid().ToString("N")[..6], CreatedAtUtc = DateTime.UtcNow };
+            await db.Designations.AddAsync(designation);
+            var employee = new Employee { Id = Guid.NewGuid(), EmployeeCode = "EMP-" + Guid.NewGuid().ToString("N")[..6], FirstName = "Test", LastName = "User", IsActive = true, JoinDate = DateTime.UtcNow, DesignationId = designation.Id };
+            await db.Employees.AddAsync(employee);
+            await db.SaveChangesAsync();
+
+            var repo = new PayrollRepository(db);
+            var createHandler = new CreateSalaryStructureCommandHandler(repo, new FakeCurrentUserService(), new RecordingAuditLogger());
+            var deleteHandler = new EMS.Application.Features.Payroll.Handlers.DeleteSalaryStructureCommandHandler(repo, new FakeCurrentUserService(), new RecordingAuditLogger(), NullLogger<EMS.Application.Features.Payroll.Handlers.DeleteSalaryStructureCommandHandler>.Instance);
+            var restoreHandler = new EMS.Application.Features.Payroll.Handlers.RestoreSalaryStructureCommandHandler(repo, new FakeCurrentUserService(), new RecordingAuditLogger(), NullLogger<EMS.Application.Features.Payroll.Handlers.RestoreSalaryStructureCommandHandler>.Instance);
+
+            var structureId = await createHandler.Handle(new CreateSalaryStructureCommand
+            {
+                EmployeeId = employee.Id,
+                BasicSalary = 1000m,
+                EffectiveFrom = DateTime.UtcNow.AddMonths(-1)
+            }, CancellationToken.None);
+
+            var created = await db.SalaryStructures.FindAsync(structureId);
+            Assert.NotNull(created!.CreatedAtUtc);
+            Assert.False(created.IsDeleted);
+
+            await deleteHandler.Handle(new EMS.Application.Features.Payroll.Commands.DeleteSalaryStructureCommand { Id = structureId }, CancellationToken.None);
+
+            // Soft-deleted: gone from every normal read path...
+            Assert.Null(await repo.GetSalaryStructureByIdAsync(structureId));
+            Assert.DoesNotContain(await repo.GetSalaryStructuresAsync(), s => s.Id == structureId);
+            Assert.Null(await repo.GetEffectiveSalaryStructureAsync(employee.Id, DateTime.UtcNow));
+
+            // ...but the row itself still exists, marked deleted with who/when.
+            var deletedRow = await repo.GetSalaryStructureByIdIncludingDeletedAsync(structureId);
+            Assert.NotNull(deletedRow);
+            Assert.True(deletedRow!.IsDeleted);
+            Assert.NotNull(deletedRow.DeletedAtUtc);
+            Assert.NotNull(deletedRow.DeletedBy);
+
+            await restoreHandler.Handle(new EMS.Application.Features.Payroll.Commands.RestoreSalaryStructureCommand { Id = structureId }, CancellationToken.None);
+
+            var restored = await repo.GetSalaryStructureByIdAsync(structureId);
+            Assert.NotNull(restored);
+            Assert.False(restored!.IsDeleted);
+            Assert.Null(restored.DeletedAtUtc);
+            Assert.Null(restored.DeletedBy);
+            Assert.NotNull(restored.UpdatedAtUtc);
+            Assert.NotNull(restored.UpdatedBy);
+            Assert.NotNull(await repo.GetEffectiveSalaryStructureAsync(employee.Id, DateTime.UtcNow));
+        }
+
+        [Fact]
+        public async Task ProcessPayroll_IgnoresSoftDeletedSalaryStructure()
+        {
+            using var db = CreateDb();
+            var designation = new Designation { Id = Guid.NewGuid(), Name = "Staff", Code = "STF-" + Guid.NewGuid().ToString("N")[..6], CreatedAtUtc = DateTime.UtcNow };
+            await db.Designations.AddAsync(designation);
+            var employee = new Employee { Id = Guid.NewGuid(), EmployeeCode = "EMP-" + Guid.NewGuid().ToString("N")[..6], FirstName = "Test", LastName = "User", IsActive = true, JoinDate = DateTime.UtcNow, DesignationId = designation.Id };
+            await db.Employees.AddAsync(employee);
+            await db.SalaryStructures.AddAsync(new SalaryStructure { Id = Guid.NewGuid(), EmployeeId = employee.Id, BasicSalary = 1000m, EffectiveFrom = DateTime.UtcNow.AddMonths(-1), IsDeleted = true, CreatedAtUtc = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+
+            var payrollRepo = new PayrollRepository(db);
+            var reimbursementRepo = new ReimbursementRepository(db);
+            var attendanceRepo = new AttendanceRepository(db);
+            var tempBase = Path.Combine(Path.GetTempPath(), "ems-payroll-softdelete-tests", Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tempBase);
+            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, new PdfSharpDocumentService(), new LocalFileStorageService(tempBase), new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<ProcessPayrollCommandHandler>.Instance);
+
+            await handler.Handle(new ProcessPayrollCommand { PeriodStart = DateTime.UtcNow.AddDays(-7), PeriodEnd = DateTime.UtcNow, ProcessedBy = Guid.NewGuid() }, CancellationToken.None);
+
+            Assert.False(await db.Payslips.AnyAsync(p => p.EmployeeId == employee.Id));
+
+            try { Directory.Delete(tempBase, true); } catch { }
+        }
+
+        [Fact]
+        public async Task ApprovePayrollRun_StampsUpdatedAtAndUpdatedBy()
+        {
+            using var db = CreateDb();
+            var run = new PayrollRun { Id = Guid.NewGuid(), PeriodStart = DateTime.UtcNow.AddDays(-30), PeriodEnd = DateTime.UtcNow, ProcessedAtUtc = DateTime.UtcNow, ProcessedBy = Guid.NewGuid(), Status = "Completed" };
+            await db.PayrollRuns.AddAsync(run);
+            await db.SaveChangesAsync();
+
+            var repo = new PayrollRepository(db);
+            var handler = new ApprovePayrollRunCommandHandler(repo, new RecordingAuditLogger(), NullLogger<ApprovePayrollRunCommandHandler>.Instance);
+            var approverId = Guid.NewGuid();
+
+            await handler.Handle(new ApprovePayrollRunCommand { PayrollRunId = run.Id, ApprovedBy = approverId }, CancellationToken.None);
+
+            var updated = await db.PayrollRuns.FindAsync(run.Id);
+            Assert.Equal("Approved", updated!.Status);
+            Assert.NotNull(updated.UpdatedAtUtc);
+            Assert.Equal(approverId, updated.UpdatedBy);
         }
 
         [Theory]
@@ -405,7 +509,7 @@ namespace EMS.Tests
             await db.SaveChangesAsync();
 
             var repo = new PayrollRepository(db);
-            var createHandler = new CreateSalaryStructureCommandHandler(repo);
+            var createHandler = new CreateSalaryStructureCommandHandler(repo, new FakeCurrentUserService(), new RecordingAuditLogger());
 
             var structureId = await createHandler.Handle(new CreateSalaryStructureCommand
             {
@@ -423,7 +527,7 @@ namespace EMS.Tests
             Assert.Single(effective.Deductions!);
             Assert.Equal("Tax", effective.Deductions![0].Name);
 
-            var updateHandler = new UpdateSalaryStructureCommandHandler(repo);
+            var updateHandler = new UpdateSalaryStructureCommandHandler(repo, new FakeCurrentUserService(), new RecordingAuditLogger());
             await updateHandler.Handle(new UpdateSalaryStructureCommand
             {
                 Id = structureId,

@@ -26,7 +26,7 @@ namespace EMS.Persistence.Repositories
             return await _db.SalaryStructures
                 .Include(s => s.Allowances)
                 .Include(s => s.Deductions)
-                .Where(s => s.EmployeeId == employeeId && s.EffectiveFrom <= asOf && (s.EffectiveTo == null || s.EffectiveTo >= asOf))
+                .Where(s => !s.IsDeleted && s.EmployeeId == employeeId && s.EffectiveFrom <= asOf && (s.EffectiveTo == null || s.EffectiveTo >= asOf))
                 .OrderByDescending(s => s.EffectiveFrom)
                 .FirstOrDefaultAsync();
         }
@@ -43,12 +43,17 @@ namespace EMS.Persistence.Repositories
 
         public async Task<SalaryStructure?> GetSalaryStructureByIdAsync(Guid id)
         {
+            return await _db.SalaryStructures.Include(s => s.Allowances).Include(s => s.Deductions).FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
+        }
+
+        public async Task<SalaryStructure?> GetSalaryStructureByIdIncludingDeletedAsync(Guid id)
+        {
             return await _db.SalaryStructures.Include(s => s.Allowances).Include(s => s.Deductions).FirstOrDefaultAsync(s => s.Id == id);
         }
 
         public async Task<IEnumerable<SalaryStructure>> GetSalaryStructuresAsync()
         {
-            return await _db.SalaryStructures.Include(s => s.Allowances).Include(s => s.Deductions).AsNoTracking().ToListAsync();
+            return await _db.SalaryStructures.Include(s => s.Allowances).Include(s => s.Deductions).AsNoTracking().Where(s => !s.IsDeleted).ToListAsync();
         }
 
         public Task UpdateSalaryStructureAsync(SalaryStructure structure)
@@ -77,12 +82,11 @@ namespace EMS.Persistence.Repositories
             return Task.CompletedTask;
         }
 
-        public async Task<bool> DeleteSalaryStructureAsync(Guid id)
+        public Task DeleteSalaryStructureAsync(SalaryStructure structure)
         {
-            var s = await _db.SalaryStructures.FindAsync(id);
-            if (s == null) return false;
-            _db.SalaryStructures.Remove(s);
-            return true;
+            structure.IsDeleted = true;
+            _db.SalaryStructures.Update(structure);
+            return Task.CompletedTask;
         }
 
         public async Task SavePayslipAsync(Payslip payslip)

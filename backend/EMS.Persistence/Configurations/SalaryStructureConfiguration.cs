@@ -12,6 +12,9 @@ namespace EMS.Persistence.Configurations
             builder.HasKey(s => s.Id);
             builder.Property(s => s.BasicSalary).IsRequired();
             builder.Property(s => s.EffectiveFrom).IsRequired();
+            builder.Property(s => s.IsDeleted).HasDefaultValue(false);
+            builder.Property(s => s.RowVersion).IsRowVersion();
+            builder.HasIndex(s => s.IsDeleted);
 
             builder.HasOne(s => s.Employee)
                 .WithMany()

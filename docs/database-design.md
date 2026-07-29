@@ -618,6 +618,7 @@ Unique constraint: `AnnouncementId`, `UserId`.
 | Table | Index | Type | Purpose |
 | --- | --- | --- | --- |
 | `SalaryStructures` | `IX_SalaryStructures_EmployeeId` | Non-unique | Current/effective salary structure lookup per employee |
+| `SalaryStructures` | `IX_SalaryStructures_IsDeleted` | Non-unique | Excluding soft-deleted rows from every read path |
 | `Allowances` | `IX_Allowances_SalaryStructureId` | Non-unique | Allowances per salary structure |
 | `Deductions` | `IX_Deductions_SalaryStructureId` | Non-unique | Deductions per salary structure |
 | `Payslips` | `IX_Payslips_EmployeeId` | Non-unique | Payslip history per employee |
@@ -651,6 +652,7 @@ Soft-deleted tables:
 - `Announcements`
 - `Clients`
 - `Reimbursements`
+- `SalaryStructures`
 
 Not normally soft-deleted:
 
@@ -662,7 +664,8 @@ Not normally soft-deleted:
 - `Tasks`: no soft delete — deliberately. There is no "Delete Task" action; `Cancel Task` is a status transition (`Status = Cancelled`), not a deletion, so a task is never removed from the table at all. See §16.1.
 - `TaskComments`, `TaskAttachments`: append-only child records of `Tasks` — never updated or deleted, matching `AnnouncementReads`.
 - `ReimbursementAttachments`: append-only child records of `Reimbursements` — never updated or deleted.
-- `SalaryStructures`, `Allowances`, `Deductions`, `PayrollRuns`, `Payslips`: no soft delete *and* no audit columns of any kind — not a deliberate design choice like the entries above, but a pre-existing Phase 1 gap inconsistent with §3's baseline. See the implementation note in §15.
+- `Allowances`, `Deductions`: no independent update/delete lifecycle — recreated wholesale by `UpdateSalaryStructureCommandHandler`, matching `TaskComments`/`ReimbursementAttachments`. `SalaryStructures` itself *is* soft-deleted (added to the list above) since it has real Create/Update/Delete/Restore actions. See the implementation note in §15.
+- `PayrollRuns`, `Payslips`: no soft delete — deliberately. Neither has a Delete action; both are immutable records of payroll actually processed/paid. See the implementation note in §15.
 
 Implementation rules:
 
@@ -686,7 +689,7 @@ Recommended foreign key delete behavior:
 
 Phase 2 and Phase 3 modules should be added in separate bounded table groups:
 
-- Payroll: `SalaryStructures`, `Allowances`, `Deductions`, `PayrollRuns`, `Payslips` are implemented — see §15. (Backfilled into this document for the first time; see the implementation note at the end of §15 for known gaps.) `Bonuses`, `OvertimeRecords` remain future extension points.
+- Payroll: `SalaryStructures`, `Allowances`, `Deductions`, `PayrollRuns`, `Payslips` are implemented — see §15, including Bonus/Overtime (`Payslips.TotalBonus`/`TotalOvertime`/`OvertimeHours` — no separate tables needed) and the FK/relationship fix and audit/soft-delete backfill documented in §15's implementation note.
 - Announcements: `Announcements` and `Notifications` are implemented — see §9. `EmailLogs` remains a future extension point.
 - Client Master: `Clients` is implemented — see §16.
 - Tasks: `Tasks`, `TaskComments`, `TaskAttachments` are implemented — see §17. (No separate `TaskAssignments` table: a task has exactly one assignee at a time, tracked directly on `Tasks.AssignedEmployeeId`; reassignment overwrites it and is itself audited via `AuditLogs`, so a full assignment-history table wasn't needed.)
@@ -711,7 +714,16 @@ Implemented in Phase 1, before this document had Client/Task/Reimbursement-style
 | `BasicSalary` | `numeric` | Required |
 | `EffectiveFrom` | `timestamptz` | Required |
 | `EffectiveTo` | `timestamptz` | Nullable |
-| Audit fields | None | No audit or soft-delete columns exist on this table |
+| `IsDeleted` | `boolean` | Required, default `false`. Indexed |
+| `CreatedAtUtc` | `timestamptz` | Required |
+| `CreatedBy` | `uuid` | Nullable |
+| `UpdatedAtUtc` | `timestamptz` | Nullable |
+| `UpdatedBy` | `uuid` | Nullable |
+| `DeletedAtUtc` | `timestamptz` | Nullable |
+| `DeletedBy` | `uuid` | Nullable |
+| `RowVersion` (`xmin`) | — | Optimistic concurrency, same `.IsRowVersion()` mapping as §3 |
+
+The only Payroll table with a full CRUD lifecycle (Create/Update/Delete/Restore), so it's the only one of the five that gets the complete Shared Audit Fields (§3) set — see the implementation note below for why the other four don't.
 
 ### 15.2 Allowances
 
@@ -721,7 +733,7 @@ Implemented in Phase 1, before this document had Client/Task/Reimbursement-style
 | `SalaryStructureId` | `uuid` | Required FK to `SalaryStructures`, `Cascade` on delete |
 | `Name` | `varchar(150)` | Required |
 | `Amount` | `numeric` | Required |
-| Audit fields | None | No audit or soft-delete columns exist on this table |
+| `CreatedAtUtc` | `timestamptz` | Required. See implementation note below — no other audit/soft-delete columns |
 
 ### 15.3 Deductions
 
@@ -733,7 +745,7 @@ Same shape as `Allowances` (§15.2):
 | `SalaryStructureId` | `uuid` | Required FK to `SalaryStructures`, `Cascade` on delete |
 | `Name` | `varchar(150)` | Required |
 | `Amount` | `numeric` | Required |
-| Audit fields | None | No audit or soft-delete columns exist on this table |
+| `CreatedAtUtc` | `timestamptz` | Required |
 
 ### 15.4 PayrollRuns
 
@@ -745,7 +757,8 @@ Same shape as `Allowances` (§15.2):
 | `ProcessedAtUtc` | `timestamptz` | Required |
 | `ProcessedBy` | `uuid` | Required. Not FK-enforced (loose reference to `Users`, matching `Tasks.AssignedByUserId`'s style) |
 | `Status` | `text` | Nullable |
-| Audit fields | None | No audit or soft-delete columns exist on this table |
+| `UpdatedAtUtc` | `timestamptz` | Nullable. Stamped on Approve — the run's only other lifecycle event besides creation |
+| `UpdatedBy` | `uuid` | Nullable. The approver |
 
 ### 15.5 Payslips
 
@@ -768,9 +781,13 @@ Same shape as `Allowances` (§15.2):
 | `BlobContainer` | `text` | Nullable |
 | Audit fields | None | No audit or soft-delete columns exist on this table |
 
-> **Implementation note — fixed, and remaining known gap:**
-> - **Fixed** (migration `FixPayrollRelationshipsAndForeignKeys`): `SalaryStructures.EmployeeId` and `Payslips.EmployeeId` now have real FK constraints to `Employees` (`Restrict`), with `SalaryStructures.EmployeeId` also indexed for the first time. Separately, `SalaryStructureConfiguration`/`PayrollRunConfiguration` originally declared the parent side of the Allowances/Deductions/Payslips relationships as `HasMany<Allowance>().WithOne()` (etc.) without pointing at the entity's own navigation collection — EF Core read that as *two* independent relationships (the explicit `HasForeignKey` one, plus a second by-convention one inferred from the orphaned navigation) and materialized the second as an extra, always-`NULL` shadow FK column (`SalaryStructureId1`/`PayrollRunId1`) that the application never populated. Against the real (relational) provider, `.Include(s => s.Allowances)` joined on that dead shadow column, so **`GetEffectiveSalaryStructureAsync` silently returned zero allowances/deductions for every employee** — Payroll would compute correct `Basic` but always `$0` `TotalAllowances`/`TotalDeductions`. It also meant `UpdateSalaryStructureCommandHandler`'s "replace children" only cleared the shadow FK (an optional relationship, so EF nulls rather than deletes) instead of the real one, permanently orphaning every prior Allowance/Deduction row on each edit. Fixed by binding the relationships to the real navigation properties (`HasMany(s => s.Allowances)`); the migration drops the three dead shadow columns. See `SalaryStructureConfiguration.cs`/`PayrollRunConfiguration.cs` and `EMS.Tests/PayrollTests.cs`'s `SalaryStructure_AllowancesAndDeductions_RoundTripThroughRealNavigation` regression test.
-> - **Remaining gap, not fixed**: no audit fields or soft delete on any of the five tables, unlike every other business table in this document (§3); records are hard-updated in place. Left as-is — retrofitting audit/soft-delete columns onto live Payroll data is separate follow-up work, out of scope for this fix.
+> **Implementation note — relationship/FK fix, and audit/soft-delete backfill (migrations `FixPayrollRelationshipsAndForeignKeys`, `AddPayrollAuditAndSoftDelete`):**
+> - **Relationship/FK fix**: `SalaryStructures.EmployeeId` and `Payslips.EmployeeId` now have real FK constraints to `Employees` (`Restrict`), with `SalaryStructures.EmployeeId` also indexed for the first time. Separately, `SalaryStructureConfiguration`/`PayrollRunConfiguration` originally declared the parent side of the Allowances/Deductions/Payslips relationships as `HasMany<Allowance>().WithOne()` (etc.) without pointing at the entity's own navigation collection — EF Core read that as *two* independent relationships (the explicit `HasForeignKey` one, plus a second by-convention one inferred from the orphaned navigation) and materialized the second as an extra, always-`NULL` shadow FK column (`SalaryStructureId1`/`PayrollRunId1`) that the application never populated. Against the real (relational) provider, `.Include(s => s.Allowances)` joined on that dead shadow column, so **`GetEffectiveSalaryStructureAsync` silently returned zero allowances/deductions for every employee** — Payroll would compute correct `Basic` but always `$0` `TotalAllowances`/`TotalDeductions`. It also meant `UpdateSalaryStructureCommandHandler`'s "replace children" only cleared the shadow FK (an optional relationship, so EF nulls rather than deletes) instead of the real one, permanently orphaning every prior Allowance/Deduction row on each edit. Fixed by binding the relationships to the real navigation properties (`HasMany(s => s.Allowances)`); the migration drops the three dead shadow columns. See `SalaryStructureConfiguration.cs`/`PayrollRunConfiguration.cs` and `EMS.Tests/PayrollTests.cs`'s `SalaryStructure_AllowancesAndDeductions_RoundTripThroughRealNavigation` regression test.
+> - **Audit/soft-delete backfill**: applied unevenly across the five tables on purpose, matching each table's actual lifecycle rather than blanket-copying the full Shared Audit Fields (§3) set everywhere:
+>   - `SalaryStructures` gets the complete set (§15.1) — it's the only table here with independent Create/Update/Delete/Restore actions (`POST`/`PUT`/`DELETE`/`POST .../restore` under `/payroll/salary-structures`), so it needed real soft delete the same way `Clients`/`Employees` do. `DeleteSalaryStructureCommandHandler` now soft-deletes (stamping `DeletedAtUtc`/`DeletedBy`) instead of hard-deleting; `GetSalaryStructureByIdAsync`/`GetSalaryStructuresAsync`/`GetEffectiveSalaryStructureAsync` all exclude `IsDeleted` rows, so a deleted structure can never be picked up by a payroll run.
+>   - `Allowances`/`Deductions` get `CreatedAtUtc` only — no update/delete lifecycle of their own since `UpdateSalaryStructureCommandHandler` always recreates them wholesale (clears and re-inserts) rather than editing a row in place, matching the same "append-only child, no independent lifecycle" reasoning already applied to `TaskComments`/`ReimbursementAttachments` elsewhere in this document.
+>   - `PayrollRuns` gets `UpdatedAtUtc`/`UpdatedBy` only (stamped by Approve) — `CreatedAtUtc`/`CreatedBy` were deliberately **not** added since `ProcessedAtUtc`/`ProcessedBy` already record that exact same creation event under a more specific name; adding both would just be two columns holding identical data. No soft delete either — there is no Delete action on a payroll run (it's an immutable record of what was paid), matching the same "no unused field" reasoning `Tasks` uses for skipping soft delete.
+>   - `Payslips` gets nothing further — `GeneratedAtUtc` already serves as its creation timestamp, and a payslip is never updated or deleted after generation (it's the legal/financial record of what an employee was actually paid).
 
 > **Implementation note (Bonus & Overtime, migration `AddPayrollBonusAndOvertime`):** requirements.md lists "Bonus" and "Overtime" under Payroll Management with no further detail — no formula, no input mechanism. Bonus is treated as manual-entry-only (a discretionary amount has no basis for auto-calculation); Overtime auto-calculates by default but always accepts a manual override, since attendance-derived overtime can be wrong (missed punch, uncorrected attendance record, etc.) and there's no attendance-independent way to detect that. The overtime formula, entirely invented here since requirements.md specifies none:
 > 1. For each `AttendanceRecord` in the pay period with a `TotalWorkMinutes` value, look up the employee's assigned `Shift` for that day (via `EmployeeShift`/`AttendanceRecord.ShiftId`) and take `(Shift.EndTime - Shift.StartTime)` in minutes as the standard for that day (wrapping across midnight for night shifts); with no shift assigned, use a configurable default (`Payroll:DefaultDailyShiftMinutes`, default 480 = 8 hours).

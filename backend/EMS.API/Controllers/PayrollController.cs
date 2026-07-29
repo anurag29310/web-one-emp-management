@@ -130,7 +130,7 @@ namespace EMS.API.Controllers
             return NoContent();
         }
 
-        /// <summary>Delete a salary structure.</summary>
+        /// <summary>Delete (soft) a salary structure.</summary>
         [HttpDelete("salary-structures/{id:guid}")]
         [Authorize(Policy = "CanManagePayroll")]
         [ProducesResponseType(204)]
@@ -138,6 +138,17 @@ namespace EMS.API.Controllers
         public async Task<IActionResult> DeleteSalaryStructure(Guid id, CancellationToken ct)
         {
             await _mediator.Send(new DeleteSalaryStructureCommand { Id = id }, ct);
+            return NoContent();
+        }
+
+        /// <summary>Restore a soft-deleted salary structure.</summary>
+        [HttpPost("salary-structures/{id:guid}/restore")]
+        [Authorize(Policy = "CanManagePayroll")]
+        [ProducesResponseType(204)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> RestoreSalaryStructure(Guid id, CancellationToken ct)
+        {
+            await _mediator.Send(new RestoreSalaryStructureCommand { Id = id }, ct);
             return NoContent();
         }
 

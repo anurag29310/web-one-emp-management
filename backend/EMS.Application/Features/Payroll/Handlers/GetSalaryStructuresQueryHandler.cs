@@ -29,7 +29,10 @@ namespace EMS.Application.Features.Payroll.Handlers
                 EffectiveFrom = s.EffectiveFrom,
                 EffectiveTo = s.EffectiveTo,
                 Allowances = s.Allowances?.ConvertAll(a => new AllowanceDto { Id = a.Id, Name = a.Name, Amount = a.Amount }) ?? new(),
-                Deductions = s.Deductions?.ConvertAll(d => new DeductionDto { Id = d.Id, Name = d.Name, Amount = d.Amount }) ?? new()
+                Deductions = s.Deductions?.ConvertAll(d => new DeductionDto { Id = d.Id, Name = d.Name, Amount = d.Amount }) ?? new(),
+                IsDeleted = s.IsDeleted,
+                CreatedAtUtc = s.CreatedAtUtc,
+                UpdatedAtUtc = s.UpdatedAtUtc
             }).ToList();
         }
     }

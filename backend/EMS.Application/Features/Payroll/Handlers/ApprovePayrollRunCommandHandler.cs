@@ -29,6 +29,8 @@ namespace EMS.Application.Features.Payroll.Handlers
             if (run.Status != "Completed") throw new InvalidOperationException("Only completed payroll runs can be approved.");
 
             run.Status = "Approved";
+            run.UpdatedAtUtc = DateTime.UtcNow;
+            run.UpdatedBy = request.ApprovedBy;
             await _repo.UpdatePayrollRunAsync(run);
             await _repo.SaveChangesAsync();
 

@@ -13,6 +13,8 @@ namespace EMS.Application.Features.Payroll.Dtos
         public DateTime ProcessedAtUtc { get; set; }
         public Guid ProcessedBy { get; set; }
         public string Status { get; set; } = null!;
+        public DateTime? UpdatedAtUtc { get; set; }
+        public Guid? UpdatedBy { get; set; }
         public int PayslipCount { get; set; }
         public decimal TotalNetPay { get; set; }
         public List<PayslipDto> Payslips { get; set; } = new();
@@ -28,6 +30,8 @@ namespace EMS.Application.Features.Payroll.Dtos
                 ProcessedAtUtc = run.ProcessedAtUtc,
                 ProcessedBy = run.ProcessedBy,
                 Status = run.Status ?? string.Empty,
+                UpdatedAtUtc = run.UpdatedAtUtc,
+                UpdatedBy = run.UpdatedBy,
                 PayslipCount = payslips.Count,
                 TotalNetPay = payslips.Sum(p => p.NetPay),
                 Payslips = payslips
