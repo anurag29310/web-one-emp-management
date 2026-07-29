@@ -644,6 +644,18 @@ Unique constraint: `AnnouncementId`, `UserId`.
 | `Offers` | `IX_Offers_Status` | Non-unique | Status filter on the offer list |
 | `OnboardingChecklistItems` | `IX_OnboardingChecklistItems_CandidateId` | Non-unique | Checklist per candidate |
 
+### 11.9 Asset Indexes
+
+| Table | Index | Type | Purpose |
+| --- | --- | --- | --- |
+| `Assets` | `IX_Assets_AssetTag` | Unique | Asset lookup |
+| `Assets` | `IX_Assets_Category` | Non-unique | Category filter on the asset list |
+| `Assets` | `IX_Assets_Status` | Non-unique | Status filter (e.g. "show all Available laptops") |
+| `Assets` | `IX_Assets_IsDeleted` | Non-unique | Excluding soft-deleted rows from every read path |
+| `AssetAssignments` | `IX_AssetAssignments_AssetId` | Non-unique | Assignment history per asset |
+| `AssetAssignments` | `IX_AssetAssignments_EmployeeId` | Non-unique | Assignment history per employee (offboarding checks) |
+| `AssetAssignments` | `IX_AssetAssignments_ReturnedDate` | Non-unique | Outstanding-assignment filter |
+
 ## 12. Soft Delete Strategy
 
 Soft delete should be implemented for business data where historical traceability matters.
@@ -672,6 +684,7 @@ Soft-deleted tables:
 - `Reimbursements`
 - `SalaryStructures`
 - `Candidates`
+- `Assets`
 
 Not normally soft-deleted:
 
@@ -688,6 +701,7 @@ Not normally soft-deleted:
 - `CandidateAttachments`: append-only child records of `Candidates` — never updated or deleted, matching `ReimbursementAttachments`.
 - `Interviews`, `Offers`: no soft delete — deliberately, matching `Tasks`. Neither has a Delete action; `Cancel`/`Withdraw` are status transitions, not deletions. See §19.3/§19.4.
 - `OnboardingChecklistItems`: no soft delete or update beyond `IsCompleted: false → true` — an item has exactly one state change, tracked by `CompletedAtUtc`/`CompletedBy` directly. See §19.5.
+- `AssetAssignments`: no soft delete — deliberately, matching `Interviews`/`Offers`. There is no "Delete Assignment" action; Return is the only close-out path and it's a field update, not a deletion. See §20.2.
 
 Implementation rules:
 
@@ -717,7 +731,7 @@ Phase 2 and Phase 3 modules should be added in separate bounded table groups:
 - Tasks: `Tasks`, `TaskComments`, `TaskAttachments` are implemented — see §17. (No separate `TaskAssignments` table: a task has exactly one assignee at a time, tracked directly on `Tasks.AssignedEmployeeId`; reassignment overwrites it and is itself audited via `AuditLogs`, so a full assignment-history table wasn't needed.)
 - Expenses: `Reimbursements`, `ReimbursementAttachments` are implemented — see §18. (No separate `ExpenseClaims`/`ExpenseClaimItems` tables: requirements.md describes one flat reimbursement request per expense, not a multi-line claim, so one table covers it.)
 - Recruitment: `Candidates`, `CandidateAttachments`, `Interviews`, `Offers`, `OnboardingChecklistItems` are implemented — see §19.
-- Assets: `Assets`, `AssetAssignments`, `AssetReturns`.
+- Assets: `Assets`, `AssetAssignments` are implemented — see §20. (No separate `AssetReturns` table: a return is a field update on the same `AssetAssignments` row — `ReturnedDate`/`ConditionAtReturn` — not a new record, matching how Task reassignment overwrites in place rather than spawning a history table.)
 - Performance: `Goals`, `Kpis`, `PerformanceReviews`, `Promotions`.
 - Messaging: `Conversations`, `Messages`, `MessageParticipants`.
 
@@ -1063,4 +1077,53 @@ No soft delete or `UpdatedAtUtc` — a checklist item has exactly one state chan
 Not a table — the action (`POST /candidates/{id}/convert-to-employee`) that turns an accepted-offer candidate into a real `Employees` row, invented here since requirements.md names "Joining Checklist" as the last Recruitment step but doesn't specify how a candidate actually becomes an employee. Requires the candidate's most recent `Offer` to be `Accepted`; blocked if the candidate was already converted (`ConvertedEmployeeId` already set, or `Status` already `Hired`).
 
 `Employee.OfficeLocationId` and `Employee.EmployeeCode` are required columns (§5.1) with no equivalent anywhere in `Candidates`/`Offers`, so the conversion command takes them as explicit inputs (plus optional `TeamId`/`ManagerId`/`JoinDate` override) — the same fields `CreateEmployeeCommand` needs and Candidate/Offer data alone can't supply. Everything else (`FirstName`/`LastName`/`Email`/`PhoneNumber` from the candidate; `DesignationId`/`DepartmentId`/`JoinDate` default from the accepted offer) is copied across automatically. `EmployeeCode` and `Email` uniqueness are checked the same way `CreateEmployeeCommandHandler` already checks them.
+
+## 20. Asset Management Tables
+
+See [requirements.md](requirements.md#asset-management) for the source requirement — three bullets (Laptop Allocation, Mobile Allocation, Asset Return Tracking) with no field list or workflow. Modeled as one `Assets` master table (any equipment type, not just laptops/mobiles — `Category` is free text, not a fixed enum, since only two examples are named) plus one `AssetAssignments` history table, the same "master + assignment history" shape as `Employees`+`AttendanceRecords`.
+
+### 20.1 Assets
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `AssetTag` | `varchar(20)` | Required, unique. Derived from `Id` (e.g. `AST-3F2A9B10`), not user-editable — same pattern as `Tasks.TaskNumber` |
+| `Category` | `varchar(100)` | Required. Free text (e.g. Laptop, Mobile, Monitor) — requirements.md names Laptop/Mobile as examples, not an exhaustive list |
+| `Brand` | `varchar(100)` | Nullable |
+| `Model` | `varchar(100)` | Nullable |
+| `SerialNumber` | `varchar(150)` | Nullable. Not unique — not every asset category has one worth enforcing uniqueness on |
+| `PurchaseDate` | `timestamptz` | Nullable |
+| `PurchaseCost` | `decimal(18,2)` | Nullable, must be `>= 0` when supplied |
+| `Status` | `varchar(20)` | Required, default `Available`. `Available`, `Assigned`, `UnderRepair`, `Retired`, `Lost`. `Assigned` is set only by the Assign action (§20.2) and cleared only by Return — it can never be set directly through the general status-change action |
+| `Notes` | `varchar(1000)` | Nullable |
+| Audit fields | Shared | Include audit and soft delete fields (§3) — full CRUD lifecycle (Create/Update/Delete/Restore), same as `SalaryStructures`/`Clients` |
+
+Unique index on `AssetTag`. Non-unique indexes on `Category`, `Status`, `IsDeleted`.
+
+Deleting (soft) an asset is rejected while its `Status` is `Assigned` — it has to be returned first, so the assignment history always ends with either an open assignment on a non-deleted asset, or a fully closed one.
+
+### 20.2 AssetAssignments
+
+One row per allocation-to-return cycle — "Asset Return Tracking." `ReturnedDate: null` means the asset is currently out with that employee.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `AssetId` | `uuid` | Required FK to `Assets`, `Restrict` on delete |
+| `EmployeeId` | `uuid` | Required FK to `Employees`, `Restrict` on delete |
+| `AssignedByUserId` | `uuid` | Required. The Admin/HR user who allocated it — not FK-enforced, matching `Tasks.AssignedByUserId`'s loose-reference style |
+| `AssignedDate` | `timestamptz` | Required |
+| `ExpectedReturnDate` | `timestamptz` | Nullable |
+| `ConditionAtAssignment` | `varchar(500)` | Nullable |
+| `ReturnedDate` | `timestamptz` | Nullable. Set by the Return action; `null` = still outstanding |
+| `ConditionAtReturn` | `varchar(500)` | Nullable |
+| `Notes` | `varchar(1000)` | Nullable |
+| `CreatedAtUtc` | `timestamptz` | Required |
+| `UpdatedAtUtc` | `timestamptz` | Nullable. Stamped when the assignment is returned — its only other lifecycle event besides creation |
+
+Non-unique indexes on `AssetId`, `EmployeeId`, `ReturnedDate` (the last one supports "which assignments are still outstanding" without a full table scan).
+
+No soft delete — deliberately, matching `Tasks`/`Interviews`/`Offers`. There is no "Delete Assignment" action; Return is the only close-out path and it's a field update (`ReturnedDate`/`ConditionAtReturn` set), not a deletion, so the full allocation history for an asset or an employee stays queryable forever — including for offboarding checks ("does this employee still have any company assets outstanding").
+
+An asset can only be assigned to one employee at a time: Assign is rejected unless `Assets.Status = Available`, and Return always writes a resulting status (defaulting to `Available`, but the caller can instead record `UnderRepair`/`Retired`/`Lost` if the returned condition warrants it) — so `Assets.Status = Assigned` and "has exactly one `AssetAssignments` row with `ReturnedDate: null`" stay in sync by construction, not by a database constraint.
 

@@ -48,6 +48,8 @@ namespace EMS.Persistence.Context
         public DbSet<EMS.Domain.Entities.Interview> Interviews => Set<EMS.Domain.Entities.Interview>();
         public DbSet<EMS.Domain.Entities.Offer> Offers => Set<EMS.Domain.Entities.Offer>();
         public DbSet<EMS.Domain.Entities.OnboardingChecklistItem> OnboardingChecklistItems => Set<EMS.Domain.Entities.OnboardingChecklistItem>();
+        public DbSet<EMS.Domain.Entities.Asset> Assets => Set<EMS.Domain.Entities.Asset>();
+        public DbSet<EMS.Domain.Entities.AssetAssignment> AssetAssignments => Set<EMS.Domain.Entities.AssetAssignment>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -91,6 +93,8 @@ namespace EMS.Persistence.Context
             modelBuilder.ApplyConfiguration(new Configurations.InterviewConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.OfferConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.OnboardingChecklistItemConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.AssetConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.AssetAssignmentConfiguration());
         }
     }
 }

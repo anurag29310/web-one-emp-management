@@ -1279,6 +1279,7 @@ Response: `200 OK`, `Content-Type: application/pdf`, file name `dashboard-summar
 | `CanManageTasks` (`Admin` role only) | Create, edit, reassign, cancel tasks — "Only Admin can assign tasks" per requirements.md. Accept/reject/start/progress/complete/comment/attach are open to any authenticated caller but scoped to the task's assignee at the handler level (see §21) |
 | `CanManageReimbursements` (`Admin` role only) | Start review, approve, reject, request changes on reimbursements. Self-approval is additionally blocked at the handler level even for Admin callers (see §22) |
 | `CanManageRecruitment` (`Admin,HR` roles) | Candidates, interview scheduling/cancel/reschedule, offers, onboarding checklist, convert-to-employee. Interview feedback submission is open to any authenticated caller but scoped to the interview's assigned interviewer at the handler level (see §23) |
+| `CanManageAssets` (`Admin,HR` roles) | Assets, allocation, return tracking (see §24) — no self-service angle, unlike Task Management or Reimbursements |
 
 ## 16. Missing But Recommended APIs
 
@@ -1928,4 +1929,124 @@ Creates the real `Employees` row (see [database-design.md §5.1](database-design
 `employeeCode` and `officeLocationId` are required — `Employees.OfficeLocationId`/`EmployeeCode` have no equivalent anywhere on `Candidates`/`Offers`, so they're supplied here, the same way they're supplied to [Create Employee](#53-create-employee) directly. Everything else (`firstName`/`lastName`/`email`/`phoneNumber` from the candidate; `designationId`/`departmentId`/join date from the accepted offer, unless `joinDate` is explicitly overridden here) is copied automatically. Rejected with `409` if there's no `Accepted` offer, or if the candidate was already converted. On success, `candidates.status` becomes `Hired` and `convertedEmployeeId` is set — both are then permanent.
 
 Business rules enforced: `Reject`/`Withdraw`/`Hired` are terminal for a candidate — every mutating endpoint in this module rejects a candidate already in one of those states; interview feedback is rejected with `403` for anyone but the assigned interviewer or Admin/HR; every status change (candidate, interview, offer) and the Convert-to-Employee action are written to `AuditLogs`.
+
+## 24. Asset Management APIs
+
+See [database-design.md §20](database-design.md#20-asset-management-tables) for the underlying schema and [requirements.md](requirements.md#asset-management) for the source requirement — three bullets (Laptop Allocation, Mobile Allocation, Asset Return Tracking) with no endpoint list, field list, or status workflow specified. Modeled as one `Assets` master table plus one `AssetAssignments` history table, the same "master + assignment history" shape as `Employees`+`AttendanceRecords`.
+
+All endpoints require the `CanManageAssets` policy (`Admin`, `HR` roles) — there is no self-service angle here, unlike Task Management (§21) or Reimbursements (§22): an employee doesn't manage their own asset assignments.
+
+### 24.1 Assets
+
+Base path: `/assets`.
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/assets` | List assets — paginated, filterable by `status`, `category`, `search` (matches `assetTag`, `brand`, `model`, `serialNumber`) |
+| `GET` | `/assets/{id}` | Get a single asset |
+| `POST` | `/assets` | Register a new asset. `status` always starts at `Available` |
+| `PUT` | `/assets/{id}` | Update asset details. Does not change `status` — use `/assets/{id}/status` or the assign/return actions |
+| `DELETE` | `/assets/{id}` | Soft-delete an asset. Rejected with `409` while `status` is `Assigned` |
+| `POST` | `/assets/{id}/restore` | Restore a soft-deleted asset |
+| `POST` | `/assets/{id}/status` | Change status outside the assign/return flow — e.g. mark `UnderRepair`, `Retired`, `Lost`, or back to `Available`. Rejected with `409` if the target status is `Assigned` (use Assign instead), or if the asset is currently `Assigned` (must be returned first) |
+
+Create/update request body:
+
+```json
+{
+  "category": "Laptop",
+  "brand": "Dell",
+  "model": "Latitude 5440",
+  "serialNumber": "SN-88213X",
+  "purchaseDate": "2026-01-15",
+  "purchaseCost": 1200.00,
+  "notes": null
+}
+```
+
+Status change request:
+
+```json
+{
+  "status": "UnderRepair",
+  "notes": "Screen flickering, sent to vendor for repair."
+}
+```
+
+Asset response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000001601",
+  "assetTag": "AST-3F2A9B10",
+  "category": "Laptop",
+  "brand": "Dell",
+  "model": "Latitude 5440",
+  "serialNumber": "SN-88213X",
+  "purchaseDate": "2026-01-15T00:00:00Z",
+  "purchaseCost": 1200.00,
+  "status": "Available",
+  "notes": null,
+  "isDeleted": false,
+  "createdAtUtc": "2026-01-15T09:00:00Z",
+  "updatedAtUtc": null
+}
+```
+
+`category` is free text, not a fixed enum — requirements.md names Laptop/Mobile as examples, not an exhaustive list. Status values: `Available`, `Assigned`, `UnderRepair`, `Retired`, `Lost`.
+
+### 24.2 Assignments (Allocation / Return Tracking)
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/assets/{id}/assignments` | List an asset's full assignment history, most recent first |
+| `POST` | `/assets/{id}/assign` | Allocate an `Available` asset to an employee. Rejected with `409` unless the asset's `status` is `Available` |
+| `POST` | `/asset-assignments/{id}/return` | Close out an outstanding assignment. Sets the asset's resulting status (defaults to `Available`; the caller can instead record `UnderRepair`/`Retired`/`Lost`) |
+| `GET` | `/employees/{employeeId}/assets` | An employee's full asset assignment history (current and past) |
+
+Assign request:
+
+```json
+{
+  "employeeId": "00000000-0000-0000-0000-000000000103",
+  "expectedReturnDate": "2027-01-15",
+  "conditionAtAssignment": "New, unboxed.",
+  "notes": null
+}
+```
+
+Return request:
+
+```json
+{
+  "conditionAtReturn": "Good, minor scuffs on the lid.",
+  "resultingAssetStatus": "Available",
+  "notes": null
+}
+```
+
+Assignment response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000001701",
+  "assetId": "00000000-0000-0000-0000-000000001601",
+  "assetTag": "AST-3F2A9B10",
+  "employeeId": "00000000-0000-0000-0000-000000000103",
+  "employeeName": "Jane Doe",
+  "assignedByUserId": "00000000-0000-0000-0000-000000000001",
+  "assignedDate": "2026-07-28T09:00:00Z",
+  "expectedReturnDate": "2027-01-15T00:00:00Z",
+  "conditionAtAssignment": "New, unboxed.",
+  "returnedDate": null,
+  "conditionAtReturn": null,
+  "notes": null,
+  "createdAtUtc": "2026-07-28T09:00:00Z",
+  "updatedAtUtc": null
+}
+```
+
+`returnedDate: null` means the asset is currently out with that employee. `assignedByUserId` is resolved server-side from the caller's JWT, not supplied by the client.
+
+Business rules enforced: an asset can only be assigned to one employee at a time (`Assign` rejected unless `status = Available`); `status` can never be set to `Assigned` directly through `/assets/{id}/status` — only the Assign action does that; an asset can't be deleted, updated in a way that bypasses these rules, or have its status changed while `Assigned` — it must be returned first; every create/update/delete/restore/status-change/assign/return action is written to `AuditLogs`.
 
