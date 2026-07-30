@@ -1282,6 +1282,7 @@ Response: `200 OK`, `Content-Type: application/pdf`, file name `dashboard-summar
 | `CanManageAssets` (`Admin,HR` roles) | Assets, allocation, return tracking (see §24) — no self-service angle, unlike Task Management or Reimbursements |
 | `CanManagePerformance` (`Admin,HR,Manager` roles) | Create/edit Goals, add KPIs, start Reviews, propose Promotions (see §25) — the first policy to include `Manager`, gated further at the handler level to a caller's own direct reports unless Admin/HR |
 | `CanApprovePromotions` (`Admin,HR` roles) | Approve/Reject/Delete/Restore Promotions (see §25.3) — stricter than `CanManagePerformance` so a Manager cannot approve their own proposal |
+| `CanManageMessaging` (`Admin,HR` roles) | Delete/Restore a Conversation (see §26) — Admin/HR-only moderation; everyday messaging (create, send, list, read, add participants, leave) is open to any authenticated caller and scoped at the handler level to the caller being an active participant |
 
 ## 16. Missing But Recommended APIs
 
@@ -2241,4 +2242,82 @@ Promotion response:
 Status values: `Proposed`, `Approved`, `Rejected`, `Withdrawn` — all except `Proposed` are terminal. No `PUT` — a proposal's terms are fixed at creation, matching `Offers`.
 
 Business rules enforced: a Manager may only Create/Propose for their own direct reports and must set themselves as reviewer when creating a Review; only the assigned reviewer may submit a manager review or cancel/delete/restore a Review; only the original proposer (or Admin/HR) may Withdraw a Promotion; only Admin/HR may Approve/Reject a Promotion, even though a Manager can Propose one; every create/update/status-change/delete/restore action across Goals, Reviews, and Promotions is written to `AuditLogs`.
+
+## 26. Messaging APIs
+
+See [database-design.md §22](database-design.md#22-messaging-tables) for the underlying schema and [requirements.md](requirements.md#internal-messaging) for the source requirement — two bullets (Employee Messaging, Manager Messaging) with no endpoint list, field list, or access model specified. Unlike Performance (§25), this is **open messaging**: "Employee Messaging"/"Manager Messaging" are read as the two participant roles in a conversation, not a restriction — any authenticated caller can start a conversation with any other user. Every action other than Delete/Restore is open to any authenticated caller (`[Authorize]`, no policy) and scoped inside the handler to the caller being an **active participant** (a `MessageParticipants` row with `leftAtUtc` null) of the conversation. Delete/Restore require the `CanManageMessaging` policy (`Admin`, `HR` only) — an Admin/HR moderation action, not a participant-facing "delete for me".
+
+### 26.1 Conversations
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/conversations` | Authenticated (self-scoped) | List the caller's conversations — paginated, filterable by `search` (matches conversation title or another participant's name), ordered by most recent activity |
+| `GET` | `/conversations/unread-count` | Authenticated | Number of the caller's conversations with at least one unread message, for a nav badge |
+| `GET` | `/conversations/{id}` | Authenticated (self-scoped) | Get a single conversation with its active participants. Only an active participant (or Admin/HR) |
+| `POST` | `/conversations` | Authenticated | Start a conversation with one or more other users and send the first message |
+| `POST` | `/conversations/{id}/participants` | Authenticated (self-scoped) | Add one or more users to a conversation. Only an active participant |
+| `POST` | `/conversations/{id}/leave` | Authenticated (self-scoped) | Leave a group conversation. Not available on a direct (1:1) conversation — `409` |
+| `DELETE` | `/conversations/{id}` | `CanManageMessaging` | Soft-delete a conversation |
+| `POST` | `/conversations/{id}/restore` | `CanManageMessaging` | Restore a soft-deleted conversation |
+
+Create request:
+
+```json
+{
+  "participantUserIds": ["00000000-0000-0000-0000-000000000102"],
+  "title": null,
+  "initialMessageBody": "Hi — do you have a minute to review the Q3 roadmap doc?"
+}
+```
+
+`participantUserIds` excludes the caller — it's added automatically. If it resolves to exactly one other user and `title` is omitted, this reuses an existing active 1:1 conversation between the caller and that user instead of creating a duplicate DM thread — the response `id` is the existing conversation's id and `initialMessageBody` is appended as a new message. Two or more `participantUserIds` (or a non-null `title`) always creates a new conversation with `isGroup: true` once there are 3+ participants.
+
+Add-participants request: `{ "userIds": ["00000000-0000-0000-0000-000000000103"] }`. Adding anyone to a 1:1 conversation promotes it to `isGroup: true`.
+
+Conversation response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000002201",
+  "title": null,
+  "isGroup": false,
+  "participants": [
+    { "userId": "00000000-0000-0000-0000-000000000101", "name": "Jane Doe", "joinedAtUtc": "2026-07-20T09:00:00Z", "leftAtUtc": null },
+    { "userId": "00000000-0000-0000-0000-000000000102", "name": "John Manager", "joinedAtUtc": "2026-07-20T09:00:00Z", "leftAtUtc": null }
+  ],
+  "lastMessageAtUtc": "2026-07-20T09:00:00Z",
+  "lastMessagePreview": "Hi — do you have a minute to review the Q3 roadmap doc?",
+  "unreadCount": 1,
+  "isDeleted": false,
+  "createdAtUtc": "2026-07-20T09:00:00Z",
+  "updatedAtUtc": "2026-07-20T09:00:00Z"
+}
+```
+
+`unreadCount` is computed per caller from their own `MessageParticipants.lastReadAtUtc` watermark, not a global count — it's always `0` from the sender's own point of view immediately after sending.
+
+### 26.2 Messages
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/conversations/{id}/messages` | Authenticated (self-scoped) | List messages in a conversation — paginated, newest first. Only an active participant (or Admin/HR) |
+| `POST` | `/conversations/{id}/messages` | Authenticated (self-scoped) | Send a message. Only an active participant |
+| `POST` | `/conversations/{id}/read` | Authenticated (self-scoped) | Advance the caller's read watermark for this conversation to now |
+
+Send request: `{ "body": "Sounds good, I'll take a look this afternoon." }`.
+
+Message response:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000002301",
+  "conversationId": "00000000-0000-0000-0000-000000002201",
+  "senderUserId": "00000000-0000-0000-0000-000000000102",
+  "senderName": "John Manager",
+  "body": "Sounds good, I'll take a look this afternoon.",
+  "sentAtUtc": "2026-07-20T09:05:00Z"
+}
+```
+
+Business rules enforced: only an active participant may send a message, view a conversation or its messages, add participants, or mark it read — a caller who isn't a participant gets `403`, and a nonexistent conversation gets `404`; sending a message advances the sender's own read watermark so their own message never shows as unread to them; a participant newly added to an existing conversation has their watermark set to the join time (not unread from the beginning), so a long conversation's prior history doesn't flood in as unread; leaving is rejected with `409` on a direct (1:1) conversation; every conversation create, participants-added, participant-left, message-sent, delete, and restore action is written to `AuditLogs`.
 

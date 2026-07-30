@@ -707,6 +707,7 @@ Soft-deleted tables:
 - `PerformanceGoals`
 - `PerformanceReviews`
 - `Promotions`
+- `Conversations`
 
 Not normally soft-deleted:
 
@@ -725,6 +726,8 @@ Not normally soft-deleted:
 - `OnboardingChecklistItems`: no soft delete or update beyond `IsCompleted: false → true` — an item has exactly one state change, tracked by `CompletedAtUtc`/`CompletedBy` directly. See §19.5.
 - `AssetAssignments`: no soft delete — deliberately, matching `Interviews`/`Offers`. There is no "Delete Assignment" action; Return is the only close-out path and it's a field update, not a deletion. See §20.2.
 - `PerformanceGoalKpis`: no soft delete or independent lifecycle beyond Add/update-progress, matching `OnboardingChecklistItems`. See §21.2.
+- `MessageParticipants`: no soft delete — `LeftAtUtc` already marks a participant inactive without removing the row, matching `AssetAssignments`. See §22.2.
+- `Messages`: append-only child records of `Conversations` — never updated or deleted, matching `TaskComments`/`ReimbursementAttachments`. See §22.3.
 
 Implementation rules:
 
@@ -756,7 +759,7 @@ Phase 2 and Phase 3 modules should be added in separate bounded table groups:
 - Recruitment: `Candidates`, `CandidateAttachments`, `Interviews`, `Offers`, `OnboardingChecklistItems` are implemented — see §19.
 - Assets: `Assets`, `AssetAssignments` are implemented — see §20. (No separate `AssetReturns` table: a return is a field update on the same `AssetAssignments` row — `ReturnedDate`/`ConditionAtReturn` — not a new record, matching how Task reassignment overwrites in place rather than spawning a history table.)
 - Performance: `PerformanceGoals`, `PerformanceGoalKpis`, `PerformanceReviews`, `Promotions` are implemented — see §21. First module where a Manager (not just Admin/HR) gets elevated access to a subordinate's records, extending Attendance's manager-tier pattern (§7) rather than Recruitment/Assets' Admin/HR-only pattern.
-- Messaging: `Conversations`, `Messages`, `MessageParticipants`.
+- Messaging: `Conversations`, `MessageParticipants`, `Messages` are implemented — see §22. Open messaging (any authenticated user can start a conversation with any other), not manager-tier-gated like Performance (§21) — "Employee Messaging"/"Manager Messaging" in requirements.md are read as participant roles, not an access restriction.
 
 Each future module should follow the same audit, soft delete, indexing, and ownership rules unless there is a clear compliance reason to do otherwise.
 
@@ -1239,4 +1242,54 @@ No `PUT` update action — matching `Interviews`/`Offers`, a review's fields are
 Unique index on `PromotionNumber`. Non-unique indexes on `EmployeeId`, `FromDesignationId`, `ToDesignationId`, `FromDepartmentId`, `ToDepartmentId`, `Status`, `IsDeleted`.
 
 Approving a promotion applies `ToDesignationId`/`ToDepartmentId` to the employee's `Employees` row **immediately**, not on `EffectiveDate` — there's no background job to apply it later, the same "defined but not automated" gap as `Offers.Expired` (§19.4). Only Admin/HR can Approve/Reject (a stricter policy than Propose, which a Manager can also do for their own direct reports) — a Manager cannot approve their own proposal. No `PUT` update action, matching `Offers`: a proposal's terms are fixed at creation; only the proposer (or Admin/HR) can Withdraw it, and only while still `Proposed`.
+
+## 22. Messaging Tables
+
+See [requirements.md](requirements.md#internal-messaging) for the source requirement — two bullets (Employee Messaging, Manager Messaging) with no field list, schema, or access model specified. "Employee Messaging"/"Manager Messaging" are read as the two participant roles in a conversation, not an access restriction — any authenticated user can start a conversation with any other user, unlike Performance's manager-tier scoping (§21). Modeled as group-capable `Conversations` from the start (`Conversations`/`MessageParticipants`/`Messages`, matching the three-table roadmap note in §14) rather than 1:1-only, since `MessageParticipants` is inherently a many-participants-per-conversation join table.
+
+### 22.1 Conversations
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `Title` | `varchar(250)` | Nullable — optional name for a group conversation; null for a 1:1 |
+| `IsGroup` | `boolean` | Required. `true` once a conversation has 3+ active participants |
+| `CreatedByUserId` | `uuid` | Required. Not FK-enforced, matching `AssetAssignments.AssignedByUserId`'s loose-reference style |
+| `LastMessageAtUtc` | `timestamptz` | Nullable. Denormalized for cheap "most recent activity" sorting of the conversation list without joining `Messages` |
+| Audit fields | Shared | Full CRUD lifecycle (Create/Delete/Restore, no `Update` body — see below), same set as §21.1 |
+
+Non-unique indexes on `LastMessageAtUtc`, `IsDeleted`.
+
+No `PUT` update action — a conversation's `Title`/`IsGroup` change only through workflow actions (Add Participants promotes `IsGroup`), matching `Interviews`/`Offers`. Delete/Restore are Admin/HR-only moderation actions (`CanManageMessaging` policy), not a participant-facing "delete for me" — closer to an `AuditLogs`-adjacent compliance capability than to `Reimbursements`' self-service delete.
+
+### 22.2 MessageParticipants
+
+Membership + read-cursor row for a Conversation. `LastReadAtUtc` is a watermark, not a per-message read-receipt table — unread count is computed as "messages sent after `LastReadAtUtc`", one row per participant instead of one row per message read, matching `AnnouncementReads`' lightweight-read-tracking precedent but scoped per conversation instead of per broadcast.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `ConversationId` | `uuid` | Required FK to `Conversations`, `Cascade` on delete — a true compositional child |
+| `UserId` | `uuid` | Required. Not FK-enforced, matching `Notifications.UserId`'s loose-reference style |
+| `JoinedAtUtc` | `timestamptz` | Required |
+| `LastReadAtUtc` | `timestamptz` | Nullable. `null` counts every message in the conversation as unread |
+| `LeftAtUtc` | `timestamptz` | Nullable. Set when a participant leaves a group conversation; the row is kept, not deleted, so history stays intact |
+
+Unique index on `(ConversationId, UserId)`. Non-unique index on `UserId`. No soft delete — `LeftAtUtc` already marks a participant inactive without removing the row, matching `AssetAssignments`' no-independent-soft-delete precedent (§20.2).
+
+### 22.3 Messages
+
+Append-only chat message — never updated or deleted, matching the `TaskComments`/`AnnouncementReads` convention.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `ConversationId` | `uuid` | Required FK to `Conversations`, `Cascade` on delete |
+| `SenderUserId` | `uuid` | Required. Not FK-enforced, same loose-reference style as `MessageParticipants.UserId` |
+| `Body` | `varchar(4000)` | Required |
+| `SentAtUtc` | `timestamptz` | Required |
+
+Non-unique index on `(ConversationId, SentAtUtc)` for paginated history lookups, and on `SenderUserId`.
+
+Business rules enforced: only an active participant (a `MessageParticipants` row with `LeftAtUtc IS NULL`) may send a message, view a conversation, add participants, or mark it read; a Manager and an Employee are equally free to start a conversation with anyone — there is no manager-tier or Admin/HR-only gate on everyday messaging, only on Delete/Restore. Sending a message advances the sender's own `LastReadAtUtc` so their own message never shows as unread to them. A participant newly added to an existing conversation gets `LastReadAtUtc` set to their join time (not `null`), so the conversation's prior history doesn't flood in as unread — only messages from that point on do. An untitled request for a conversation with exactly one other participant reuses an existing active 1:1 conversation between the same two users instead of creating a duplicate DM thread. Leaving is only available on a group conversation (`IsGroup = true`); a direct 1:1 conversation cannot be left.
 

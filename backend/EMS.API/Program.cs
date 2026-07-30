@@ -61,6 +61,7 @@ builder.Services.AddScoped<EMS.Application.Interfaces.IReimbursementRepository, 
 builder.Services.AddScoped<EMS.Application.Interfaces.IRecruitmentRepository, EMS.Persistence.Repositories.RecruitmentRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IAssetRepository, EMS.Persistence.Repositories.AssetRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IPerformanceRepository, EMS.Persistence.Repositories.PerformanceRepository>();
+builder.Services.AddScoped<EMS.Application.Interfaces.IMessagingRepository, EMS.Persistence.Repositories.MessagingRepository>();
 // Payroll services
 builder.Services.AddScoped<EMS.Application.Interfaces.IPayrollRepository, EMS.Persistence.Repositories.PayrollRepository>();
 builder.Services.AddSingleton<EMS.Application.Interfaces.IPdfService, EMS.Infrastructure.Pdf.PdfSharpDocumentService>();
@@ -209,6 +210,11 @@ builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.ApprovePromotionCommand>, EMS.Application.Features.Performance.Validators.ApprovePromotionCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Performance.Commands.RejectPromotionCommand>, EMS.Application.Features.Performance.Validators.RejectPromotionCommandValidator>();
 
+// Messaging validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Messaging.Commands.CreateConversationCommand>, EMS.Application.Features.Messaging.Validators.CreateConversationCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Messaging.Commands.SendMessageCommand>, EMS.Application.Features.Messaging.Validators.SendMessageCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Messaging.Commands.AddParticipantsCommand>, EMS.Application.Features.Messaging.Validators.AddParticipantsCommandValidator>();
+
 // Infrastructure services
 builder.Services.AddSingleton<IPasswordHashService, PasswordHashService>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
@@ -307,6 +313,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanManageAssets", policy => policy.RequireRole("Admin", "HR"));
     options.AddPolicy("CanManagePerformance", policy => policy.RequireRole("Admin", "HR", "Manager"));
     options.AddPolicy("CanApprovePromotions", policy => policy.RequireRole("Admin", "HR"));
+    options.AddPolicy("CanManageMessaging", policy => policy.RequireRole("Admin", "HR"));
 });
 
 // Rate limiting: login and register are the two unauthenticated endpoints an attacker can hammer

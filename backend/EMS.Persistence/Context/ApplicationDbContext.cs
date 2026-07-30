@@ -54,6 +54,9 @@ namespace EMS.Persistence.Context
         public DbSet<EMS.Domain.Entities.PerformanceGoalKpi> PerformanceGoalKpis => Set<EMS.Domain.Entities.PerformanceGoalKpi>();
         public DbSet<EMS.Domain.Entities.PerformanceReview> PerformanceReviews => Set<EMS.Domain.Entities.PerformanceReview>();
         public DbSet<EMS.Domain.Entities.Promotion> Promotions => Set<EMS.Domain.Entities.Promotion>();
+        public DbSet<EMS.Domain.Entities.Conversation> Conversations => Set<EMS.Domain.Entities.Conversation>();
+        public DbSet<EMS.Domain.Entities.MessageParticipant> MessageParticipants => Set<EMS.Domain.Entities.MessageParticipant>();
+        public DbSet<EMS.Domain.Entities.Message> Messages => Set<EMS.Domain.Entities.Message>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -103,6 +106,9 @@ namespace EMS.Persistence.Context
             modelBuilder.ApplyConfiguration(new Configurations.PerformanceGoalKpiConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.PerformanceReviewConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.PromotionConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.ConversationConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.MessageParticipantConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.MessageConfiguration());
         }
     }
 }
