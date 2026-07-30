@@ -14,6 +14,7 @@ namespace EMS.Application.Interfaces
         Task<Candidate?> GetByIdIncludingDeletedAsync(Guid id, CancellationToken ct = default);
         Task<IEnumerable<Candidate>> GetAllAsync(int page, int pageSize, CandidateStatus? status, Guid? designationId, string? search, CancellationToken ct = default);
         Task<int> CountAsync(CandidateStatus? status, Guid? designationId, string? search, CancellationToken ct = default);
+        Task<IEnumerable<Candidate>> GetAllForExportAsync(CandidateStatus? status, Guid? designationId, string? search, CancellationToken ct = default);
         Task AddAsync(Candidate candidate, CancellationToken ct = default);
         Task UpdateAsync(Candidate candidate, CancellationToken ct = default);
         Task DeleteAsync(Candidate candidate, CancellationToken ct = default);
@@ -32,6 +33,7 @@ namespace EMS.Application.Interfaces
         // ─── Offers ────────────────────────────────────────────────────────────────
         Task<Offer?> GetOfferByIdAsync(Guid id, CancellationToken ct = default);
         Task<IEnumerable<Offer>> GetOffersByCandidateAsync(Guid candidateId, CancellationToken ct = default);
+        Task<IEnumerable<Offer>> GetSentOffersPastExpiryAsync(DateTime asOfUtc, CancellationToken ct = default);
         Task AddOfferAsync(Offer offer, CancellationToken ct = default);
         Task UpdateOfferAsync(Offer offer, CancellationToken ct = default);
 

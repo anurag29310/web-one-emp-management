@@ -200,6 +200,11 @@ namespace EMS.Persistence.Repositories
         public async Task<int> CountPromotionsAsync(Guid? employeeId, PromotionStatus? status, IEnumerable<Guid>? employeeScope, CancellationToken ct = default) =>
             await BuildPromotionFilterQuery(employeeId, status, employeeScope).CountAsync(ct);
 
+        public async Task<IEnumerable<Promotion>> GetApprovedPromotionsDueForApplicationAsync(DateTime asOfUtc, CancellationToken ct = default) =>
+            await _db.Promotions
+                .Where(p => !p.IsDeleted && p.Status == PromotionStatus.Approved && p.AppliedAtUtc == null && p.EffectiveDate <= asOfUtc)
+                .ToListAsync(ct);
+
         public async Task AddPromotionAsync(Promotion promotion, CancellationToken ct = default) =>
             await _db.Promotions.AddAsync(promotion, ct);
 

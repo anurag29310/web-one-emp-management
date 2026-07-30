@@ -1068,15 +1068,16 @@ Feedback submission is scoped to the assigned interviewer (any authenticated emp
 | `DepartmentId` | `uuid` | Nullable FK to `Departments`, `Restrict` on delete |
 | `OfferedSalary` | `decimal(18,2)` | Required, must be `> 0` |
 | `JoiningDate` | `timestamptz` | Required |
-| `Status` | `varchar(20)` | Required, default `Draft`. `Draft`, `Sent`, `Accepted`, `Rejected`, `Withdrawn`, `Expired` (`Expired` is defined but nothing sets it automatically yet — no expiry-date field or background job; a future extension point) |
+| `Status` | `varchar(20)` | Required, default `Draft`. `Draft`, `Sent`, `Accepted`, `Rejected`, `Withdrawn`, `Expired`. `Expired` is set automatically — see §23 |
 | `IssuedAtUtc` | `timestamptz` | Nullable. Set when `Status` becomes `Sent` — also when the offer letter PDF is generated |
 | `RespondedAtUtc` | `timestamptz` | Nullable. Set when the candidate's Accept/Reject response is recorded |
+| `ExpiresAtUtc` | `timestamptz` | Nullable, optional at creation. Offers without one never auto-expire; must be in the future when supplied. Once a `Sent` offer's `ExpiresAtUtc` has passed, the daily sweep (§23) flips it to `Expired` |
 | `Notes` | `varchar(1000)` | Nullable |
 | `BlobContainer` | `varchar(100)` | Nullable. Set once the offer letter PDF is generated (on Send) |
 | `BlobPath` | `varchar(500)` | Nullable |
 | Audit fields | Partial | `CreatedAtUtc`/`CreatedBy`/`UpdatedAtUtc`/`UpdatedBy` only — no soft delete; `Withdraw` (company pulls the offer back) is the only removal-like action and it's a status transition, matching `Tasks`/`Interviews` |
 
-Unique index on `OfferNumber`. Non-unique indexes on `CandidateId`, `Status`.
+Unique index on `OfferNumber`. Non-unique indexes on `CandidateId`, `Status`, `ExpiresAtUtc`.
 
 The candidate isn't a system user, so their Accept/Reject response is *recorded* by Admin/HR (`CanManageRecruitment`), not submitted by the candidate directly — there's no candidate-facing portal in this system.
 
@@ -1237,11 +1238,12 @@ No `PUT` update action — matching `Interviews`/`Offers`, a review's fields are
 | `DecidedByUserId` | `uuid` | Nullable, same loose-reference style |
 | `DecidedAtUtc` | `timestamptz` | Nullable |
 | `DecisionNotes` | `varchar(1000)` | Nullable |
+| `AppliedAtUtc` | `timestamptz` | Nullable. Set when `ToDesignationId`/`ToDepartmentId` is actually written to the employee's `Employees` row — see below |
 | Audit fields | Shared | Full CRUD lifecycle (Create/Delete/Restore, no `Update`), same set as §21.1 |
 
 Unique index on `PromotionNumber`. Non-unique indexes on `EmployeeId`, `FromDesignationId`, `ToDesignationId`, `FromDepartmentId`, `ToDepartmentId`, `Status`, `IsDeleted`.
 
-Approving a promotion applies `ToDesignationId`/`ToDepartmentId` to the employee's `Employees` row **immediately**, not on `EffectiveDate` — there's no background job to apply it later, the same "defined but not automated" gap as `Offers.Expired` (§19.4). Only Admin/HR can Approve/Reject (a stricter policy than Propose, which a Manager can also do for their own direct reports) — a Manager cannot approve their own proposal. No `PUT` update action, matching `Offers`: a proposal's terms are fixed at creation; only the proposer (or Admin/HR) can Withdraw it, and only while still `Proposed`.
+Approving a promotion applies `ToDesignationId`/`ToDepartmentId` to the employee's `Employees` row immediately **if `EffectiveDate` has already arrived**; otherwise the application is deferred and `AppliedAtUtc` stays `null` until the daily sweep (§23) applies it once `EffectiveDate` arrives. `Status = Approved` reflects the decision either way — `AppliedAtUtc` tracks separately whether it's actually taken effect on the employee record yet. Only Admin/HR can Approve/Reject (a stricter policy than Propose, which a Manager can also do for their own direct reports) — a Manager cannot approve their own proposal. No `PUT` update action, matching `Offers`: a proposal's terms are fixed at creation; only the proposer (or Admin/HR) can Withdraw it, and only while still `Proposed`.
 
 ## 22. Messaging Tables
 
@@ -1292,4 +1294,17 @@ Append-only chat message — never updated or deleted, matching the `TaskComment
 Non-unique index on `(ConversationId, SentAtUtc)` for paginated history lookups, and on `SenderUserId`.
 
 Business rules enforced: only an active participant (a `MessageParticipants` row with `LeftAtUtc IS NULL`) may send a message, view a conversation, add participants, or mark it read; a Manager and an Employee are equally free to start a conversation with anyone — there is no manager-tier or Admin/HR-only gate on everyday messaging, only on Delete/Restore. Sending a message advances the sender's own `LastReadAtUtc` so their own message never shows as unread to them. A participant newly added to an existing conversation gets `LastReadAtUtc` set to their join time (not `null`), so the conversation's prior history doesn't flood in as unread — only messages from that point on do. An untitled request for a conversation with exactly one other participant reuses an existing active 1:1 conversation between the same two users instead of creating a duplicate DM thread. Leaving is only available on a group conversation (`IsGroup = true`); a direct 1:1 conversation cannot be left.
+
+## 23. Background Jobs
+
+The first (and so far only) recurring background job in this system, added to close two "field defined but nothing sets it automatically" gaps flagged in review: `Offers.Status = Expired` (§19.4) and `Promotions.EffectiveDate` (§21.4).
+
+`RunDailySweepCommand` (a normal MediatR command, `EMS.Application/Features/Maintenance/`) does two things, both idempotent — running it twice in a row a moment apart is harmless, since each pass only picks up rows that still match its filter:
+
+1. **Expire stale offers**: every `Offers` row with `Status = Sent` and a non-null `ExpiresAtUtc` that has passed is flipped to `Status = Expired`.
+2. **Apply due promotions**: every `Promotions` row with `Status = Approved`, `AppliedAtUtc IS NULL`, and `EffectiveDate` that has passed has `ToDesignationId`/`ToDepartmentId` written to its `Employees` row and `AppliedAtUtc` stamped — the same application logic `ApprovePromotionCommandHandler` uses for the immediate case (§21.4), factored into a shared `PromotionApplier` so the two paths can't drift apart.
+
+`DailySweepHostedService` (`EMS.Infrastructure/BackgroundJobs/`, a standard ASP.NET Core `BackgroundService`) dispatches `RunDailySweepCommand` once at application startup and then on a recurring interval — default 24 hours, configurable via `BackgroundJobs:DailySweepIntervalHours` in `appsettings.json`. Since `DailySweepHostedService` itself is registered as a singleton (required by `IHostedService`) but the command handler depends on scoped repositories/`DbContext`, a new DI scope is created for each run.
+
+Nothing else in this system runs on a schedule yet — no email delivery, no notification digests, no data-retention purges (§12/§13 describe those as manual/administrative for now). Future scheduled work should be added as additional MediatR commands dispatched from the same `DailySweepHostedService` (or a second hosted service, if a materially different interval is needed) rather than introducing a new scheduling mechanism per module.
 

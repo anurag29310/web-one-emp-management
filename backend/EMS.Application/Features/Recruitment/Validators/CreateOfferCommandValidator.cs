@@ -12,6 +12,7 @@ namespace EMS.Application.Features.Recruitment.Validators
             RuleFor(x => x.CandidateId).NotEmpty();
             RuleFor(x => x.OfferedSalary).GreaterThan(0);
             RuleFor(x => x.JoiningDate).NotEqual(default(DateTime));
+            RuleFor(x => x.ExpiresAtUtc).GreaterThan(DateTime.UtcNow).When(x => x.ExpiresAtUtc.HasValue);
             RuleFor(x => x.Notes).MaximumLength(1000);
 
             RuleFor(x => x.DesignationId).NotEmpty()

@@ -52,6 +52,11 @@ namespace EMS.Persistence.Repositories
         public async Task<int> CountAsync(CandidateStatus? status, Guid? designationId, string? search, CancellationToken ct = default) =>
             await BuildFilterQuery(status, designationId, search).CountAsync(ct);
 
+        public async Task<IEnumerable<Candidate>> GetAllForExportAsync(CandidateStatus? status, Guid? designationId, string? search, CancellationToken ct = default) =>
+            await IncludeRelated(BuildFilterQuery(status, designationId, search))
+                .OrderByDescending(c => c.AppliedDate)
+                .ToListAsync(ct);
+
         public async Task AddAsync(Candidate candidate, CancellationToken ct = default) =>
             await _db.Candidates.AddAsync(candidate, ct);
 
@@ -109,6 +114,11 @@ namespace EMS.Persistence.Repositories
             await _db.Offers.AsNoTracking().Include(o => o.Designation).Include(o => o.Department)
                 .Where(o => o.CandidateId == candidateId)
                 .OrderByDescending(o => o.CreatedAtUtc)
+                .ToListAsync(ct);
+
+        public async Task<IEnumerable<Offer>> GetSentOffersPastExpiryAsync(DateTime asOfUtc, CancellationToken ct = default) =>
+            await _db.Offers
+                .Where(o => o.Status == OfferStatus.Sent && o.ExpiresAtUtc != null && o.ExpiresAtUtc <= asOfUtc)
                 .ToListAsync(ct);
 
         public async Task AddOfferAsync(Offer offer, CancellationToken ct = default) =>

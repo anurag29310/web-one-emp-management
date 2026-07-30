@@ -64,6 +64,37 @@ namespace EMS.API.Controllers
             return File(result.Content, result.ContentType, result.FileName);
         }
 
+        /// <summary>Export reimbursements matching the given filters to Excel. Non-Admin callers only ever see their own, regardless of filters supplied.</summary>
+        [HttpGet("reimbursements")]
+        [ProducesResponseType(200)]
+        public async Task<IActionResult> ExportReimbursements([FromQuery] ExportReimbursementsQuery query, CancellationToken ct)
+        {
+            query.RequestingUserId = GetCurrentUserId();
+            query.IsPrivileged = IsAdmin();
+            var result = await _mediator.Send(query, ct);
+            return File(result.Content, result.ContentType, result.FileName);
+        }
+
+        /// <summary>Export assets matching the given filters to Excel, including each asset's current assignee.</summary>
+        [HttpGet("assets")]
+        [Authorize(Policy = "CanManageAssets")]
+        [ProducesResponseType(200)]
+        public async Task<IActionResult> ExportAssets([FromQuery] ExportAssetsQuery query, CancellationToken ct)
+        {
+            var result = await _mediator.Send(query, ct);
+            return File(result.Content, result.ContentType, result.FileName);
+        }
+
+        /// <summary>Export candidates matching the given filters to Excel.</summary>
+        [HttpGet("candidates")]
+        [Authorize(Policy = "CanManageRecruitment")]
+        [ProducesResponseType(200)]
+        public async Task<IActionResult> ExportCandidates([FromQuery] ExportCandidatesQuery query, CancellationToken ct)
+        {
+            var result = await _mediator.Send(query, ct);
+            return File(result.Content, result.ContentType, result.FileName);
+        }
+
         // ─── Helpers ───────────────────────────────────────────────────────────────
 
         private Guid GetCurrentUserId()
@@ -78,5 +109,6 @@ namespace EMS.API.Controllers
         }
 
         private bool IsAdminOrHr() => User.IsInRole("Admin") || User.IsInRole("HR");
+        private bool IsAdmin() => User.IsInRole("Admin");
     }
 }

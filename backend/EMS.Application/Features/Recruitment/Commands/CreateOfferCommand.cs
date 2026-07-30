@@ -10,6 +10,7 @@ namespace EMS.Application.Features.Recruitment.Commands
         public Guid? DepartmentId { get; set; }
         public decimal OfferedSalary { get; set; }
         public DateTime JoiningDate { get; set; }
+        public DateTime? ExpiresAtUtc { get; set; }
         public string? Notes { get; set; }
     }
 }

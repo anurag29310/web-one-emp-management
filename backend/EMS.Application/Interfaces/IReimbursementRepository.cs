@@ -14,6 +14,7 @@ namespace EMS.Application.Interfaces
         Task<IEnumerable<Reimbursement>> GetAllAsync(
             int page, int pageSize, Guid? employeeId, ReimbursementStatus? status, CancellationToken ct = default);
         Task<int> CountAsync(Guid? employeeId, ReimbursementStatus? status, CancellationToken ct = default);
+        Task<IEnumerable<Reimbursement>> GetAllForExportAsync(Guid? employeeId, ReimbursementStatus? status, CancellationToken ct = default);
         Task AddAsync(Reimbursement reimbursement, CancellationToken ct = default);
         Task UpdateAsync(Reimbursement reimbursement, CancellationToken ct = default);
         Task SaveChangesAsync(CancellationToken ct = default);

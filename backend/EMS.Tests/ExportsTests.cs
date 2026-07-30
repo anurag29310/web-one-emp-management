@@ -142,6 +142,85 @@ namespace EMS.Tests
             Assert.Equal(employeeId, result[0].EmployeeId);
         }
 
+        [Fact]
+        public async Task ReimbursementRepository_GetAllForExportAsync_FiltersByEmployeeAndStatus_WithoutPagination()
+        {
+            using var db = CreateDb("ems_export_reimb_" + Guid.NewGuid());
+            var employee = new Employee { Id = Guid.NewGuid(), EmployeeCode = "E1", FirstName = "Ada", LastName = "Lovelace", IsActive = true, JoinDate = DateTime.UtcNow };
+            var otherEmployee = new Employee { Id = Guid.NewGuid(), EmployeeCode = "E2", FirstName = "Bob", LastName = "Smith", IsActive = true, JoinDate = DateTime.UtcNow };
+            db.Employees.AddRange(employee, otherEmployee);
+            db.Reimbursements.AddRange(
+                new Reimbursement { Id = Guid.NewGuid(), ReimbursementNumber = "REI-1", EmployeeId = employee.Id, ExpenseTitle = "Taxi", ExpenseCategory = "Travel", ExpenseDate = DateTime.UtcNow, Amount = 50, Status = ReimbursementStatus.Approved, CreatedAtUtc = DateTime.UtcNow },
+                new Reimbursement { Id = Guid.NewGuid(), ReimbursementNumber = "REI-2", EmployeeId = employee.Id, ExpenseTitle = "Hotel", ExpenseCategory = "Travel", ExpenseDate = DateTime.UtcNow, Amount = 200, Status = ReimbursementStatus.Draft, CreatedAtUtc = DateTime.UtcNow },
+                new Reimbursement { Id = Guid.NewGuid(), ReimbursementNumber = "REI-3", EmployeeId = otherEmployee.Id, ExpenseTitle = "Meal", ExpenseCategory = "Food", ExpenseDate = DateTime.UtcNow, Amount = 20, Status = ReimbursementStatus.Approved, CreatedAtUtc = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+
+            var repo = new ReimbursementRepository(db);
+            var result = (await repo.GetAllForExportAsync(employee.Id, ReimbursementStatus.Approved, CancellationToken.None)).ToList();
+
+            var reimbursement = Assert.Single(result);
+            Assert.Equal("REI-1", reimbursement.ReimbursementNumber);
+        }
+
+        [Fact]
+        public async Task AssetRepository_GetAllForExportAsync_FiltersByStatusCategoryAndSearch_WithoutPagination()
+        {
+            using var db = CreateDb("ems_export_asset_" + Guid.NewGuid());
+            db.Assets.AddRange(
+                new Asset { Id = Guid.NewGuid(), AssetTag = "LAP-001", Category = "Laptop", Status = AssetStatus.Assigned, CreatedAtUtc = DateTime.UtcNow },
+                new Asset { Id = Guid.NewGuid(), AssetTag = "LAP-002", Category = "Laptop", Status = AssetStatus.Available, CreatedAtUtc = DateTime.UtcNow },
+                new Asset { Id = Guid.NewGuid(), AssetTag = "MOB-001", Category = "Mobile", Status = AssetStatus.Assigned, CreatedAtUtc = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+
+            var repo = new AssetRepository(db);
+            var result = (await repo.GetAllForExportAsync(AssetStatus.Assigned, "Laptop", null, CancellationToken.None)).ToList();
+
+            var asset = Assert.Single(result);
+            Assert.Equal("LAP-001", asset.AssetTag);
+        }
+
+        [Fact]
+        public async Task AssetRepository_GetActiveAssignmentsByAssetIdsAsync_ReturnsOnlyActiveAssignmentsWithEmployee()
+        {
+            using var db = CreateDb("ems_export_assetassign_" + Guid.NewGuid());
+            var employee = new Employee { Id = Guid.NewGuid(), EmployeeCode = "E1", FirstName = "Ada", LastName = "Lovelace", IsActive = true, JoinDate = DateTime.UtcNow };
+            var assetA = new Asset { Id = Guid.NewGuid(), AssetTag = "LAP-001", Category = "Laptop", Status = AssetStatus.Assigned, CreatedAtUtc = DateTime.UtcNow };
+            var assetB = new Asset { Id = Guid.NewGuid(), AssetTag = "LAP-002", Category = "Laptop", Status = AssetStatus.Available, CreatedAtUtc = DateTime.UtcNow };
+            db.Employees.Add(employee);
+            db.Assets.AddRange(assetA, assetB);
+            db.AssetAssignments.AddRange(
+                new AssetAssignment { Id = Guid.NewGuid(), AssetId = assetA.Id, EmployeeId = employee.Id, AssignedByUserId = Guid.NewGuid(), AssignedDate = DateTime.UtcNow, CreatedAtUtc = DateTime.UtcNow },
+                new AssetAssignment { Id = Guid.NewGuid(), AssetId = assetB.Id, EmployeeId = employee.Id, AssignedByUserId = Guid.NewGuid(), AssignedDate = DateTime.UtcNow, ReturnedDate = DateTime.UtcNow, CreatedAtUtc = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+
+            var repo = new AssetRepository(db);
+            var result = (await repo.GetActiveAssignmentsByAssetIdsAsync(new[] { assetA.Id, assetB.Id }, CancellationToken.None)).ToList();
+
+            var assignment = Assert.Single(result);
+            Assert.Equal(assetA.Id, assignment.AssetId);
+            Assert.NotNull(assignment.Employee);
+        }
+
+        [Fact]
+        public async Task RecruitmentRepository_GetAllForExportAsync_FiltersByStatusDesignationAndSearch_WithoutPagination()
+        {
+            using var db = CreateDb("ems_export_candidate_" + Guid.NewGuid());
+            var designation = new Designation { Id = Guid.NewGuid(), Name = "Engineer", Code = "ENG", CreatedAtUtc = DateTime.UtcNow };
+            var otherDesignation = new Designation { Id = Guid.NewGuid(), Name = "Sales", Code = "SLS", CreatedAtUtc = DateTime.UtcNow };
+            db.Designations.AddRange(designation, otherDesignation);
+            db.Candidates.AddRange(
+                new Candidate { Id = Guid.NewGuid(), CandidateNumber = "CAN-1", FirstName = "Ada", LastName = "Lovelace", Email = "ada@test.com", DesignationId = designation.Id, AppliedDate = DateTime.UtcNow, Status = CandidateStatus.Screening, CreatedAtUtc = DateTime.UtcNow },
+                new Candidate { Id = Guid.NewGuid(), CandidateNumber = "CAN-2", FirstName = "Bob", LastName = "Smith", Email = "bob@test.com", DesignationId = designation.Id, AppliedDate = DateTime.UtcNow, Status = CandidateStatus.Applied, CreatedAtUtc = DateTime.UtcNow },
+                new Candidate { Id = Guid.NewGuid(), CandidateNumber = "CAN-3", FirstName = "Cara", LastName = "Jones", Email = "cara@test.com", DesignationId = otherDesignation.Id, AppliedDate = DateTime.UtcNow, Status = CandidateStatus.Screening, CreatedAtUtc = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+
+            var repo = new RecruitmentRepository(db);
+            var result = (await repo.GetAllForExportAsync(CandidateStatus.Screening, designation.Id, null, CancellationToken.None)).ToList();
+
+            var candidate = Assert.Single(result);
+            Assert.Equal("CAN-1", candidate.CandidateNumber);
+        }
+
         // ─── Handler tests ──────────────────────────────────────────────────────────
 
         [Fact]
@@ -321,6 +400,119 @@ namespace EMS.Tests
             Assert.Equal(new byte[] { 9, 9, 9 }, result.Content);
         }
 
+        [Fact]
+        public async Task ExportReimbursementsQueryHandler_Handle_NonPrivileged_ScopesToOwnEmployeeRegardlessOfFilter()
+        {
+            var requestingUserId = Guid.NewGuid();
+            var ownEmployeeId = Guid.NewGuid();
+            var otherEmployeeId = Guid.NewGuid();
+
+            var authRepo = new Mock<IAuthRepository>();
+            authRepo.Setup(r => r.GetByIdAsync(requestingUserId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new User { Id = requestingUserId, EmployeeId = ownEmployeeId, UserName = "u", Email = "u@test.com", PasswordHash = "x" });
+
+            Guid? capturedEmployeeId = null;
+            var reimbursementRepo = new Mock<IReimbursementRepository>();
+            reimbursementRepo
+                .Setup(r => r.GetAllForExportAsync(It.IsAny<Guid?>(), null, It.IsAny<CancellationToken>()))
+                .Callback<Guid?, ReimbursementStatus?, CancellationToken>((employeeId, _, _) => capturedEmployeeId = employeeId)
+                .ReturnsAsync(Enumerable.Empty<Reimbursement>());
+
+            var excelService = new Mock<IExcelExportService>();
+            excelService.Setup(s => s.GenerateAsync("Reimbursements", It.IsAny<IReadOnlyList<string>>(), It.IsAny<IEnumerable<IReadOnlyList<object?>>>()))
+                .ReturnsAsync(Array.Empty<byte>());
+
+            var handler = new ExportReimbursementsQueryHandler(reimbursementRepo.Object, authRepo.Object, excelService.Object);
+
+            await handler.Handle(new ExportReimbursementsQuery { IsPrivileged = false, RequestingUserId = requestingUserId, EmployeeId = otherEmployeeId }, CancellationToken.None);
+
+            Assert.Equal(ownEmployeeId, capturedEmployeeId);
+        }
+
+        [Fact]
+        public async Task ExportReimbursementsQueryHandler_Handle_Privileged_UsesRequestedEmployeeFilter()
+        {
+            var otherEmployeeId = Guid.NewGuid();
+            Guid? capturedEmployeeId = null;
+
+            var reimbursementRepo = new Mock<IReimbursementRepository>();
+            reimbursementRepo
+                .Setup(r => r.GetAllForExportAsync(It.IsAny<Guid?>(), null, It.IsAny<CancellationToken>()))
+                .Callback<Guid?, ReimbursementStatus?, CancellationToken>((employeeId, _, _) => capturedEmployeeId = employeeId)
+                .ReturnsAsync(Enumerable.Empty<Reimbursement>());
+
+            var excelService = new Mock<IExcelExportService>();
+            excelService.Setup(s => s.GenerateAsync("Reimbursements", It.IsAny<IReadOnlyList<string>>(), It.IsAny<IEnumerable<IReadOnlyList<object?>>>()))
+                .ReturnsAsync(Array.Empty<byte>());
+
+            var handler = new ExportReimbursementsQueryHandler(reimbursementRepo.Object, Mock.Of<IAuthRepository>(), excelService.Object);
+
+            var result = await handler.Handle(new ExportReimbursementsQuery { IsPrivileged = true, EmployeeId = otherEmployeeId }, CancellationToken.None);
+
+            Assert.Equal(otherEmployeeId, capturedEmployeeId);
+            Assert.StartsWith("reimbursements_", result.FileName);
+        }
+
+        [Fact]
+        public async Task ExportAssetsQueryHandler_Handle_IncludesCurrentAssigneeName()
+        {
+            var asset = new Asset { Id = Guid.NewGuid(), AssetTag = "LAP-001", Category = "Laptop", Status = AssetStatus.Assigned };
+            var employee = new Employee { Id = Guid.NewGuid(), EmployeeCode = "E1", FirstName = "Ada", LastName = "Lovelace", IsActive = true, JoinDate = DateTime.UtcNow };
+            var assignment = new AssetAssignment { Id = Guid.NewGuid(), AssetId = asset.Id, EmployeeId = employee.Id, Employee = employee, AssignedByUserId = Guid.NewGuid(), AssignedDate = DateTime.UtcNow };
+
+            var assetRepo = new Mock<IAssetRepository>();
+            assetRepo.Setup(r => r.GetAllForExportAsync(null, null, null, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { asset });
+            assetRepo.Setup(r => r.GetActiveAssignmentsByAssetIdsAsync(It.Is<IEnumerable<Guid>>(ids => ids.Contains(asset.Id)), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new[] { assignment });
+
+            IEnumerable<IReadOnlyList<object?>>? capturedRows = null;
+            var excelService = new Mock<IExcelExportService>();
+            excelService.Setup(s => s.GenerateAsync("Assets", It.IsAny<IReadOnlyList<string>>(), It.IsAny<IEnumerable<IReadOnlyList<object?>>>()))
+                .Callback<string, IReadOnlyList<string>, IEnumerable<IReadOnlyList<object?>>>((_, _, rows) => capturedRows = rows)
+                .ReturnsAsync(Array.Empty<byte>());
+
+            var handler = new ExportAssetsQueryHandler(assetRepo.Object, excelService.Object);
+
+            var result = await handler.Handle(new ExportAssetsQuery(), CancellationToken.None);
+
+            Assert.StartsWith("assets_", result.FileName);
+            var row = Assert.Single(capturedRows!);
+            Assert.Equal("LAP-001", row[0]);
+            Assert.Equal("Ada Lovelace", row[8]);
+        }
+
+        [Fact]
+        public async Task ExportCandidatesQueryHandler_Handle_GeneratesExcelWithResolvedDesignationAndDepartmentNames()
+        {
+            var designation = new Designation { Id = Guid.NewGuid(), Name = "Engineer", Code = "ENG" };
+            var department = new Department { Id = Guid.NewGuid(), Name = "Engineering" };
+            var candidate = new Candidate
+            {
+                Id = Guid.NewGuid(), CandidateNumber = "CAN-1", FirstName = "Ada", LastName = "Lovelace", Email = "ada@test.com",
+                DesignationId = designation.Id, Designation = designation, DepartmentId = department.Id, Department = department,
+                AppliedDate = DateTime.UtcNow, Status = CandidateStatus.Screening
+            };
+
+            var recruitmentRepo = new Mock<IRecruitmentRepository>();
+            recruitmentRepo.Setup(r => r.GetAllForExportAsync(null, null, null, It.IsAny<CancellationToken>())).ReturnsAsync(new[] { candidate });
+
+            IEnumerable<IReadOnlyList<object?>>? capturedRows = null;
+            var excelService = new Mock<IExcelExportService>();
+            excelService.Setup(s => s.GenerateAsync("Candidates", It.IsAny<IReadOnlyList<string>>(), It.IsAny<IEnumerable<IReadOnlyList<object?>>>()))
+                .Callback<string, IReadOnlyList<string>, IEnumerable<IReadOnlyList<object?>>>((_, _, rows) => capturedRows = rows)
+                .ReturnsAsync(Array.Empty<byte>());
+
+            var handler = new ExportCandidatesQueryHandler(recruitmentRepo.Object, excelService.Object);
+
+            var result = await handler.Handle(new ExportCandidatesQuery(), CancellationToken.None);
+
+            Assert.StartsWith("candidates_", result.FileName);
+            var row = Assert.Single(capturedRows!);
+            Assert.Equal("CAN-1", row[0]);
+            Assert.Equal("Engineer", row[5]);
+            Assert.Equal("Engineering", row[6]);
+        }
+
         // ─── Service tests (real implementations) ──────────────────────────────────
 
         [Fact]
@@ -409,6 +601,62 @@ namespace EMS.Tests
             Assert.Equal(userId, sentQuery!.RequestingUserId);
             Assert.True(sentQuery.IsManager);
             Assert.False(sentQuery.IsAdminOrHr);
+        }
+
+        [Fact]
+        public async Task ExportsController_ExportReimbursements_SetsRequestingUserIdAndPrivilegeFromClaims()
+        {
+            var userId = Guid.NewGuid();
+            ExportReimbursementsQuery? sentQuery = null;
+
+            var mediatorMock = new Mock<IMediator>();
+            mediatorMock.Setup(m => m.Send(It.IsAny<ExportReimbursementsQuery>(), It.IsAny<CancellationToken>()))
+                .Callback<object, CancellationToken>((q, _) => sentQuery = (ExportReimbursementsQuery)q)
+                .ReturnsAsync(new ExportFileResult { Content = Array.Empty<byte>(), ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", FileName = "reimbursements_x.xlsx" });
+
+            var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId.ToString()) };
+            var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth"));
+
+            var controller = new ExportsController(mediatorMock.Object)
+            {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = principal } }
+            };
+
+            await controller.ExportReimbursements(new ExportReimbursementsQuery(), CancellationToken.None);
+
+            Assert.NotNull(sentQuery);
+            Assert.Equal(userId, sentQuery!.RequestingUserId);
+            Assert.False(sentQuery.IsPrivileged);
+        }
+
+        [Fact]
+        public async Task ExportsController_ExportAssets_ReturnsFileResult()
+        {
+            var mediatorMock = new Mock<IMediator>();
+            mediatorMock.Setup(m => m.Send(It.IsAny<ExportAssetsQuery>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ExportFileResult { Content = new byte[] { 1 }, ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", FileName = "assets_x.xlsx" });
+
+            var controller = new ExportsController(mediatorMock.Object);
+
+            var result = await controller.ExportAssets(new ExportAssetsQuery(), CancellationToken.None);
+
+            var fileResult = Assert.IsType<FileContentResult>(result);
+            Assert.Equal("assets_x.xlsx", fileResult.FileDownloadName);
+        }
+
+        [Fact]
+        public async Task ExportsController_ExportCandidates_ReturnsFileResult()
+        {
+            var mediatorMock = new Mock<IMediator>();
+            mediatorMock.Setup(m => m.Send(It.IsAny<ExportCandidatesQuery>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ExportFileResult { Content = new byte[] { 1 }, ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", FileName = "candidates_x.xlsx" });
+
+            var controller = new ExportsController(mediatorMock.Object);
+
+            var result = await controller.ExportCandidates(new ExportCandidatesQuery(), CancellationToken.None);
+
+            var fileResult = Assert.IsType<FileContentResult>(result);
+            Assert.Equal("candidates_x.xlsx", fileResult.FileDownloadName);
         }
 
         // ─── Validator tests ────────────────────────────────────────────────────────

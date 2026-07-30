@@ -22,6 +22,10 @@ namespace EMS.Domain.Entities
 
         /// <summary>Set when the candidate's Accept/Reject response is recorded.</summary>
         public DateTime? RespondedAtUtc { get; set; }
+
+        /// <summary>Optional. When set and still in the past for a Sent offer, the daily sweep
+        /// (RunDailySweepCommand) flips Status to Expired. Offers without one never auto-expire.</summary>
+        public DateTime? ExpiresAtUtc { get; set; }
         public string? Notes { get; set; }
         public string? BlobContainer { get; set; }
         public string? BlobPath { get; set; }

@@ -43,6 +43,7 @@ namespace EMS.Application.Features.Recruitment.Handlers
                 DepartmentId = request.DepartmentId,
                 OfferedSalary = request.OfferedSalary,
                 JoiningDate = request.JoiningDate,
+                ExpiresAtUtc = request.ExpiresAtUtc,
                 Notes = request.Notes,
                 Status = OfferStatus.Draft,
                 CreatedAtUtc = DateTime.UtcNow,

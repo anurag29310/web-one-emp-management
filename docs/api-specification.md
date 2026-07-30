@@ -1213,6 +1213,9 @@ standard error response (`api-specification.md §2.4`).
 | `GET` | `/exports/attendance` | Admin, HR, Manager | Export attendance to Excel |
 | `GET` | `/exports/leave-requests` | Admin, HR, Manager | Export leave requests to Excel |
 | `GET` | `/exports/dashboard-summary` | Admin, HR, Manager | Export dashboard summary to PDF |
+| `GET` | `/exports/reimbursements` | Authenticated (self-scoped) | Export reimbursements to Excel. Non-Admin callers only ever see their own, regardless of filters supplied |
+| `GET` | `/exports/assets` | Admin, HR | Export assets to Excel, including each asset's current assignee |
+| `GET` | `/exports/candidates` | Admin, HR | Export candidates to Excel |
 
 Export endpoints accept the same filters as their list or dashboard endpoints (§5.1, §8.3, §9.2,
 §10.1), scoped to the filters currently implemented by those endpoints.
@@ -1247,6 +1250,24 @@ file name `leave-requests_{yyyyMMddHHmmss}.xlsx`.
 Query parameters: `departmentId`, `officeLocationId`, `date` (same meaning as §10.1).
 
 Response: `200 OK`, `Content-Type: application/pdf`, file name `dashboard-summary_{yyyyMMdd}.pdf`.
+
+### 13.5 Export Reimbursements
+
+Query parameters: `employeeId`, `status` (same meaning as [§22](#22-reimbursement-management-apis)'s `GET /reimbursements` list endpoint). A non-Admin caller is always scoped to their own reimbursements, regardless of any `employeeId` filter supplied — matching the list endpoint's rule exactly.
+
+Response: `200 OK`, `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, file name `reimbursements_{yyyyMMddHHmmss}.xlsx`.
+
+### 13.6 Export Assets
+
+Query parameters: `status`, `category`, `search` (same meaning as §24.1's list endpoint). Each row includes a "Currently Assigned To" column resolved from the asset's active (not yet returned) assignment, if any.
+
+Response: `200 OK`, `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, file name `assets_{yyyyMMddHHmmss}.xlsx`.
+
+### 13.7 Export Candidates
+
+Query parameters: `status`, `designationId`, `search` (same meaning as §23.1's list endpoint).
+
+Response: `200 OK`, `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, file name `candidates_{yyyyMMddHHmmss}.xlsx`.
 
 ## 14. Health And System APIs
 
@@ -1873,9 +1894,12 @@ Create request:
   "departmentId": "00000000-0000-0000-0000-000000000301",
   "offeredSalary": 90000.00,
   "joiningDate": "2026-09-01",
+  "expiresAtUtc": "2026-08-15T00:00:00Z",
   "notes": null
 }
 ```
+
+`expiresAtUtc` is optional and must be in the future when supplied; an offer without one never auto-expires.
 
 Offer response:
 
@@ -1893,13 +1917,14 @@ Offer response:
   "status": "Sent",
   "issuedAtUtc": "2026-07-29T10:00:00Z",
   "respondedAtUtc": null,
+  "expiresAtUtc": "2026-08-15T00:00:00Z",
   "notes": null,
   "hasDocument": true,
   "createdAtUtc": "2026-07-28T09:00:00Z"
 }
 ```
 
-Status values: `Draft`, `Sent`, `Accepted`, `Rejected`, `Withdrawn`, `Expired` (`Expired` is defined but nothing sets it automatically yet — no expiry-date field or background job).
+Status values: `Draft`, `Sent`, `Accepted`, `Rejected`, `Withdrawn`, `Expired`. `Expired` is set automatically: a daily background sweep (see [database-design.md §23](database-design.md#23-background-jobs)) flips any `Sent` offer whose `expiresAtUtc` has passed.
 
 ### 23.4 Onboarding Checklist
 
@@ -2188,7 +2213,7 @@ Status values: `Draft`, `SelfAssessmentSubmitted`, `Completed`, `Cancelled`. The
 | `GET` | `/promotions` | Authenticated (self-scoped) | List promotions — paginated, filterable by `employeeId`/`status`. Employees see their own; Managers see their own and their reports'; Admin/HR see all |
 | `GET` | `/promotions/{id}` | Authenticated (self-scoped) | Get a single promotion |
 | `POST` | `/promotions` | `CanManagePerformance` | Propose a promotion. A Manager may only propose for their own direct reports |
-| `POST` | `/promotions/{id}/approve` | `CanApprovePromotions` | `Proposed` → `Approved` — applies `toDesignationId`/`toDepartmentId` to the employee's record **immediately** (no background job for `effectiveDate` — same "defined but not automated" gap as `Offers.Expired`) |
+| `POST` | `/promotions/{id}/approve` | `CanApprovePromotions` | `Proposed` → `Approved`. Applies `toDesignationId`/`toDepartmentId` to the employee's record immediately if `effectiveDate` has already arrived; otherwise deferred until the daily sweep applies it (see [database-design.md §23](database-design.md#23-background-jobs)) |
 | `POST` | `/promotions/{id}/reject` | `CanApprovePromotions` | `Proposed` → `Rejected` |
 | `POST` | `/promotions/{id}/withdraw` | `CanManagePerformance` | `Proposed` → `Withdrawn` — the proposer pulling it back. Only the original proposer (or Admin/HR) |
 | `DELETE` | `/promotions/{id}` | `CanApprovePromotions` | Soft-delete a promotion record |
@@ -2233,13 +2258,14 @@ Promotion response:
   "decidedByUserId": "00000000-0000-0000-0000-000000000001",
   "decidedAtUtc": "2026-03-20T09:00:00Z",
   "decisionNotes": "Approved effective next cycle.",
+  "appliedAtUtc": "2026-04-01T00:03:00Z",
   "isDeleted": false,
   "createdAtUtc": "2026-03-15T09:00:00Z",
-  "updatedAtUtc": "2026-03-20T09:00:00Z"
+  "updatedAtUtc": "2026-04-01T00:03:00Z"
 }
 ```
 
-Status values: `Proposed`, `Approved`, `Rejected`, `Withdrawn` — all except `Proposed` are terminal. No `PUT` — a proposal's terms are fixed at creation, matching `Offers`.
+Status values: `Proposed`, `Approved`, `Rejected`, `Withdrawn` — all except `Proposed` are terminal. No `PUT` — a proposal's terms are fixed at creation, matching `Offers`. `appliedAtUtc` is separate from `status`: it's `null` on a freshly `Approved` promotion whose `effectiveDate` is still in the future, and gets stamped — by the Approve action itself or, if it had to wait, by the next daily sweep — the moment `toDesignationId`/`toDepartmentId` is actually written to the employee's record.
 
 Business rules enforced: a Manager may only Create/Propose for their own direct reports and must set themselves as reviewer when creating a Review; only the assigned reviewer may submit a manager review or cancel/delete/restore a Review; only the original proposer (or Admin/HR) may Withdraw a Promotion; only Admin/HR may Approve/Reject a Promotion, even though a Manager can Propose one; every create/update/status-change/delete/restore action across Goals, Reviews, and Promotions is written to `AuditLogs`.
 

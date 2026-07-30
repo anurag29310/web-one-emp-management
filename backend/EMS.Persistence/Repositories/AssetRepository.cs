@@ -49,6 +49,11 @@ namespace EMS.Persistence.Repositories
         public async Task<int> CountAsync(AssetStatus? status, string? category, string? search, CancellationToken ct = default) =>
             await BuildFilterQuery(status, category, search).CountAsync(ct);
 
+        public async Task<IEnumerable<Asset>> GetAllForExportAsync(AssetStatus? status, string? category, string? search, CancellationToken ct = default) =>
+            await BuildFilterQuery(status, category, search)
+                .OrderByDescending(a => a.CreatedAtUtc)
+                .ToListAsync(ct);
+
         public async Task<bool> AssetTagExistsAsync(string assetTag, Guid? excludeId = null, CancellationToken ct = default) =>
             await _db.Assets.AnyAsync(a => a.AssetTag == assetTag && (excludeId == null || a.Id != excludeId), ct);
 
@@ -85,6 +90,14 @@ namespace EMS.Persistence.Repositories
 
         public async Task<AssetAssignment?> GetActiveAssignmentByAssetAsync(Guid assetId, CancellationToken ct = default) =>
             await _db.AssetAssignments.FirstOrDefaultAsync(a => a.AssetId == assetId && a.ReturnedDate == null, ct);
+
+        public async Task<IEnumerable<AssetAssignment>> GetActiveAssignmentsByAssetIdsAsync(IEnumerable<Guid> assetIds, CancellationToken ct = default)
+        {
+            var idList = assetIds.ToList();
+            return await _db.AssetAssignments.AsNoTracking().Include(a => a.Employee)
+                .Where(a => idList.Contains(a.AssetId) && a.ReturnedDate == null)
+                .ToListAsync(ct);
+        }
 
         public async Task AddAssignmentAsync(AssetAssignment assignment, CancellationToken ct = default) =>
             await _db.AssetAssignments.AddAsync(assignment, ct);

@@ -24,6 +24,7 @@ namespace EMS.Application.Features.Performance.DTOs
         public Guid? DecidedByUserId { get; set; }
         public DateTime? DecidedAtUtc { get; set; }
         public string? DecisionNotes { get; set; }
+        public DateTime? AppliedAtUtc { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime CreatedAtUtc { get; set; }
         public DateTime? UpdatedAtUtc { get; set; }
@@ -49,6 +50,7 @@ namespace EMS.Application.Features.Performance.DTOs
             DecidedByUserId = p.DecidedByUserId,
             DecidedAtUtc = p.DecidedAtUtc,
             DecisionNotes = p.DecisionNotes,
+            AppliedAtUtc = p.AppliedAtUtc,
             IsDeleted = p.IsDeleted,
             CreatedAtUtc = p.CreatedAtUtc,
             UpdatedAtUtc = p.UpdatedAtUtc

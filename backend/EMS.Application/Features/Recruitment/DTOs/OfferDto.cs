@@ -17,6 +17,7 @@ namespace EMS.Application.Features.Recruitment.DTOs
         public string Status { get; set; } = null!;
         public DateTime? IssuedAtUtc { get; set; }
         public DateTime? RespondedAtUtc { get; set; }
+        public DateTime? ExpiresAtUtc { get; set; }
         public string? Notes { get; set; }
         public bool HasDocument { get; set; }
         public DateTime CreatedAtUtc { get; set; }
@@ -35,6 +36,7 @@ namespace EMS.Application.Features.Recruitment.DTOs
             Status = o.Status.ToString(),
             IssuedAtUtc = o.IssuedAtUtc,
             RespondedAtUtc = o.RespondedAtUtc,
+            ExpiresAtUtc = o.ExpiresAtUtc,
             Notes = o.Notes,
             HasDocument = !string.IsNullOrEmpty(o.BlobContainer) && !string.IsNullOrEmpty(o.BlobPath),
             CreatedAtUtc = o.CreatedAtUtc

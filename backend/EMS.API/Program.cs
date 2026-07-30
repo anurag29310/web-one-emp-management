@@ -61,6 +61,9 @@ builder.Services.AddScoped<EMS.Application.Interfaces.IReimbursementRepository, 
 builder.Services.AddScoped<EMS.Application.Interfaces.IRecruitmentRepository, EMS.Persistence.Repositories.RecruitmentRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IAssetRepository, EMS.Persistence.Repositories.AssetRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IPerformanceRepository, EMS.Persistence.Repositories.PerformanceRepository>();
+
+// Background jobs
+builder.Services.AddHostedService<EMS.Infrastructure.BackgroundJobs.DailySweepHostedService>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IMessagingRepository, EMS.Persistence.Repositories.MessagingRepository>();
 // Payroll services
 builder.Services.AddScoped<EMS.Application.Interfaces.IPayrollRepository, EMS.Persistence.Repositories.PayrollRepository>();

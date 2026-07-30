@@ -31,6 +31,11 @@ namespace EMS.Domain.Entities
         public DateTime? DecidedAtUtc { get; set; }
         public string? DecisionNotes { get; set; }
 
+        /// <summary>Set when the designation/department change is actually applied to the Employee
+        /// row — immediately on Approve if EffectiveDate has already arrived, otherwise left null
+        /// until the daily sweep (RunDailySweepCommand) applies it once EffectiveDate arrives.</summary>
+        public DateTime? AppliedAtUtc { get; set; }
+
         public bool IsDeleted { get; set; }
         public DateTime CreatedAtUtc { get; set; }
         public Guid? CreatedBy { get; set; }

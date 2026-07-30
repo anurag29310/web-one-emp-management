@@ -49,6 +49,11 @@ namespace EMS.Persistence.Repositories
         public async Task<int> CountAsync(Guid? employeeId, ReimbursementStatus? status, CancellationToken ct = default) =>
             await BuildFilterQuery(employeeId, status).CountAsync(ct);
 
+        public async Task<IEnumerable<Reimbursement>> GetAllForExportAsync(Guid? employeeId, ReimbursementStatus? status, CancellationToken ct = default) =>
+            await IncludeRelated(BuildFilterQuery(employeeId, status))
+                .OrderByDescending(r => r.CreatedAtUtc)
+                .ToListAsync(ct);
+
         public async Task AddAsync(Reimbursement reimbursement, CancellationToken ct = default) =>
             await _db.Reimbursements.AddAsync(reimbursement, ct);
 

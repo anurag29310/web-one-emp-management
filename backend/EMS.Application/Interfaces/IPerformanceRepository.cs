@@ -39,6 +39,7 @@ namespace EMS.Application.Interfaces
         Task<Promotion?> GetPromotionByIdIncludingDeletedAsync(Guid id, CancellationToken ct = default);
         Task<IEnumerable<Promotion>> GetPromotionsAsync(int page, int pageSize, Guid? employeeId, PromotionStatus? status, IEnumerable<Guid>? employeeScope, CancellationToken ct = default);
         Task<int> CountPromotionsAsync(Guid? employeeId, PromotionStatus? status, IEnumerable<Guid>? employeeScope, CancellationToken ct = default);
+        Task<IEnumerable<Promotion>> GetApprovedPromotionsDueForApplicationAsync(DateTime asOfUtc, CancellationToken ct = default);
         Task AddPromotionAsync(Promotion promotion, CancellationToken ct = default);
         Task UpdatePromotionAsync(Promotion promotion, CancellationToken ct = default);
         Task DeletePromotionAsync(Promotion promotion, CancellationToken ct = default);

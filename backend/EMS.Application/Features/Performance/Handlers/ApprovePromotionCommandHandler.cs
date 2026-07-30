@@ -9,9 +9,9 @@ using System.Threading.Tasks;
 
 namespace EMS.Application.Features.Performance.Handlers
 {
-    /// <summary>Approving takes effect immediately — the Employee's designation/department is updated
-    /// on approval, not on EffectiveDate. There's no background job to apply it later, matching
-    /// Offer.Expired's precedent of a field that's defined but not automated.</summary>
+    /// <summary>Approving applies the Employee's designation/department change immediately if
+    /// EffectiveDate has already arrived; otherwise the change is deferred and applied later by the
+    /// daily sweep (RunDailySweepCommand) once EffectiveDate arrives — see PromotionApplier.</summary>
     public class ApprovePromotionCommandHandler : IRequestHandler<ApprovePromotionCommand>
     {
         private readonly IPerformanceRepository _repo;
@@ -35,27 +35,27 @@ namespace EMS.Application.Features.Performance.Handlers
             if (promotion.Status != PromotionStatus.Proposed)
                 throw new InvalidOperationException($"Promotion {promotion.PromotionNumber} must be Proposed to approve (currently {promotion.Status}).");
 
-            var employee = await _employeeRepo.GetByIdAsync(promotion.EmployeeId, cancellationToken)
-                ?? throw new InvalidOperationException($"Employee {promotion.EmployeeId} not found.");
-
-            employee.DesignationId = promotion.ToDesignationId;
-            if (promotion.ToDepartmentId.HasValue)
-                employee.DepartmentId = promotion.ToDepartmentId;
-            employee.UpdatedAtUtc = DateTime.UtcNow;
-            await _employeeRepo.UpdateAsync(employee, cancellationToken);
+            var now = DateTime.UtcNow;
 
             promotion.Status = PromotionStatus.Approved;
             promotion.DecidedByUserId = request.RequestingUserId;
-            promotion.DecidedAtUtc = DateTime.UtcNow;
+            promotion.DecidedAtUtc = now;
             promotion.DecisionNotes = request.DecisionNotes;
-            promotion.UpdatedAtUtc = DateTime.UtcNow;
+            promotion.UpdatedAtUtc = now;
             promotion.UpdatedBy = request.RequestingUserId;
+
+            if (promotion.EffectiveDate <= now)
+                await PromotionApplier.ApplyAsync(_employeeRepo, promotion, now, cancellationToken);
+
             await _repo.UpdatePromotionAsync(promotion, cancellationToken);
-
             await _repo.SaveChangesAsync(cancellationToken);
-            _logger.LogInformation("Approved promotion {PromotionId}, employee {EmployeeId} moved to designation {ToDesignationId}", promotion.Id, promotion.EmployeeId, promotion.ToDesignationId);
 
-            await _auditLogger.LogAsync("Promotion", promotion.Id, "Approved", newValues: new { promotion.ToDesignationId, promotion.ToDepartmentId }, ct: cancellationToken);
+            if (promotion.AppliedAtUtc.HasValue)
+                _logger.LogInformation("Approved promotion {PromotionId}, employee {EmployeeId} moved to designation {ToDesignationId}", promotion.Id, promotion.EmployeeId, promotion.ToDesignationId);
+            else
+                _logger.LogInformation("Approved promotion {PromotionId} for employee {EmployeeId}; deferred until EffectiveDate {EffectiveDate}", promotion.Id, promotion.EmployeeId, promotion.EffectiveDate);
+
+            await _auditLogger.LogAsync("Promotion", promotion.Id, "Approved", newValues: new { promotion.ToDesignationId, promotion.ToDepartmentId, Deferred = !promotion.AppliedAtUtc.HasValue }, ct: cancellationToken);
         }
     }
 }
