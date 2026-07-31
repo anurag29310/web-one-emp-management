@@ -257,7 +257,12 @@ Unique constraint: `DepartmentId`, `Code`.
 | `State` | `varchar(100)` | Nullable |
 | `Country` | `varchar(100)` | Required |
 | `TimeZoneId` | `varchar(100)` | Required |
+| `Latitude` | `decimal(9,6)` | Nullable |
+| `Longitude` | `decimal(9,6)` | Nullable |
+| `GeofenceRadiusMeters` | `integer` | Nullable |
 | Audit fields | Shared | Include audit and soft delete fields |
+
+Office Geofencing ("restricting Punch In outside a configurable radius", requirements.md's GPS & Location Tracking planned enhancement — see §6): `Latitude`/`Longitude`/`GeofenceRadiusMeters` are nullable and only enforced as a group — geofencing is off for an office until all three are deliberately set (`CreateOfficeLocationCommandValidator`/`UpdateOfficeLocationCommandValidator` reject a partially-set combination). This keeps every existing office ungeofenced by default and lets Admin/HR opt individual offices in.
 
 ### 5.6 EmployeeDocuments
 
@@ -331,7 +336,9 @@ Stores metadata for files stored in Azure Blob Storage.
 
 Unique constraint: `EmployeeId`, `AttendanceDate`.
 
-> **Implementation note (GPS & Location Tracking):** see [requirements.md](requirements.md#gps--location-tracking-planned-enhancement) for the source requirement. Check-in and check-out locations are stored as two independent column groups rather than one shared set, since an employee's punch-out location (e.g. a client site) is frequently different from their punch-in location (the office) and both must remain independently visible to Admin. Reverse geocoding uses Nominatim/OpenStreetMap (`IGeocodingService` / `NominatimGeocodingService`, configured under `Geocoding:BaseUrl`/`Geocoding:UserAgent`) — free, no API key, but a geocoding failure or timeout never blocks a punch; `Latitude`/`Longitude` are always saved and `Address` is simply left `null`. Office geofencing (rejecting a Punch In outside a configurable radius) is explicitly out of scope here — requirements.md lists it as a future "Nice To Have", not part of this pass.
+> **Implementation note (GPS & Location Tracking):** see [requirements.md](requirements.md#gps--location-tracking-planned-enhancement) for the source requirement. Check-in and check-out locations are stored as two independent column groups rather than one shared set, since an employee's punch-out location (e.g. a client site) is frequently different from their punch-in location (the office) and both must remain independently visible to Admin. Reverse geocoding uses Nominatim/OpenStreetMap (`IGeocodingService` / `NominatimGeocodingService`, configured under `Geocoding:BaseUrl`/`Geocoding:UserAgent`) — free, no API key, but a geocoding failure or timeout never blocks a punch; `Latitude`/`Longitude` are always saved and `Address` is simply left `null`.
+>
+> **Office Geofencing:** enforced on Check In only — Check Out is never geofenced, since Punch Out may legitimately happen off-premises. `CheckInCommandHandler` resolves the employee's `OfficeLocationId` and, only when that office has `Latitude`/`Longitude`/`GeofenceRadiusMeters` all configured (§5.5), rejects the punch with a `409`-equivalent error if the supplied coordinates fall outside the radius (great-circle distance via `GeofenceCalculator`, a pure local Haversine calculation — no external service, unlike reverse geocoding). An office with any of the three left unset is never geofenced, so this is fully opt-in per office.
 
 ### 6.4 AttendanceCorrections
 
@@ -955,10 +962,12 @@ See [requirements.md](requirements.md#expense-management-employee-reimbursement-
 | `ExpenseTitle` | `varchar(200)` | Required |
 | `ExpenseCategory` | `varchar(100)` | Required. Free text — requirements.md doesn't enumerate a fixed category list (unlike Leave Types), so this isn't an enum |
 | `ExpenseDate` | `timestamptz` | Required. Cannot be in the future |
-| `Amount` | `decimal(18,2)` | Required, must be `> 0` |
+| `Amount` | `decimal(18,2)` | Required, must be `> 0`. For a mileage claim (`DistanceKm` set), computed server-side rather than client-supplied — see below |
 | `Currency` | `varchar(10)` | Required, default `USD`. Free text, not validated against an ISO 4217 list |
 | `Description` | `varchar(2000)` | Nullable |
 | `Notes` | `varchar(1000)` | Nullable |
+| `DistanceKm` | `decimal(10,2)` | Nullable. Set only for a Mileage Reimbursement claim; required to be `> 0` when present |
+| `MileageRatePerKm` | `decimal(10,4)` | Nullable. The rate in effect at submission/edit time, frozen onto the row so a later rate change never retroactively alters an already-submitted claim |
 | `Status` | `varchar(20)` | Required, default `Draft`. `Draft`, `Submitted`, `UnderReview`, `Approved`, `Rejected`, `ChangesRequested`, `Paid` — matches the workflow diagram in requirements.md exactly, including the `UnderReview` step between `Submitted` and the approve/reject/changes-requested branch |
 | `SubmittedAtUtc` | `timestamptz` | Nullable. Set when `Status` becomes `Submitted` |
 | `ApprovedAtUtc` | `timestamptz` | Nullable. Set when `Status` becomes `Approved` |
@@ -970,6 +979,8 @@ See [requirements.md](requirements.md#expense-management-employee-reimbursement-
 | Audit fields | Shared | Include audit and soft delete fields — "Delete Draft reimbursement" is a real action here (unlike Tasks), so soft delete applies |
 
 Business rules enforced in the application layer, not the schema: an employee cannot approve their own reimbursement (checked against the reviewer's own `EmployeeId`, regardless of role); edits are only accepted while `Draft` or `ChangesRequested`; delete is only accepted while `Draft`; review actions (`start-review`/`approve`/`reject`/`request-changes`) all require `UnderReview` except `start-review` itself, which requires `Submitted`.
+
+**Mileage Reimbursement:** modeled as two additional nullable columns on the same table rather than a separate claim type, matching this schema's existing "one flat table covers it" precedent (§18 header note above the `Reimbursements` table). Submitting a claim with `distanceKm` set marks it as mileage-based: `Amount` is always computed server-side as `DistanceKm * MileageRatePerKm` (rounded to 2 decimal places) and any client-supplied `amount` is ignored — this prevents an employee from self-reporting an inflated rate. `MileageRatePerKm` itself is never client-suppliable; it's resolved from the `Reimbursements:MileageRatePerKm` configuration value (`appsettings.json`, matching `Payroll:StandardMonthlyHours`'s precedent for a configurable business constant — no dedicated rate-management table or admin UI exists for it) and stamped onto the row at Create/Update time, so the historical claim keeps the rate that was actually applied even after the configured rate later changes.
 
 ### 18.2 ReimbursementAttachments
 

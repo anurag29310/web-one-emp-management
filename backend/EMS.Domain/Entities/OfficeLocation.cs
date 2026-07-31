@@ -14,6 +14,12 @@ namespace EMS.Domain.Entities
         public string Country { get; set; } = null!;
         public string TimeZoneId { get; set; } = null!;
 
+        /// <summary>Office coordinates + allowed Punch In radius. Geofencing is only enforced when all
+        /// three are set — nullable so existing/new offices aren't geofenced until deliberately configured.</summary>
+        public decimal? Latitude { get; set; }
+        public decimal? Longitude { get; set; }
+        public int? GeofenceRadiusMeters { get; set; }
+
         public bool IsDeleted { get; set; }
         public DateTime CreatedAtUtc { get; set; }
         public Guid? CreatedBy { get; set; }

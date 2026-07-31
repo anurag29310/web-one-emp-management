@@ -93,7 +93,7 @@ namespace EMS.Tests
             var repo = new ReimbursementRepository(db);
             var userId = Guid.NewGuid();
             var authRepo = AuthRepoFor(userId, employeeId).Object;
-            var handler = new CreateReimbursementCommandHandler(repo, authRepo, new RecordingAuditLogger(), NullLogger<CreateReimbursementCommandHandler>.Instance);
+            var handler = new CreateReimbursementCommandHandler(repo, authRepo, new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<CreateReimbursementCommandHandler>.Instance);
 
             var created = await handler.Handle(ValidCreateCommand(userId), CancellationToken.None);
 
@@ -110,8 +110,8 @@ namespace EMS.Tests
             var repo = new ReimbursementRepository(db);
             var ownerUserId = Guid.NewGuid();
             var ownerAuthRepo = AuthRepoFor(ownerUserId, employeeId).Object;
-            var createHandler = new CreateReimbursementCommandHandler(repo, ownerAuthRepo, new RecordingAuditLogger(), NullLogger<CreateReimbursementCommandHandler>.Instance);
-            var updateHandler = new UpdateReimbursementCommandHandler(repo, ownerAuthRepo, new RecordingAuditLogger(), NullLogger<UpdateReimbursementCommandHandler>.Instance);
+            var createHandler = new CreateReimbursementCommandHandler(repo, ownerAuthRepo, new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<CreateReimbursementCommandHandler>.Instance);
+            var updateHandler = new UpdateReimbursementCommandHandler(repo, ownerAuthRepo, new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<UpdateReimbursementCommandHandler>.Instance);
 
             var created = await createHandler.Handle(ValidCreateCommand(ownerUserId), CancellationToken.None);
 
@@ -129,7 +129,7 @@ namespace EMS.Tests
 
             var otherUserId = Guid.NewGuid();
             var otherAuthRepo = AuthRepoFor(otherUserId, Guid.NewGuid()).Object;
-            var updateHandlerAsOther = new UpdateReimbursementCommandHandler(repo, otherAuthRepo, new RecordingAuditLogger(), NullLogger<UpdateReimbursementCommandHandler>.Instance);
+            var updateHandlerAsOther = new UpdateReimbursementCommandHandler(repo, otherAuthRepo, new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<UpdateReimbursementCommandHandler>.Instance);
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
                 updateHandlerAsOther.Handle(new UpdateReimbursementCommand { Id = created.Id, ExpenseTitle = "Hijack", ExpenseCategory = "Meals", ExpenseDate = created.ExpenseDate, Amount = 1m, Currency = "USD", RequestingUserId = otherUserId }, CancellationToken.None));
 
@@ -150,7 +150,7 @@ namespace EMS.Tests
             var repo = new ReimbursementRepository(db);
             var userId = Guid.NewGuid();
             var authRepo = AuthRepoFor(userId, employeeId).Object;
-            var createHandler = new CreateReimbursementCommandHandler(repo, authRepo, new RecordingAuditLogger(), NullLogger<CreateReimbursementCommandHandler>.Instance);
+            var createHandler = new CreateReimbursementCommandHandler(repo, authRepo, new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<CreateReimbursementCommandHandler>.Instance);
             var submitHandler = new SubmitReimbursementCommandHandler(repo, authRepo, new RecordingAuditLogger(), NullLogger<SubmitReimbursementCommandHandler>.Instance);
 
             var created = await createHandler.Handle(ValidCreateCommand(userId), CancellationToken.None);
@@ -172,7 +172,7 @@ namespace EMS.Tests
             var repo = new ReimbursementRepository(db);
             var userId = Guid.NewGuid();
             var authRepo = AuthRepoFor(userId, employeeId).Object;
-            var createHandler = new CreateReimbursementCommandHandler(repo, authRepo, new RecordingAuditLogger(), NullLogger<CreateReimbursementCommandHandler>.Instance);
+            var createHandler = new CreateReimbursementCommandHandler(repo, authRepo, new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<CreateReimbursementCommandHandler>.Instance);
             var deleteHandler = new DeleteReimbursementCommandHandler(repo, authRepo, new RecordingAuditLogger(), NullLogger<DeleteReimbursementCommandHandler>.Instance);
 
             var created = await createHandler.Handle(ValidCreateCommand(userId), CancellationToken.None);
@@ -192,7 +192,7 @@ namespace EMS.Tests
             var repo = new ReimbursementRepository(db);
             var ownerUserId = Guid.NewGuid();
             var ownerAuthRepo = AuthRepoFor(ownerUserId, employeeId).Object;
-            var createHandler = new CreateReimbursementCommandHandler(repo, ownerAuthRepo, new RecordingAuditLogger(), NullLogger<CreateReimbursementCommandHandler>.Instance);
+            var createHandler = new CreateReimbursementCommandHandler(repo, ownerAuthRepo, new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<CreateReimbursementCommandHandler>.Instance);
             var submitHandler = new SubmitReimbursementCommandHandler(repo, ownerAuthRepo, new RecordingAuditLogger(), NullLogger<SubmitReimbursementCommandHandler>.Instance);
             var startReviewHandler = new StartReviewReimbursementCommandHandler(repo, new RecordingAuditLogger(), NullLogger<StartReviewReimbursementCommandHandler>.Instance);
 
@@ -230,7 +230,7 @@ namespace EMS.Tests
             var adminUserId = Guid.NewGuid();
             var adminAuthRepo = AuthRepoFor(adminUserId, Guid.NewGuid()).Object;
 
-            var createHandler = new CreateReimbursementCommandHandler(repo, ownerAuthRepo, new RecordingAuditLogger(), NullLogger<CreateReimbursementCommandHandler>.Instance);
+            var createHandler = new CreateReimbursementCommandHandler(repo, ownerAuthRepo, new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<CreateReimbursementCommandHandler>.Instance);
             var submitHandler = new SubmitReimbursementCommandHandler(repo, ownerAuthRepo, new RecordingAuditLogger(), NullLogger<SubmitReimbursementCommandHandler>.Instance);
             var startReviewHandler = new StartReviewReimbursementCommandHandler(repo, new RecordingAuditLogger(), NullLogger<StartReviewReimbursementCommandHandler>.Instance);
             var rejectHandler = new RejectReimbursementCommandHandler(repo, adminAuthRepo, new RecordingAuditLogger(), NullLogger<RejectReimbursementCommandHandler>.Instance);
@@ -254,7 +254,7 @@ namespace EMS.Tests
             Assert.Equal(ReimbursementStatus.ChangesRequested, revised!.Status);
 
             // ChangesRequested can be edited and resubmitted, closing the loop.
-            var updateHandler = new UpdateReimbursementCommandHandler(repo, ownerAuthRepo, new RecordingAuditLogger(), NullLogger<UpdateReimbursementCommandHandler>.Instance);
+            var updateHandler = new UpdateReimbursementCommandHandler(repo, ownerAuthRepo, new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<UpdateReimbursementCommandHandler>.Instance);
             await updateHandler.Handle(new UpdateReimbursementCommand { Id = toRevise.Id, ExpenseTitle = "Fixed", ExpenseCategory = "Travel", ExpenseDate = toRevise.ExpenseDate, Amount = 200m, Currency = "USD", RequestingUserId = ownerUserId }, CancellationToken.None);
             await submitHandler.Handle(new SubmitReimbursementCommand { Id = toRevise.Id, RequestingUserId = ownerUserId }, CancellationToken.None);
             Assert.Equal(ReimbursementStatus.Submitted, (await repo.GetByIdAsync(toRevise.Id, CancellationToken.None))!.Status);
@@ -269,8 +269,8 @@ namespace EMS.Tests
             var repo = new ReimbursementRepository(db);
             var userAId = Guid.NewGuid();
             var userBId = Guid.NewGuid();
-            var createHandlerA = new CreateReimbursementCommandHandler(repo, AuthRepoFor(userAId, employeeAId).Object, new RecordingAuditLogger(), NullLogger<CreateReimbursementCommandHandler>.Instance);
-            var createHandlerB = new CreateReimbursementCommandHandler(repo, AuthRepoFor(userBId, employeeBId).Object, new RecordingAuditLogger(), NullLogger<CreateReimbursementCommandHandler>.Instance);
+            var createHandlerA = new CreateReimbursementCommandHandler(repo, AuthRepoFor(userAId, employeeAId).Object, new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<CreateReimbursementCommandHandler>.Instance);
+            var createHandlerB = new CreateReimbursementCommandHandler(repo, AuthRepoFor(userBId, employeeBId).Object, new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<CreateReimbursementCommandHandler>.Instance);
 
             await createHandlerA.Handle(ValidCreateCommand(userAId), CancellationToken.None);
             await createHandlerB.Handle(ValidCreateCommand(userBId), CancellationToken.None);
@@ -360,6 +360,135 @@ namespace EMS.Tests
             Assert.Equal(0m, secondPayslip.TotalReimbursements);
 
             try { Directory.Delete(tempBase, true); } catch { }
+        }
+
+        // ─── Mileage Reimbursement ─────────────────────────────────────────────────
+
+        [Fact]
+        public async Task CreateReimbursement_MileageClaim_ComputesAmountFromDistanceAndConfiguredRate()
+        {
+            using var db = CreateDb();
+            var employeeId = await SeedEmployeeAsync(db);
+            var repo = new ReimbursementRepository(db);
+            var userId = Guid.NewGuid();
+            var authRepo = AuthRepoFor(userId, employeeId).Object;
+            var config = new ConfigurationBuilder().AddInMemoryCollection(new System.Collections.Generic.Dictionary<string, string?>
+            {
+                ["Reimbursements:MileageRatePerKm"] = "0.50"
+            }).Build();
+            var handler = new CreateReimbursementCommandHandler(repo, authRepo, new RecordingAuditLogger(), config, NullLogger<CreateReimbursementCommandHandler>.Instance);
+
+            var command = ValidCreateCommand(userId);
+            command.Amount = 999m; // deliberately wrong — must be ignored and recomputed for a mileage claim
+            command.DistanceKm = 40m;
+
+            var created = await handler.Handle(command, CancellationToken.None);
+
+            Assert.Equal(40m, created.DistanceKm);
+            Assert.Equal(0.50m, created.MileageRatePerKm);
+            Assert.Equal(20.00m, created.Amount); // 40km * 0.50/km
+        }
+
+        [Fact]
+        public async Task CreateReimbursement_NonMileageClaim_UsesClientSuppliedAmountUnchanged()
+        {
+            using var db = CreateDb();
+            var employeeId = await SeedEmployeeAsync(db);
+            var repo = new ReimbursementRepository(db);
+            var userId = Guid.NewGuid();
+            var authRepo = AuthRepoFor(userId, employeeId).Object;
+            var handler = new CreateReimbursementCommandHandler(repo, authRepo, new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<CreateReimbursementCommandHandler>.Instance);
+
+            var created = await handler.Handle(ValidCreateCommand(userId), CancellationToken.None);
+
+            Assert.Null(created.DistanceKm);
+            Assert.Null(created.MileageRatePerKm);
+            Assert.Equal(120.50m, created.Amount);
+        }
+
+        [Fact]
+        public async Task UpdateReimbursement_MileageClaim_RecomputesAmountFromNewDistanceAndCurrentRate()
+        {
+            using var db = CreateDb();
+            var employeeId = await SeedEmployeeAsync(db);
+            var repo = new ReimbursementRepository(db);
+            var userId = Guid.NewGuid();
+            var authRepo = AuthRepoFor(userId, employeeId).Object;
+            var createConfig = new ConfigurationBuilder().AddInMemoryCollection(new System.Collections.Generic.Dictionary<string, string?>
+            {
+                ["Reimbursements:MileageRatePerKm"] = "0.50"
+            }).Build();
+            var createHandler = new CreateReimbursementCommandHandler(repo, authRepo, new RecordingAuditLogger(), createConfig, NullLogger<CreateReimbursementCommandHandler>.Instance);
+            var created = await createHandler.Handle(new CreateReimbursementCommand
+            {
+                ExpenseTitle = "Client site visit",
+                ExpenseCategory = "Mileage",
+                ExpenseDate = DateTime.UtcNow.Date,
+                Currency = "USD",
+                DistanceKm = 40m,
+                RequestingUserId = userId
+            }, CancellationToken.None);
+            Assert.Equal(20.00m, created.Amount);
+
+            // Rate changes between submission and edit — the update should use the new current rate,
+            // not the one frozen on the original claim.
+            var updateConfig = new ConfigurationBuilder().AddInMemoryCollection(new System.Collections.Generic.Dictionary<string, string?>
+            {
+                ["Reimbursements:MileageRatePerKm"] = "0.60"
+            }).Build();
+            var updateHandler = new UpdateReimbursementCommandHandler(repo, authRepo, new RecordingAuditLogger(), updateConfig, NullLogger<UpdateReimbursementCommandHandler>.Instance);
+
+            var updated = await updateHandler.Handle(new UpdateReimbursementCommand
+            {
+                Id = created.Id,
+                ExpenseTitle = created.ExpenseTitle,
+                ExpenseCategory = created.ExpenseCategory,
+                ExpenseDate = created.ExpenseDate,
+                Currency = created.Currency,
+                DistanceKm = 50m,
+                RequestingUserId = userId
+            }, CancellationToken.None);
+
+            Assert.Equal(50m, updated.DistanceKm);
+            Assert.Equal(0.60m, updated.MileageRatePerKm);
+            Assert.Equal(30.00m, updated.Amount); // 50km * 0.60/km
+        }
+
+        [Fact]
+        public async Task CreateReimbursementCommandValidator_MileageClaim_DoesNotRequireAmount()
+        {
+            var validator = new CreateReimbursementCommandValidator();
+
+            var result = await validator.ValidateAsync(new CreateReimbursementCommand
+            {
+                ExpenseTitle = "Client site visit",
+                ExpenseCategory = "Mileage",
+                ExpenseDate = DateTime.UtcNow.Date,
+                Currency = "USD",
+                DistanceKm = 40m,
+                RequestingUserId = Guid.NewGuid()
+                // Amount deliberately omitted (defaults to 0) — must not fail validation for a mileage claim.
+            });
+
+            Assert.DoesNotContain(result.Errors, e => e.PropertyName == "Amount");
+        }
+
+        [Fact]
+        public async Task CreateReimbursementCommandValidator_MileageClaim_RejectsNonPositiveDistance()
+        {
+            var validator = new CreateReimbursementCommandValidator();
+
+            var result = await validator.ValidateAsync(new CreateReimbursementCommand
+            {
+                ExpenseTitle = "Client site visit",
+                ExpenseCategory = "Mileage",
+                ExpenseDate = DateTime.UtcNow.Date,
+                Currency = "USD",
+                DistanceKm = 0m,
+                RequestingUserId = Guid.NewGuid()
+            });
+
+            Assert.Contains(result.Errors, e => e.PropertyName == "DistanceKm");
         }
     }
 }

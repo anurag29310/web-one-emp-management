@@ -108,7 +108,7 @@ Each attendance record shall additionally store:
 
 Business rules:
 
-* Punch In should normally originate from company premises. Office geofencing with a configurable radius, and restricting Punch In outside that radius, is a future enhancement (see Nice To Have).
+* Punch In should normally originate from company premises. Office Geofencing: each office location may configure a Latitude/Longitude/radius; when configured, Punch In is rejected outside that radius. Geofencing is opt-in per office — an office with no radius configured is never restricted.
 * Punch Out may occur outside the office when business requires it (client visit, field work, travel). Punch Out location must always be recorded regardless of where it happens.
 * Location data shall be visible to Admin on attendance records.
 
@@ -442,6 +442,10 @@ Each reimbursement shall contain:
 * Payroll Processed Flag
 * Payroll Date
 
+### Mileage Reimbursement
+
+An employee may submit a mileage-based claim instead of a flat amount by supplying a distance (km) instead of an amount. The reimbursement amount is then calculated automatically as distance × the configured per-km mileage rate, rather than entered by the employee — preventing self-reported inflation of the rate. The rate applied is recorded on the claim itself so a later rate change never retroactively changes an already-submitted claim.
+
 ### Attachment Support
 
 Allowed types: PDF, JPG, JPEG, PNG. Multiple attachments per reimbursement are supported.
@@ -539,9 +543,7 @@ The system shall record, for auditable entities (including Reimbursements, Clien
 * Slack Integration
 * Teams Integration
 * ERP Integration (incl. Payroll ERP sync)
-* Office Geofencing (configurable radius, restrict Punch In outside office)
 * Route Optimization
-* Mileage Reimbursement
 * Expense Policy Validation
 * OCR Receipt Scanning
 * Digital Approval Workflow

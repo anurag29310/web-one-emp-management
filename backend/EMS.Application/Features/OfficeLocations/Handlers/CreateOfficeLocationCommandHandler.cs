@@ -37,6 +37,9 @@ namespace EMS.Application.Features.OfficeLocations.Handlers
                 State = request.State,
                 Country = request.Country,
                 TimeZoneId = request.TimeZoneId,
+                Latitude = request.Latitude,
+                Longitude = request.Longitude,
+                GeofenceRadiusMeters = request.GeofenceRadiusMeters,
                 CreatedAtUtc = DateTime.UtcNow,
                 CreatedBy = _currentUser.UserId,
                 IsDeleted = false

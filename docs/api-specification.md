@@ -849,6 +849,8 @@ Department request:
 | `PUT` | `/office-locations/{id}` | Admin, HR | Update office location |
 | `DELETE` | `/office-locations/{id}` | Admin, HR | Soft delete office location |
 
+Create/update request body accepts an optional geofence: `{ "name": "...", "code": "...", "city": "...", "country": "...", "timeZoneId": "...", "latitude": 12.9716, "longitude": 77.5946, "geofenceRadiusMeters": 500 }`. `latitude`/`longitude`/`geofenceRadiusMeters` must be either all supplied together or all omitted — rejected with `400` if only some are set. Omitting all three leaves the office ungeofenced (the default for every existing office). See [database-design.md §5.5](database-design.md#55-officelocations) and [§8.1](#81-check-in)'s geofencing behavior.
+
 ## 8. Attendance APIs
 
 ### 8.1 Check In
@@ -873,7 +875,9 @@ Request:
 
 Employees can check in only for themselves. Admin and HR can record on behalf of an employee.
 
-GPS & Location Tracking (see [requirements.md](requirements.md#gps--location-tracking-planned-enhancement) and [database-design.md §6.3](database-design.md#63-attendancerecords)): `latitude`/`longitude` are required — captured by the client's Geolocation API and validated to `[-90, 90]`/`[-180, 180]`. `deviceInfo` and `ipAddress` are **not** part of the request body; the server derives them from the `User-Agent` header and the connection's remote IP respectively, and reverse-geocodes the coordinates into a human-readable `checkInAddress` (best-effort — a geocoding provider outage never blocks the check-in; the address is simply omitted). Office geofencing (rejecting a check-in outside a configurable radius) is a future enhancement, not enforced here.
+GPS & Location Tracking (see [requirements.md](requirements.md#gps--location-tracking-planned-enhancement) and [database-design.md §6.3](database-design.md#63-attendancerecords)): `latitude`/`longitude` are required — captured by the client's Geolocation API and validated to `[-90, 90]`/`[-180, 180]`. `deviceInfo` and `ipAddress` are **not** part of the request body; the server derives them from the `User-Agent` header and the connection's remote IP respectively, and reverse-geocodes the coordinates into a human-readable `checkInAddress` (best-effort — a geocoding provider outage never blocks the check-in; the address is simply omitted).
+
+**Office Geofencing:** enforced only when the employee's office location has `latitude`/`longitude`/`geofenceRadiusMeters` all configured ([§7.4](#74-office-locations)). If configured and `latitude`/`longitude` fall outside the radius, the check-in is rejected with `409` (`{ "code": "CONFLICT", "message": "Punch In must originate within {radius}m of {office}." }`) — the record is never created. Check Out is never geofenced (see §8.2) — Punch Out may legitimately happen off-premises.
 
 ### 8.2 Check Out
 
@@ -1728,11 +1732,14 @@ Create/update request body:
   "amount": 120.50,
   "currency": "USD",
   "description": "Dinner with Acme Retail's finance team.",
-  "notes": null
+  "notes": null,
+  "distanceKm": null
 }
 ```
 
-`expenseDate` cannot be in the future. `amount` must be greater than `0`. `currency` is free text (not validated against ISO 4217), defaulting to `USD`. `expenseCategory` is free text — requirements.md doesn't enumerate a fixed category list.
+`expenseDate` cannot be in the future. `amount` must be greater than `0`, **unless** `distanceKm` is set. `currency` is free text (not validated against ISO 4217), defaulting to `USD`. `expenseCategory` is free text — requirements.md doesn't enumerate a fixed category list.
+
+**Mileage Reimbursement:** set `distanceKm` (must be `> 0`) to submit a mileage claim instead of a flat-amount one — `amount` is then computed server-side as `distanceKm * `the current configured rate (`Reimbursements:MileageRatePerKm`) and any `amount` supplied in the request is ignored. Example mileage request: `{ "expenseTitle": "Client site visit", "expenseCategory": "Mileage", "expenseDate": "2026-07-24T00:00:00Z", "currency": "USD", "distanceKm": 40 }`.
 
 Reimbursement response:
 
@@ -1749,6 +1756,8 @@ Reimbursement response:
   "currency": "USD",
   "description": "Dinner with Acme Retail's finance team.",
   "notes": null,
+  "distanceKm": null,
+  "mileageRatePerKm": null,
   "status": "Submitted",
   "submittedAtUtc": "2026-07-26T09:00:00Z",
   "approvedAtUtc": null,

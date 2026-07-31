@@ -188,6 +188,24 @@ const NotificationsPage = lazy(() =>
     default: m.NotificationsPage,
   })),
 )
+const AssetListPage = lazy(() =>
+  import('@/app/features/assets/pages/AssetListPage').then((m) => ({ default: m.AssetListPage })),
+)
+const AssetDetailPage = lazy(() =>
+  import('@/app/features/assets/pages/AssetDetailPage').then((m) => ({ default: m.AssetDetailPage })),
+)
+const ClientListPage = lazy(() =>
+  import('@/app/features/clients/pages/ClientListPage').then((m) => ({ default: m.ClientListPage })),
+)
+const ClientDetailPage = lazy(() =>
+  import('@/app/features/clients/pages/ClientDetailPage').then((m) => ({ default: m.ClientDetailPage })),
+)
+const TaskListPage = lazy(() =>
+  import('@/app/features/tasks/pages/TaskListPage').then((m) => ({ default: m.TaskListPage })),
+)
+const TaskDetailPage = lazy(() =>
+  import('@/app/features/tasks/pages/TaskDetailPage').then((m) => ({ default: m.TaskDetailPage })),
+)
 
 function PageFallback() {
   return <div className="min-h-screen bg-canvas p-6 text-sm text-ink-subtle">Loading…</div>
@@ -243,6 +261,12 @@ export function AppRouter() {
               <Route path="/audit-logs" element={<AuditLogListPage />} />
               <Route path="/announcements" element={<AnnouncementListPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/assets" element={<AssetListPage />} />
+              <Route path="/assets/:id" element={<AssetDetailPage />} />
+              <Route path="/clients" element={<ClientListPage />} />
+              <Route path="/clients/:id" element={<ClientDetailPage />} />
+              <Route path="/tasks" element={<TaskListPage />} />
+              <Route path="/tasks/:id" element={<TaskDetailPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>
           </Route>

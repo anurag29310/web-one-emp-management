@@ -18,6 +18,8 @@ namespace EMS.Persistence.Configurations
             builder.Property(o => o.State).HasMaxLength(100);
             builder.Property(o => o.Country).IsRequired().HasMaxLength(100);
             builder.Property(o => o.TimeZoneId).IsRequired().HasMaxLength(100);
+            builder.Property(o => o.Latitude).HasColumnType("decimal(9,6)");
+            builder.Property(o => o.Longitude).HasColumnType("decimal(9,6)");
 
             builder.HasIndex(o => o.Code).IsUnique();
 

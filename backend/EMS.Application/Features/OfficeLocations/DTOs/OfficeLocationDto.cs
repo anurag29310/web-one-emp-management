@@ -14,6 +14,9 @@ namespace EMS.Application.Features.OfficeLocations.DTOs
         public string? State { get; set; }
         public string Country { get; set; } = null!;
         public string TimeZoneId { get; set; } = null!;
+        public decimal? Latitude { get; set; }
+        public decimal? Longitude { get; set; }
+        public int? GeofenceRadiusMeters { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime CreatedAtUtc { get; set; }
         public DateTime? UpdatedAtUtc { get; set; }
@@ -29,6 +32,9 @@ namespace EMS.Application.Features.OfficeLocations.DTOs
             State = o.State,
             Country = o.Country,
             TimeZoneId = o.TimeZoneId,
+            Latitude = o.Latitude,
+            Longitude = o.Longitude,
+            GeofenceRadiusMeters = o.GeofenceRadiusMeters,
             IsDeleted = o.IsDeleted,
             CreatedAtUtc = o.CreatedAtUtc,
             UpdatedAtUtc = o.UpdatedAtUtc

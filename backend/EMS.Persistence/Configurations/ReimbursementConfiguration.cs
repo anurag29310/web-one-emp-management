@@ -14,6 +14,8 @@ namespace EMS.Persistence.Configurations
             builder.Property(r => r.ExpenseTitle).IsRequired().HasMaxLength(200);
             builder.Property(r => r.ExpenseCategory).IsRequired().HasMaxLength(100);
             builder.Property(r => r.Amount).HasColumnType("decimal(18,2)").IsRequired();
+            builder.Property(r => r.DistanceKm).HasColumnType("decimal(10,2)");
+            builder.Property(r => r.MileageRatePerKm).HasColumnType("decimal(10,4)");
             builder.Property(r => r.Currency).IsRequired().HasMaxLength(10);
             builder.Property(r => r.Description).HasMaxLength(2000);
             builder.Property(r => r.Notes).HasMaxLength(1000);

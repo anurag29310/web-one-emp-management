@@ -18,6 +18,14 @@ namespace EMS.Application.Features.OfficeLocations.Validators
             RuleFor(x => x.AddressLine1).MaximumLength(250);
             RuleFor(x => x.AddressLine2).MaximumLength(250);
             RuleFor(x => x.State).MaximumLength(100);
+
+            RuleFor(x => x.Latitude).InclusiveBetween(-90m, 90m).When(x => x.Latitude.HasValue);
+            RuleFor(x => x.Longitude).InclusiveBetween(-180m, 180m).When(x => x.Longitude.HasValue);
+            RuleFor(x => x.GeofenceRadiusMeters).GreaterThan(0).When(x => x.GeofenceRadiusMeters.HasValue);
+            RuleFor(x => x)
+                .Must(x => (x.Latitude.HasValue && x.Longitude.HasValue && x.GeofenceRadiusMeters.HasValue)
+                    || (!x.Latitude.HasValue && !x.Longitude.HasValue && !x.GeofenceRadiusMeters.HasValue))
+                .WithMessage("Latitude, Longitude, and GeofenceRadiusMeters must all be set together, or all left empty.");
         }
     }
 
@@ -36,6 +44,14 @@ namespace EMS.Application.Features.OfficeLocations.Validators
             RuleFor(x => x.AddressLine1).MaximumLength(250);
             RuleFor(x => x.AddressLine2).MaximumLength(250);
             RuleFor(x => x.State).MaximumLength(100);
+
+            RuleFor(x => x.Latitude).InclusiveBetween(-90m, 90m).When(x => x.Latitude.HasValue);
+            RuleFor(x => x.Longitude).InclusiveBetween(-180m, 180m).When(x => x.Longitude.HasValue);
+            RuleFor(x => x.GeofenceRadiusMeters).GreaterThan(0).When(x => x.GeofenceRadiusMeters.HasValue);
+            RuleFor(x => x)
+                .Must(x => (x.Latitude.HasValue && x.Longitude.HasValue && x.GeofenceRadiusMeters.HasValue)
+                    || (!x.Latitude.HasValue && !x.Longitude.HasValue && !x.GeofenceRadiusMeters.HasValue))
+                .WithMessage("Latitude, Longitude, and GeofenceRadiusMeters must all be set together, or all left empty.");
         }
     }
 }

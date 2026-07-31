@@ -71,7 +71,7 @@ namespace EMS.Tests
 
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
-            var handler = new CheckInCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
+            var handler = new CheckInCommandHandler(repo, authRepo, new EmployeeRepository(db), new OfficeLocationRepository(db), CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
 
             var checkInTime = new DateTime(2026, 6, 12, 3, 45, 0, DateTimeKind.Utc);
             var result = await handler.Handle(new CheckInCommand
@@ -95,7 +95,7 @@ namespace EMS.Tests
 
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
-            var handler = new CheckInCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
+            var handler = new CheckInCommandHandler(repo, authRepo, new EmployeeRepository(db), new OfficeLocationRepository(db), CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => handler.Handle(new CheckInCommand
             {
@@ -115,7 +115,7 @@ namespace EMS.Tests
 
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
-            var handler = new CheckInCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
+            var handler = new CheckInCommandHandler(repo, authRepo, new EmployeeRepository(db), new OfficeLocationRepository(db), CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
 
             var cmd = new CheckInCommand
             {
@@ -160,7 +160,7 @@ namespace EMS.Tests
 
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
-            var handler = new CheckInCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
+            var handler = new CheckInCommandHandler(repo, authRepo, new EmployeeRepository(db), new OfficeLocationRepository(db), CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
 
             // 9:20 is past the 9:00 + 10 minute grace window.
             var result = await handler.Handle(new CheckInCommand
@@ -206,7 +206,7 @@ namespace EMS.Tests
 
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
-            var checkInHandler = new CheckInCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
+            var checkInHandler = new CheckInCommandHandler(repo, authRepo, new EmployeeRepository(db), new OfficeLocationRepository(db), CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
             var checkOutHandler = new CheckOutCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckOutCommandHandler>.Instance);
 
             var checkInTime = new DateTime(2026, 6, 12, 9, 0, 0, DateTimeKind.Utc);
@@ -547,7 +547,7 @@ namespace EMS.Tests
             }, CancellationToken.None);
 
             var authRepo = new AuthRepository(db);
-            var checkInHandler = new CheckInCommandHandler(attendanceRepo, authRepo, CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
+            var checkInHandler = new CheckInCommandHandler(attendanceRepo, authRepo, new EmployeeRepository(db), new OfficeLocationRepository(db), CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
 
             var result = await checkInHandler.Handle(new CheckInCommand
             {
@@ -576,7 +576,7 @@ namespace EMS.Tests
             geocodingMock.Setup(g => g.ReverseGeocodeAsync(13.0827m, 80.2707m, It.IsAny<CancellationToken>()))
                 .ReturnsAsync("Client Site, Chennai");
 
-            var checkInHandler = new CheckInCommandHandler(repo, authRepo, geocodingMock.Object, NullLogger<CheckInCommandHandler>.Instance);
+            var checkInHandler = new CheckInCommandHandler(repo, authRepo, new EmployeeRepository(db), new OfficeLocationRepository(db), geocodingMock.Object, NullLogger<CheckInCommandHandler>.Instance);
             var checkOutHandler = new CheckOutCommandHandler(repo, authRepo, geocodingMock.Object, NullLogger<CheckOutCommandHandler>.Instance);
 
             var checkInTime = new DateTime(2026, 6, 12, 9, 0, 0, DateTimeKind.Utc);
@@ -631,7 +631,7 @@ namespace EMS.Tests
             failingGeocoder.Setup(g => g.ReverseGeocodeAsync(It.IsAny<decimal>(), It.IsAny<decimal>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((string?)null);
 
-            var handler = new CheckInCommandHandler(repo, authRepo, failingGeocoder.Object, NullLogger<CheckInCommandHandler>.Instance);
+            var handler = new CheckInCommandHandler(repo, authRepo, new EmployeeRepository(db), new OfficeLocationRepository(db), failingGeocoder.Object, NullLogger<CheckInCommandHandler>.Instance);
 
             var result = await handler.Handle(new CheckInCommand
             {
@@ -665,6 +665,245 @@ namespace EMS.Tests
             });
 
             Assert.False(result.IsValid);
+        }
+
+        // ─── Office Geofencing ─────────────────────────────────────────────────────
+
+        private static async Task<Designation> SeedDesignationAsync(ApplicationDbContext db)
+        {
+            var designation = new Designation
+            {
+                Id = Guid.NewGuid(),
+                Name = "Designation-" + Guid.NewGuid().ToString("N")[..8],
+                Code = "DSG-" + Guid.NewGuid().ToString("N")[..8],
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            await db.Designations.AddAsync(designation);
+            await db.SaveChangesAsync();
+            return designation;
+        }
+
+        private static async Task<OfficeLocation> SeedOfficeLocationAsync(ApplicationDbContext db, decimal? latitude = null, decimal? longitude = null, int? geofenceRadiusMeters = null)
+        {
+            var office = new OfficeLocation
+            {
+                Id = Guid.NewGuid(),
+                Name = "HQ",
+                Code = "HQ-" + Guid.NewGuid().ToString("N")[..8],
+                City = "Bengaluru",
+                Country = "India",
+                TimeZoneId = "Asia/Kolkata",
+                Latitude = latitude,
+                Longitude = longitude,
+                GeofenceRadiusMeters = geofenceRadiusMeters,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            await db.OfficeLocations.AddAsync(office);
+            await db.SaveChangesAsync();
+            return office;
+        }
+
+        [Fact]
+        public void GeofenceCalculator_DistanceMeters_ZeroForIdenticalCoordinates()
+        {
+            var distance = EMS.Application.Features.Attendance.GeofenceCalculator.DistanceMeters(12.9716m, 77.5946m, 12.9716m, 77.5946m);
+            Assert.Equal(0, distance, 3);
+        }
+
+        [Fact]
+        public void GeofenceCalculator_IsWithinGeofence_TrueWhenNotConfigured()
+        {
+            // Bengaluru vs. a point in Chennai (~290km away) — but no office radius configured, so it's a no-op.
+            Assert.True(EMS.Application.Features.Attendance.GeofenceCalculator.IsWithinGeofence(13.0827m, 80.2707m, 12.9716m, 77.5946m, null));
+            Assert.True(EMS.Application.Features.Attendance.GeofenceCalculator.IsWithinGeofence(13.0827m, 80.2707m, null, 77.5946m, 500));
+        }
+
+        [Fact]
+        public void GeofenceCalculator_IsWithinGeofence_FalseWhenOutsideConfiguredRadius()
+        {
+            Assert.False(EMS.Application.Features.Attendance.GeofenceCalculator.IsWithinGeofence(13.0827m, 80.2707m, 12.9716m, 77.5946m, 500));
+        }
+
+        [Fact]
+        public async Task CheckIn_WithinConfiguredGeofence_Succeeds()
+        {
+            using var db = CreateDb();
+            var office = await SeedOfficeLocationAsync(db, 12.9716m, 77.5946m, 500);
+            var designation = await SeedDesignationAsync(db);
+            var employee = new Employee
+            {
+                Id = Guid.NewGuid(),
+                EmployeeCode = "EMP" + Guid.NewGuid().ToString("N")[..6],
+                FirstName = "Test",
+                LastName = "Employee",
+                JoinDate = DateTime.UtcNow.Date,
+                OfficeLocationId = office.Id,
+                DesignationId = designation.Id,
+                IsActive = true
+            };
+            await db.Employees.AddAsync(employee);
+            await db.SaveChangesAsync();
+            var user = await SeedUserAsync(db, employee.Id);
+
+            var repo = new AttendanceRepository(db);
+            var authRepo = new AuthRepository(db);
+            var handler = new CheckInCommandHandler(repo, authRepo, new EmployeeRepository(db), new OfficeLocationRepository(db), CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
+
+            var result = await handler.Handle(new CheckInCommand
+            {
+                EmployeeId = employee.Id,
+                CheckInAtUtc = DateTime.UtcNow,
+                Latitude = 12.9716m,
+                Longitude = 77.5946m,
+                RequestingUserId = user.Id,
+                IsPrivileged = false
+            }, CancellationToken.None);
+
+            Assert.Equal(12.9716m, result.CheckInLatitude);
+        }
+
+        [Fact]
+        public async Task CheckIn_OutsideConfiguredGeofence_ThrowsInvalidOperation()
+        {
+            using var db = CreateDb();
+            var office = await SeedOfficeLocationAsync(db, 12.9716m, 77.5946m, 500);
+            var designation = await SeedDesignationAsync(db);
+            var employee = new Employee
+            {
+                Id = Guid.NewGuid(),
+                EmployeeCode = "EMP" + Guid.NewGuid().ToString("N")[..6],
+                FirstName = "Test",
+                LastName = "Employee",
+                JoinDate = DateTime.UtcNow.Date,
+                OfficeLocationId = office.Id,
+                DesignationId = designation.Id,
+                IsActive = true
+            };
+            await db.Employees.AddAsync(employee);
+            await db.SaveChangesAsync();
+            var user = await SeedUserAsync(db, employee.Id);
+
+            var repo = new AttendanceRepository(db);
+            var authRepo = new AuthRepository(db);
+            var handler = new CheckInCommandHandler(repo, authRepo, new EmployeeRepository(db), new OfficeLocationRepository(db), CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
+
+            // Chennai coordinates — ~290km from the Bengaluru office, well outside the 500m radius.
+            await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(new CheckInCommand
+            {
+                EmployeeId = employee.Id,
+                CheckInAtUtc = DateTime.UtcNow,
+                Latitude = 13.0827m,
+                Longitude = 80.2707m,
+                RequestingUserId = user.Id,
+                IsPrivileged = false
+            }, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task CheckIn_OfficeWithoutGeofenceConfigured_SucceedsRegardlessOfDistance()
+        {
+            using var db = CreateDb();
+            var office = await SeedOfficeLocationAsync(db); // no Latitude/Longitude/GeofenceRadiusMeters
+            var designation = await SeedDesignationAsync(db);
+            var employee = new Employee
+            {
+                Id = Guid.NewGuid(),
+                EmployeeCode = "EMP" + Guid.NewGuid().ToString("N")[..6],
+                FirstName = "Test",
+                LastName = "Employee",
+                JoinDate = DateTime.UtcNow.Date,
+                OfficeLocationId = office.Id,
+                DesignationId = designation.Id,
+                IsActive = true
+            };
+            await db.Employees.AddAsync(employee);
+            await db.SaveChangesAsync();
+            var user = await SeedUserAsync(db, employee.Id);
+
+            var repo = new AttendanceRepository(db);
+            var authRepo = new AuthRepository(db);
+            var handler = new CheckInCommandHandler(repo, authRepo, new EmployeeRepository(db), new OfficeLocationRepository(db), CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
+
+            var result = await handler.Handle(new CheckInCommand
+            {
+                EmployeeId = employee.Id,
+                CheckInAtUtc = DateTime.UtcNow,
+                Latitude = 13.0827m,
+                Longitude = 80.2707m,
+                RequestingUserId = user.Id,
+                IsPrivileged = false
+            }, CancellationToken.None);
+
+            Assert.Equal(13.0827m, result.CheckInLatitude);
+        }
+
+        [Theory]
+        [InlineData(91, 0, 100)]
+        [InlineData(0, 181, 100)]
+        [InlineData(0, 0, -1)]
+        public async Task CreateOfficeLocationCommandValidator_RejectsOutOfRangeGeofenceValues(double latitude, double longitude, int radius)
+        {
+            var repo = new Mock<IOfficeLocationRepository>();
+            repo.Setup(r => r.CodeExistsAsync(It.IsAny<string>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+            var validator = new EMS.Application.Features.OfficeLocations.Validators.CreateOfficeLocationCommandValidator(repo.Object);
+
+            var result = await validator.ValidateAsync(new EMS.Application.Features.OfficeLocations.CreateOfficeLocationCommand
+            {
+                Name = "HQ",
+                Code = "HQ-" + Guid.NewGuid().ToString("N")[..8],
+                City = "Bengaluru",
+                Country = "India",
+                TimeZoneId = "Asia/Kolkata",
+                Latitude = (decimal)latitude,
+                Longitude = (decimal)longitude,
+                GeofenceRadiusMeters = radius
+            });
+
+            Assert.False(result.IsValid);
+        }
+
+        [Fact]
+        public async Task CreateOfficeLocationCommandValidator_RejectsPartiallySetGeofenceFields()
+        {
+            var repo = new Mock<IOfficeLocationRepository>();
+            repo.Setup(r => r.CodeExistsAsync(It.IsAny<string>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+            var validator = new EMS.Application.Features.OfficeLocations.Validators.CreateOfficeLocationCommandValidator(repo.Object);
+
+            var result = await validator.ValidateAsync(new EMS.Application.Features.OfficeLocations.CreateOfficeLocationCommand
+            {
+                Name = "HQ",
+                Code = "HQ-" + Guid.NewGuid().ToString("N")[..8],
+                City = "Bengaluru",
+                Country = "India",
+                TimeZoneId = "Asia/Kolkata",
+                Latitude = 12.9716m,
+                Longitude = null,
+                GeofenceRadiusMeters = 500
+            });
+
+            Assert.False(result.IsValid);
+        }
+
+        [Fact]
+        public async Task CreateOfficeLocationCommandValidator_AcceptsFullyConfiguredGeofence()
+        {
+            var repo = new Mock<IOfficeLocationRepository>();
+            repo.Setup(r => r.CodeExistsAsync(It.IsAny<string>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+            var validator = new EMS.Application.Features.OfficeLocations.Validators.CreateOfficeLocationCommandValidator(repo.Object);
+
+            var result = await validator.ValidateAsync(new EMS.Application.Features.OfficeLocations.CreateOfficeLocationCommand
+            {
+                Name = "HQ",
+                Code = "HQ-" + Guid.NewGuid().ToString("N")[..8],
+                City = "Bengaluru",
+                Country = "India",
+                TimeZoneId = "Asia/Kolkata",
+                Latitude = 12.9716m,
+                Longitude = 77.5946m,
+                GeofenceRadiusMeters = 500
+            });
+
+            Assert.True(result.IsValid);
         }
     }
 }

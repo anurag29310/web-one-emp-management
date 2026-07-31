@@ -37,6 +37,9 @@ namespace EMS.Application.Features.OfficeLocations.Handlers
             location.State = request.State;
             location.Country = request.Country;
             location.TimeZoneId = request.TimeZoneId;
+            location.Latitude = request.Latitude;
+            location.Longitude = request.Longitude;
+            location.GeofenceRadiusMeters = request.GeofenceRadiusMeters;
             location.UpdatedAtUtc = DateTime.UtcNow;
             location.UpdatedBy = _currentUser.UserId;
 

@@ -2,6 +2,7 @@ using EMS.Application.Interfaces;
 using EMS.Domain.Entities;
 using EMS.Domain.Enums;
 using MediatR;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
@@ -15,13 +16,15 @@ namespace EMS.Application.Features.Reimbursements.Handlers
         private readonly IAuthRepository _authRepo;
         private readonly IAuditLogger _auditLogger;
         private readonly ILogger<UpdateReimbursementCommandHandler> _logger;
+        private readonly decimal _mileageRatePerKm;
 
-        public UpdateReimbursementCommandHandler(IReimbursementRepository repo, IAuthRepository authRepo, IAuditLogger auditLogger, ILogger<UpdateReimbursementCommandHandler> logger)
+        public UpdateReimbursementCommandHandler(IReimbursementRepository repo, IAuthRepository authRepo, IAuditLogger auditLogger, IConfiguration configuration, ILogger<UpdateReimbursementCommandHandler> logger)
         {
             _repo = repo;
             _authRepo = authRepo;
             _auditLogger = auditLogger;
             _logger = logger;
+            _mileageRatePerKm = decimal.TryParse(configuration["Reimbursements:MileageRatePerKm"], out var rate) ? rate : 0.30m;
         }
 
         public async Task<Reimbursement> Handle(UpdateReimbursementCommand request, CancellationToken cancellationToken)
@@ -36,13 +39,17 @@ namespace EMS.Application.Features.Reimbursements.Handlers
             if (reimbursement.Status is not (ReimbursementStatus.Draft or ReimbursementStatus.ChangesRequested))
                 throw new InvalidOperationException($"Reimbursement {reimbursement.ReimbursementNumber} can only be edited while Draft or ChangesRequested (currently {reimbursement.Status}).");
 
+            var isMileageClaim = request.DistanceKm.HasValue;
+
             reimbursement.ExpenseTitle = request.ExpenseTitle;
             reimbursement.ExpenseCategory = request.ExpenseCategory;
             reimbursement.ExpenseDate = request.ExpenseDate;
-            reimbursement.Amount = request.Amount;
+            reimbursement.Amount = isMileageClaim ? MileageCalculator.CalculateAmount(request.DistanceKm!.Value, _mileageRatePerKm) : request.Amount;
             reimbursement.Currency = request.Currency;
             reimbursement.Description = request.Description;
             reimbursement.Notes = request.Notes;
+            reimbursement.DistanceKm = request.DistanceKm;
+            reimbursement.MileageRatePerKm = isMileageClaim ? _mileageRatePerKm : null;
             reimbursement.UpdatedAtUtc = DateTime.UtcNow;
             reimbursement.UpdatedBy = request.RequestingUserId;
 

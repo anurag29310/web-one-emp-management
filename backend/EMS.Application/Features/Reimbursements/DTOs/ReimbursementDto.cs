@@ -16,6 +16,8 @@ namespace EMS.Application.Features.Reimbursements.DTOs
         public string Currency { get; set; } = null!;
         public string? Description { get; set; }
         public string? Notes { get; set; }
+        public decimal? DistanceKm { get; set; }
+        public decimal? MileageRatePerKm { get; set; }
         public string Status { get; set; } = null!;
         public DateTime? SubmittedAtUtc { get; set; }
         public DateTime? ApprovedAtUtc { get; set; }
@@ -40,6 +42,8 @@ namespace EMS.Application.Features.Reimbursements.DTOs
             Currency = r.Currency,
             Description = r.Description,
             Notes = r.Notes,
+            DistanceKm = r.DistanceKm,
+            MileageRatePerKm = r.MileageRatePerKm,
             Status = r.Status.ToString(),
             SubmittedAtUtc = r.SubmittedAtUtc,
             ApprovedAtUtc = r.ApprovedAtUtc,

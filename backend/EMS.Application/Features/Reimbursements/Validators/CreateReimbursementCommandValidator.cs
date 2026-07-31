@@ -11,7 +11,10 @@ namespace EMS.Application.Features.Reimbursements.Validators
             RuleFor(x => x.ExpenseCategory).NotEmpty().MaximumLength(100);
             RuleFor(x => x.ExpenseDate).LessThanOrEqualTo(_ => DateTime.UtcNow.Date.AddDays(1))
                 .WithMessage("Expense date cannot be in the future.");
-            RuleFor(x => x.Amount).GreaterThan(0);
+            // Amount is only client-supplied for non-mileage claims — a mileage claim (DistanceKm set)
+            // has its Amount computed server-side from DistanceKm * the current mileage rate.
+            RuleFor(x => x.Amount).GreaterThan(0).When(x => x.DistanceKm == null);
+            RuleFor(x => x.DistanceKm).GreaterThan(0).When(x => x.DistanceKm.HasValue);
             RuleFor(x => x.Currency).NotEmpty().MaximumLength(10);
             RuleFor(x => x.Description).MaximumLength(2000);
             RuleFor(x => x.Notes).MaximumLength(1000);
@@ -26,7 +29,8 @@ namespace EMS.Application.Features.Reimbursements.Validators
             RuleFor(x => x.ExpenseCategory).NotEmpty().MaximumLength(100);
             RuleFor(x => x.ExpenseDate).LessThanOrEqualTo(_ => DateTime.UtcNow.Date.AddDays(1))
                 .WithMessage("Expense date cannot be in the future.");
-            RuleFor(x => x.Amount).GreaterThan(0);
+            RuleFor(x => x.Amount).GreaterThan(0).When(x => x.DistanceKm == null);
+            RuleFor(x => x.DistanceKm).GreaterThan(0).When(x => x.DistanceKm.HasValue);
             RuleFor(x => x.Currency).NotEmpty().MaximumLength(10);
             RuleFor(x => x.Description).MaximumLength(2000);
             RuleFor(x => x.Notes).MaximumLength(1000);

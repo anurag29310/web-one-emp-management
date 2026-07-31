@@ -15,6 +15,10 @@ namespace EMS.Application.Features.Reimbursements
         public string? Description { get; set; }
         public string? Notes { get; set; }
 
+        /// <summary>Set only for mileage claims. When present, Amount is ignored and recomputed
+        /// server-side as DistanceKm * the current configured mileage rate.</summary>
+        public decimal? DistanceKm { get; set; }
+
         /// <summary>Set by the controller from the caller's identity — the employee is always the caller, never client-supplied.</summary>
         public Guid RequestingUserId { get; set; }
     }

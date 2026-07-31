@@ -21,6 +21,13 @@ namespace EMS.Domain.Entities
         public string? Description { get; set; }
         public string? Notes { get; set; }
 
+        /// <summary>Set only for mileage claims. When present, Amount is computed server-side as
+        /// DistanceKm * MileageRatePerKm (the rate in effect at submission time, frozen here so a later
+        /// rate change never retroactively changes an already-submitted claim) — the client-supplied
+        /// Amount is ignored for these claims.</summary>
+        public decimal? DistanceKm { get; set; }
+        public decimal? MileageRatePerKm { get; set; }
+
         public ReimbursementStatus Status { get; set; } = ReimbursementStatus.Draft;
 
         public DateTime? SubmittedAtUtc { get; set; }
