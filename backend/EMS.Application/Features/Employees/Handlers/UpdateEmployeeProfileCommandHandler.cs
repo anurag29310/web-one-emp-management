@@ -12,19 +12,22 @@ namespace EMS.Application.Features.Employees.Handlers
     {
         private readonly IEmployeeRepository _repo;
         private readonly IAuditLogger _auditLogger;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<UpdateEmployeeProfileCommandHandler> _logger;
 
-        public UpdateEmployeeProfileCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ILogger<UpdateEmployeeProfileCommandHandler> logger)
+        public UpdateEmployeeProfileCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ICurrentUserService currentUser, ILogger<UpdateEmployeeProfileCommandHandler> logger)
         {
             _repo = repo;
             _auditLogger = auditLogger;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
         public async Task Handle(UpdateEmployeeProfileCommand request, CancellationToken cancellationToken)
         {
-            var emp = await _repo.GetByIdAsync(request.Id, cancellationToken)
-                ?? throw new InvalidOperationException($"Employee {request.Id} not found.");
+            var emp = await _repo.GetByIdAsync(request.Id, cancellationToken);
+            if (emp == null || emp.CompanyId != _currentUser.CompanyId!.Value)
+                throw new InvalidOperationException($"Employee {request.Id} not found.");
 
             var oldValues = new
             {

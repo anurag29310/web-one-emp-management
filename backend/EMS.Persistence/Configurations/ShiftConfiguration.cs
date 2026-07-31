@@ -11,11 +11,15 @@ namespace EMS.Persistence.Configurations
             builder.ToTable("Shifts");
             builder.HasKey(x => x.Id);
 
+            builder.Property(x => x.CompanyId).IsRequired();
             builder.Property(x => x.Name).IsRequired().HasMaxLength(150);
             builder.Property(x => x.StartTime).HasColumnType("time").IsRequired();
             builder.Property(x => x.EndTime).HasColumnType("time").IsRequired();
             builder.Property(x => x.GraceMinutes).IsRequired();
             builder.Property(x => x.IsDeleted).HasDefaultValue(false);
+            builder.HasIndex(x => x.CompanyId);
+
+            builder.HasOne(x => x.Company).WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

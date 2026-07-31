@@ -11,16 +11,22 @@ namespace EMS.Application.Features.AuditLogs.Handlers
     public class GetAuditLogsForEntityQueryHandler : IRequestHandler<Queries.GetAuditLogsForEntityQuery, PagedResult<AuditLogDto>>
     {
         private readonly IAuditLogRepository _repo;
+        private readonly ICurrentUserService _currentUser;
 
-        public GetAuditLogsForEntityQueryHandler(IAuditLogRepository repo) => _repo = repo;
+        public GetAuditLogsForEntityQueryHandler(IAuditLogRepository repo, ICurrentUserService currentUser)
+        {
+            _repo = repo;
+            _currentUser = currentUser;
+        }
 
         public async Task<PagedResult<AuditLogDto>> Handle(Queries.GetAuditLogsForEntityQuery request, CancellationToken cancellationToken)
         {
             var pageSize = request.PageSize is > 0 and <= 100 ? request.PageSize : 20;
             var page = request.Page > 0 ? request.Page : 1;
+            var companyId = _currentUser.CompanyId;
 
-            var items = await _repo.GetForEntityAsync(request.EntityName, request.EntityId, page, pageSize, cancellationToken);
-            var total = await _repo.CountForEntityAsync(request.EntityName, request.EntityId, cancellationToken);
+            var items = await _repo.GetForEntityAsync(companyId, request.EntityName, request.EntityId, page, pageSize, cancellationToken);
+            var total = await _repo.CountForEntityAsync(companyId, request.EntityName, request.EntityId, cancellationToken);
 
             return PagedResult<AuditLogDto>.Create(items.Select(AuditLogDto.FromEntity), page, pageSize, total);
         }

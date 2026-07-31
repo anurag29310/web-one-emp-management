@@ -23,12 +23,14 @@ namespace EMS.Application.Features.Teams.Handlers
 
         public async Task<Team> Handle(CreateTeamCommand request, CancellationToken cancellationToken)
         {
-            if (await _repo.CodeExistsAsync(request.DepartmentId, request.Code, ct: cancellationToken))
+            var companyId = _currentUser.CompanyId!.Value;
+            if (await _repo.CodeExistsAsync(request.DepartmentId, request.Code, companyId, ct: cancellationToken))
                 throw new InvalidOperationException("Team code already exists in this department.");
 
             var team = new Team
             {
                 Id = Guid.NewGuid(),
+                CompanyId = companyId,
                 DepartmentId = request.DepartmentId,
                 Name = request.Name,
                 Code = request.Code,

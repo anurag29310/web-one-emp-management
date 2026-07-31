@@ -9,13 +9,15 @@ namespace EMS.Application.Features.Leave.Handlers
     public class GetLeaveTypeByIdQueryHandler : IRequestHandler<Queries.GetLeaveTypeByIdQuery, LeaveType?>
     {
         private readonly ILeaveRepository _repo;
+        private readonly ICurrentUserService _currentUser;
 
-        public GetLeaveTypeByIdQueryHandler(ILeaveRepository repo)
+        public GetLeaveTypeByIdQueryHandler(ILeaveRepository repo, ICurrentUserService currentUser)
         {
             _repo = repo;
+            _currentUser = currentUser;
         }
 
         public async Task<LeaveType?> Handle(Queries.GetLeaveTypeByIdQuery request, CancellationToken cancellationToken)
-            => await _repo.GetLeaveTypeByIdAsync(request.Id, cancellationToken);
+            => await _repo.GetLeaveTypeByIdAsync(request.Id, _currentUser.CompanyId!.Value, cancellationToken);
     }
 }

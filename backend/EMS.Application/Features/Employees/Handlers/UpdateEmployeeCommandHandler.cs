@@ -12,23 +12,27 @@ namespace EMS.Application.Features.Employees.Handlers
     {
         private readonly IEmployeeRepository _repo;
         private readonly IAuditLogger _auditLogger;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<UpdateEmployeeCommandHandler> _logger;
 
-        public UpdateEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ILogger<UpdateEmployeeCommandHandler> logger)
+        public UpdateEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ICurrentUserService currentUser, ILogger<UpdateEmployeeCommandHandler> logger)
         {
             _repo = repo;
             _auditLogger = auditLogger;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
         public async Task<Employee> Handle(Commands.UpdateEmployeeCommand request, CancellationToken cancellationToken)
         {
-            var emp = await _repo.GetByIdAsync(request.Id, cancellationToken)
-                ?? throw new InvalidOperationException($"Employee {request.Id} not found.");
+            var companyId = _currentUser.CompanyId!.Value;
+            var emp = await _repo.GetByIdAsync(request.Id, cancellationToken);
+            if (emp == null || emp.CompanyId != companyId)
+                throw new InvalidOperationException($"Employee {request.Id} not found.");
 
-            if (!string.IsNullOrWhiteSpace(request.Email) && await _repo.EmailExistsAsync(request.Email, request.Id, cancellationToken))
+            if (!string.IsNullOrWhiteSpace(request.Email) && await _repo.EmailExistsAsync(request.Email, companyId, request.Id, cancellationToken))
                 throw new InvalidOperationException("Email already exists.");
-            if (await _repo.EmployeeCodeExistsAsync(request.EmployeeCode, request.Id, cancellationToken))
+            if (await _repo.EmployeeCodeExistsAsync(request.EmployeeCode, companyId, request.Id, cancellationToken))
                 throw new InvalidOperationException("Employee code already exists.");
 
             var oldValues = new

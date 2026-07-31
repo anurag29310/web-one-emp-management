@@ -444,6 +444,9 @@ namespace EMS.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<Guid?>("CompanyId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -476,6 +479,9 @@ namespace EMS.Persistence.Migrations
 
                     b.HasIndex("Action", "CreatedAtUtc")
                         .HasDatabaseName("IX_AuditLogs_Action_CreatedAtUtc");
+
+                    b.HasIndex("CompanyId", "CreatedAtUtc")
+                        .HasDatabaseName("IX_AuditLogs_CompanyId_CreatedAtUtc");
 
                     b.HasIndex("UserId", "CreatedAtUtc")
                         .HasDatabaseName("IX_AuditLogs_UserId_CreatedAtUtc");
@@ -755,6 +761,94 @@ namespace EMS.Persistence.Migrations
                     b.ToTable("Clients", (string)null);
                 });
 
+            modelBuilder.Entity("EMS.Domain.Entities.Company", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("RegisteredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("RejectedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RejectedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("SuspendedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SuspendedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Timezone")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RegisteredAtUtc");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("Companies", (string)null);
+                });
+
             modelBuilder.Entity("EMS.Domain.Entities.Conversation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -849,6 +943,9 @@ namespace EMS.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -874,7 +971,9 @@ namespace EMS.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name");
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("CompanyId", "Name");
 
                     b.ToTable("Departments", (string)null);
                 });
@@ -889,6 +988,9 @@ namespace EMS.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -927,10 +1029,10 @@ namespace EMS.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Code")
+                    b.HasIndex("CompanyId", "Code")
                         .IsUnique();
 
-                    b.HasIndex("Name")
+                    b.HasIndex("CompanyId", "Name")
                         .IsUnique();
 
                     b.ToTable("Designations", (string)null);
@@ -953,6 +1055,9 @@ namespace EMS.Persistence.Migrations
                     b.Property<string>("City")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Country")
                         .HasMaxLength(100)
@@ -1055,15 +1160,11 @@ namespace EMS.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId");
+
                     b.HasIndex("DepartmentId");
 
                     b.HasIndex("DesignationId");
-
-                    b.HasIndex("Email")
-                        .IsUnique();
-
-                    b.HasIndex("EmployeeCode")
-                        .IsUnique();
 
                     b.HasIndex("ManagerId");
 
@@ -1072,6 +1173,12 @@ namespace EMS.Persistence.Migrations
                     b.HasIndex("ProfilePhotoDocumentId");
 
                     b.HasIndex("TeamId");
+
+                    b.HasIndex("CompanyId", "Email")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "EmployeeCode")
+                        .IsUnique();
 
                     b.ToTable("Employees", (string)null);
                 });
@@ -1401,6 +1508,9 @@ namespace EMS.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -1423,7 +1533,9 @@ namespace EMS.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Code")
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("CompanyId", "Code")
                         .IsUnique();
 
                     b.ToTable("LeaveTypes", (string)null);
@@ -1697,6 +1809,9 @@ namespace EMS.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Country")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1754,7 +1869,9 @@ namespace EMS.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Code")
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("CompanyId", "Code")
                         .IsUnique();
 
                     b.ToTable("OfficeLocations", (string)null);
@@ -2115,6 +2232,35 @@ namespace EMS.Persistence.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("PerformanceReviews", (string)null);
+                });
+
+            modelBuilder.Entity("EMS.Domain.Entities.PlatformSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsPublicRegistrationEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("RequireApprovalForNewCompanies")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PlatformSettings", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("99999999-9999-9999-9999-999999999999"),
+                            IsPublicRegistrationEnabled = true,
+                            RequireApprovalForNewCompanies = true,
+                            UpdatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        });
                 });
 
             modelBuilder.Entity("EMS.Domain.Entities.Promotion", b =>
@@ -2478,6 +2624,13 @@ namespace EMS.Persistence.Migrations
                             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsDeleted = false,
                             Name = "Employee"
+                        },
+                        new
+                        {
+                            Id = new Guid("55555555-5555-5555-5555-555555555555"),
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsDeleted = false,
+                            Name = "SuperAdmin"
                         });
                 });
 
@@ -2543,6 +2696,9 @@ namespace EMS.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -2572,6 +2728,8 @@ namespace EMS.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
 
                     b.ToTable("Shifts", (string)null);
                 });
@@ -2743,6 +2901,9 @@ namespace EMS.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -2783,9 +2944,13 @@ namespace EMS.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("DepartmentId");
+
                     b.HasIndex("LeadEmployeeId");
 
-                    b.HasIndex("DepartmentId", "Code")
+                    b.HasIndex("CompanyId", "DepartmentId", "Code")
                         .IsUnique();
 
                     b.ToTable("Teams", (string)null);
@@ -2795,6 +2960,9 @@ namespace EMS.Persistence.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CompanyId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAtUtc")
@@ -2841,6 +3009,8 @@ namespace EMS.Persistence.Migrations
                         .HasColumnType("character varying(256)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
 
                     b.HasIndex("Email");
 
@@ -2910,6 +3080,14 @@ namespace EMS.Persistence.Migrations
                     b.Navigation("Shift");
                 });
 
+            modelBuilder.Entity("EMS.Domain.Entities.AuditLog", b =>
+                {
+                    b.HasOne("EMS.Domain.Entities.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("EMS.Domain.Entities.Candidate", b =>
                 {
                     b.HasOne("EMS.Domain.Entities.Employee", "ConvertedEmployee")
@@ -2953,8 +3131,36 @@ namespace EMS.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("EMS.Domain.Entities.Department", b =>
+                {
+                    b.HasOne("EMS.Domain.Entities.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+                });
+
+            modelBuilder.Entity("EMS.Domain.Entities.Designation", b =>
+                {
+                    b.HasOne("EMS.Domain.Entities.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+                });
+
             modelBuilder.Entity("EMS.Domain.Entities.Employee", b =>
                 {
+                    b.HasOne("EMS.Domain.Entities.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("EMS.Domain.Entities.Department", "Department")
                         .WithMany()
                         .HasForeignKey("DepartmentId")
@@ -2986,6 +3192,8 @@ namespace EMS.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("TeamId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Company");
 
                     b.Navigation("Department");
 
@@ -3036,6 +3244,17 @@ namespace EMS.Persistence.Migrations
                     b.Navigation("Candidate");
 
                     b.Navigation("InterviewerEmployee");
+                });
+
+            modelBuilder.Entity("EMS.Domain.Entities.LeaveType", b =>
+                {
+                    b.HasOne("EMS.Domain.Entities.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Company");
                 });
 
             modelBuilder.Entity("EMS.Domain.Entities.Message", b =>
@@ -3102,6 +3321,17 @@ namespace EMS.Persistence.Migrations
                     b.Navigation("Department");
 
                     b.Navigation("Designation");
+                });
+
+            modelBuilder.Entity("EMS.Domain.Entities.OfficeLocation", b =>
+                {
+                    b.HasOne("EMS.Domain.Entities.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Company");
                 });
 
             modelBuilder.Entity("EMS.Domain.Entities.OnboardingChecklistItem", b =>
@@ -3256,6 +3486,17 @@ namespace EMS.Persistence.Migrations
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("EMS.Domain.Entities.Shift", b =>
+                {
+                    b.HasOne("EMS.Domain.Entities.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+                });
+
             modelBuilder.Entity("EMS.Domain.Entities.TaskAttachment", b =>
                 {
                     b.HasOne("EMS.Domain.Entities.TaskItem", null)
@@ -3294,6 +3535,12 @@ namespace EMS.Persistence.Migrations
 
             modelBuilder.Entity("EMS.Domain.Entities.Team", b =>
                 {
+                    b.HasOne("EMS.Domain.Entities.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("EMS.Domain.Entities.Department", "Department")
                         .WithMany()
                         .HasForeignKey("DepartmentId")
@@ -3305,6 +3552,8 @@ namespace EMS.Persistence.Migrations
                         .HasForeignKey("LeadEmployeeId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.Navigation("Company");
+
                     b.Navigation("Department");
 
                     b.Navigation("LeadEmployee");
@@ -3312,9 +3561,16 @@ namespace EMS.Persistence.Migrations
 
             modelBuilder.Entity("EMS.Domain.Entities.User", b =>
                 {
+                    b.HasOne("EMS.Domain.Entities.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("EMS.Domain.Entities.Role", "Role")
                         .WithMany("Users")
                         .HasForeignKey("RoleId");
+
+                    b.Navigation("Company");
 
                     b.Navigation("Role");
                 });

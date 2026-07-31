@@ -341,7 +341,7 @@ namespace EMS.Tests
             Directory.CreateDirectory(tempBase);
             var storage = new LocalFileStorageService(tempBase);
             var config = new ConfigurationBuilder().Build();
-            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, pdf, storage, new RecordingAuditLogger(), config, NullLogger<ProcessPayrollCommandHandler>.Instance);
+            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, pdf, storage, new RecordingAuditLogger(), Mock.Of<ICurrentUserService>(c => c.CompanyId == Guid.NewGuid()), config, NullLogger<ProcessPayrollCommandHandler>.Instance);
 
             var runId = await handler.Handle(new ProcessPayrollCommand { PeriodStart = DateTime.UtcNow.AddDays(-7), PeriodEnd = DateTime.UtcNow, ProcessedBy = Guid.NewGuid() }, CancellationToken.None);
 

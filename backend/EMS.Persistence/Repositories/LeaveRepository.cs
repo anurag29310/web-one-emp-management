@@ -117,14 +117,14 @@ namespace EMS.Persistence.Repositories
             return Task.CompletedTask;
         }
 
-        public async Task<LeaveType?> GetLeaveTypeByIdAsync(Guid id, CancellationToken ct = default) =>
-            await _db.LeaveTypes.FirstOrDefaultAsync(lt => lt.Id == id && !lt.IsDeleted, ct);
+        public async Task<LeaveType?> GetLeaveTypeByIdAsync(Guid id, Guid companyId, CancellationToken ct = default) =>
+            await _db.LeaveTypes.FirstOrDefaultAsync(lt => lt.Id == id && lt.CompanyId == companyId && !lt.IsDeleted, ct);
 
-        public async Task<LeaveType?> GetLeaveTypeByIdIncludingDeletedAsync(Guid id, CancellationToken ct = default) =>
-            await _db.LeaveTypes.FirstOrDefaultAsync(lt => lt.Id == id, ct);
+        public async Task<LeaveType?> GetLeaveTypeByIdIncludingDeletedAsync(Guid id, Guid companyId, CancellationToken ct = default) =>
+            await _db.LeaveTypes.FirstOrDefaultAsync(lt => lt.Id == id && lt.CompanyId == companyId, ct);
 
-        public async Task<IEnumerable<LeaveType>> GetLeaveTypesAsync(CancellationToken ct = default) =>
-            await _db.LeaveTypes.AsNoTracking().Where(lt => !lt.IsDeleted).OrderBy(lt => lt.Name).ToListAsync(ct);
+        public async Task<IEnumerable<LeaveType>> GetLeaveTypesAsync(Guid companyId, CancellationToken ct = default) =>
+            await _db.LeaveTypes.AsNoTracking().Where(lt => lt.CompanyId == companyId && !lt.IsDeleted).OrderBy(lt => lt.Name).ToListAsync(ct);
 
         public async Task AddLeaveTypeAsync(LeaveType leaveType, CancellationToken ct = default) =>
             await _db.LeaveTypes.AddAsync(leaveType, ct);
@@ -149,8 +149,8 @@ namespace EMS.Persistence.Repositories
             return Task.CompletedTask;
         }
 
-        public async Task<bool> LeaveTypeCodeExistsAsync(string code, Guid? excludeId = null, CancellationToken ct = default) =>
-            await _db.LeaveTypes.AnyAsync(lt => lt.Code == code && !lt.IsDeleted && (excludeId == null || lt.Id != excludeId), ct);
+        public async Task<bool> LeaveTypeCodeExistsAsync(string code, Guid companyId, Guid? excludeId = null, CancellationToken ct = default) =>
+            await _db.LeaveTypes.AnyAsync(lt => lt.Code == code && lt.CompanyId == companyId && !lt.IsDeleted && (excludeId == null || lt.Id != excludeId), ct);
 
         public async Task SaveChangesAsync(CancellationToken ct = default) =>
             await _db.SaveChangesAsync(ct);

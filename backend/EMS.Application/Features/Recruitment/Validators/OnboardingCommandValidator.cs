@@ -16,13 +16,13 @@ namespace EMS.Application.Features.Recruitment.Validators
 
     public class ConvertCandidateToEmployeeCommandValidator : AbstractValidator<ConvertCandidateToEmployeeCommand>
     {
-        public ConvertCandidateToEmployeeCommandValidator(IOfficeLocationRepository officeLocationRepo)
+        public ConvertCandidateToEmployeeCommandValidator(IOfficeLocationRepository officeLocationRepo, ICurrentUserService currentUser)
         {
             RuleFor(x => x.CandidateId).NotEmpty();
             RuleFor(x => x.EmployeeCode).NotEmpty().MaximumLength(50);
 
             RuleFor(x => x.OfficeLocationId).NotEmpty()
-                .MustAsync(async (id, ct) => await officeLocationRepo.GetByIdAsync(id, ct) != null)
+                .MustAsync(async (id, ct) => await officeLocationRepo.GetByIdAsync(id, currentUser.CompanyId!.Value, ct) != null)
                 .WithMessage("Office location does not exist.");
         }
     }

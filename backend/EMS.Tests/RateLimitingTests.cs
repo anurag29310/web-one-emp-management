@@ -84,14 +84,20 @@ namespace EMS.Tests
                 Content = JsonContent.Create(new { userNameOrEmail = "nouser", password = "wrong-password" })
             };
 
+        // The legacy POST /auth/register route was removed (see AuthController.cs) —
+        // CompanyRegistrationController's POST /company-registration is now the only publicly
+        // reachable endpoint on the "RegisterPolicy" rate-limit budget.
         private static HttpRequestMessage RegisterRequest() =>
-            new(HttpMethod.Post, "/api/v1/auth/register")
+            new(HttpMethod.Post, "/api/v1/company-registration")
             {
                 Content = JsonContent.Create(new
                 {
-                    userName = "user_" + Guid.NewGuid().ToString("N"),
-                    email = Guid.NewGuid().ToString("N") + "@example.com",
-                    password = "Password@123"
+                    companyName = "Company_" + Guid.NewGuid().ToString("N"),
+                    timezone = "UTC",
+                    currency = "USD",
+                    adminUserName = "user_" + Guid.NewGuid().ToString("N"),
+                    adminEmail = Guid.NewGuid().ToString("N") + "@example.com",
+                    adminPassword = "Password@123"
                 })
             };
 

@@ -21,9 +21,9 @@ namespace EMS.Persistence.Repositories
             _attendanceRepository = attendanceRepository;
         }
 
-        public async Task<DashboardSummaryDto> GetSummaryAsync(Guid? departmentId, DateTime date, CancellationToken ct = default)
+        public async Task<DashboardSummaryDto> GetSummaryAsync(Guid companyId, Guid? departmentId, DateTime date, CancellationToken ct = default)
         {
-            var employees = _db.Employees.AsNoTracking().AsQueryable();
+            var employees = _db.Employees.AsNoTracking().Where(e => e.CompanyId == companyId).AsQueryable();
             if (departmentId.HasValue)
                 employees = employees.Where(e => e.DepartmentId == departmentId.Value);
 
@@ -31,7 +31,8 @@ namespace EMS.Persistence.Repositories
             var active = await employees.CountAsync(e => e.IsActive, ct);
             var inactive = total - active;
 
-            var leaveRequests = _db.LeaveRequests.AsNoTracking().AsQueryable();
+            var leaveRequests = _db.LeaveRequests.AsNoTracking()
+                .Where(l => _db.Employees.Any(e => e.Id == l.EmployeeId && e.CompanyId == companyId));
             if (departmentId.HasValue)
             {
                 leaveRequests = leaveRequests.Where(l =>
@@ -45,7 +46,7 @@ namespace EMS.Persistence.Repositories
                 l.Status == LeaveStatus.Rejected && l.DecisionAtUtc.HasValue && l.DecisionAtUtc.Value.Date == date, ct);
 
             var departments = await _db.Departments.AsNoTracking()
-                .Where(d => !d.IsDeleted && (!departmentId.HasValue || d.Id == departmentId.Value))
+                .Where(d => !d.IsDeleted && d.CompanyId == companyId && (!departmentId.HasValue || d.Id == departmentId.Value))
                 .Select(d => new DepartmentSummaryDto
                 {
                     DepartmentId = d.Id,
@@ -54,7 +55,7 @@ namespace EMS.Persistence.Repositories
                 })
                 .ToListAsync(ct);
 
-            var attendance = await _attendanceRepository.GetDailyCountsAsync(date, departmentId, ct);
+            var attendance = await _attendanceRepository.GetDailyCountsAsync(companyId, date, departmentId, ct);
 
             return new DashboardSummaryDto
             {

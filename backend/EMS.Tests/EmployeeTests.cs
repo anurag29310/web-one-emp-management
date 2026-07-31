@@ -28,6 +28,16 @@ namespace EMS.Tests
             return new ApplicationDbContext(options);
         }
 
+        private static readonly Guid TestCompanyId = Guid.NewGuid();
+
+        private class FakeCurrentUserService : ICurrentUserService
+        {
+            public Guid? UserId => Guid.NewGuid();
+            public Guid? CompanyId => TestCompanyId;
+            public string? IpAddress => null;
+            public string? UserAgent => null;
+        }
+
         private class RecordingAuditLogger : IAuditLogger
         {
             public List<(string EntityName, Guid? EntityId, string Action)> Calls { get; } = new();
@@ -58,6 +68,7 @@ namespace EMS.Tests
             return new Employee
             {
                 Id = Guid.NewGuid(),
+                CompanyId = TestCompanyId,
                 EmployeeCode = code,
                 FirstName = firstName,
                 LastName = lastName,
@@ -74,8 +85,8 @@ namespace EMS.Tests
 
         private static async Task<(Designation Designation, OfficeLocation OfficeLocation)> SeedOrgRefsAsync(ApplicationDbContext db, string suffix)
         {
-            var designation = new Designation { Id = Guid.NewGuid(), Name = "Engineer-" + suffix, Code = "ENG-" + suffix, CreatedAtUtc = DateTime.UtcNow };
-            var officeLocation = new OfficeLocation { Id = Guid.NewGuid(), Name = "HQ-" + suffix, Code = "HQ-" + suffix, City = "Metropolis", Country = "US", TimeZoneId = "UTC", CreatedAtUtc = DateTime.UtcNow };
+            var designation = new Designation { Id = Guid.NewGuid(), CompanyId = TestCompanyId, Name = "Engineer-" + suffix, Code = "ENG-" + suffix, CreatedAtUtc = DateTime.UtcNow };
+            var officeLocation = new OfficeLocation { Id = Guid.NewGuid(), CompanyId = TestCompanyId, Name = "HQ-" + suffix, Code = "HQ-" + suffix, City = "Metropolis", Country = "US", TimeZoneId = "UTC", CreatedAtUtc = DateTime.UtcNow };
             db.Designations.Add(designation);
             db.OfficeLocations.Add(officeLocation);
             await db.SaveChangesAsync();
@@ -90,7 +101,7 @@ namespace EMS.Tests
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
             var auditLogger = new RecordingAuditLogger();
-            var handler = new CreateEmployeeCommandHandler(repo, auditLogger, NullLogger<CreateEmployeeCommandHandler>.Instance);
+            var handler = new CreateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<CreateEmployeeCommandHandler>.Instance);
 
             var cmd = new CreateEmployeeCommand
             {
@@ -117,7 +128,7 @@ namespace EMS.Tests
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
             var auditLogger = new RecordingAuditLogger();
-            var handler = new CreateEmployeeCommandHandler(repo, auditLogger, NullLogger<CreateEmployeeCommandHandler>.Instance);
+            var handler = new CreateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<CreateEmployeeCommandHandler>.Instance);
 
             var created = await handler.Handle(new CreateEmployeeCommand
             {
@@ -138,7 +149,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
-            var handler = new CreateEmployeeCommandHandler(repo, new RecordingAuditLogger(), NullLogger<CreateEmployeeCommandHandler>.Instance);
+            var handler = new CreateEmployeeCommandHandler(repo, new RecordingAuditLogger(), new FakeCurrentUserService(), NullLogger<CreateEmployeeCommandHandler>.Instance);
 
             await handler.Handle(new CreateEmployeeCommand { EmployeeCode = "DUP1", FirstName = "A", LastName = "One", JoinDate = DateTime.UtcNow }, CancellationToken.None);
 
@@ -151,7 +162,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
-            var handler = new CreateEmployeeCommandHandler(repo, new RecordingAuditLogger(), NullLogger<CreateEmployeeCommandHandler>.Instance);
+            var handler = new CreateEmployeeCommandHandler(repo, new RecordingAuditLogger(), new FakeCurrentUserService(), NullLogger<CreateEmployeeCommandHandler>.Instance);
 
             await handler.Handle(new CreateEmployeeCommand { EmployeeCode = "E1", FirstName = "A", LastName = "One", Email = "dup@test.local", JoinDate = DateTime.UtcNow }, CancellationToken.None);
 
@@ -168,8 +179,8 @@ namespace EMS.Tests
             var (designation, officeLocation) = await SeedOrgRefsAsync(db, "UPD1");
             var repo = new EmployeeRepository(db);
             var auditLogger = new RecordingAuditLogger();
-            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, NullLogger<CreateEmployeeCommandHandler>.Instance);
-            var updateHandler = new UpdateEmployeeCommandHandler(repo, auditLogger, NullLogger<UpdateEmployeeCommandHandler>.Instance);
+            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<CreateEmployeeCommandHandler>.Instance);
+            var updateHandler = new UpdateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<UpdateEmployeeCommandHandler>.Instance);
 
             var created = await createHandler.Handle(new CreateEmployeeCommand { EmployeeCode = "UPD1", FirstName = "Carol", LastName = "Lee", JoinDate = DateTime.UtcNow, DesignationId = designation.Id, OfficeLocationId = officeLocation.Id }, CancellationToken.None);
 
@@ -194,7 +205,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
-            var handler = new UpdateEmployeeCommandHandler(repo, new RecordingAuditLogger(), NullLogger<UpdateEmployeeCommandHandler>.Instance);
+            var handler = new UpdateEmployeeCommandHandler(repo, new RecordingAuditLogger(), new FakeCurrentUserService(), NullLogger<UpdateEmployeeCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 handler.Handle(new UpdateEmployeeCommand { Id = Guid.NewGuid(), EmployeeCode = "X", FirstName = "X", LastName = "X", JoinDate = DateTime.UtcNow }, CancellationToken.None));
@@ -206,8 +217,8 @@ namespace EMS.Tests
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
             var auditLogger = new RecordingAuditLogger();
-            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, NullLogger<CreateEmployeeCommandHandler>.Instance);
-            var updateHandler = new UpdateEmployeeCommandHandler(repo, auditLogger, NullLogger<UpdateEmployeeCommandHandler>.Instance);
+            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<CreateEmployeeCommandHandler>.Instance);
+            var updateHandler = new UpdateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<UpdateEmployeeCommandHandler>.Instance);
 
             await createHandler.Handle(new CreateEmployeeCommand { EmployeeCode = "A1", FirstName = "A", LastName = "One", Email = "taken@test.local", JoinDate = DateTime.UtcNow }, CancellationToken.None);
             var second = await createHandler.Handle(new CreateEmployeeCommand { EmployeeCode = "A2", FirstName = "B", LastName = "Two", Email = "free@test.local", JoinDate = DateTime.UtcNow }, CancellationToken.None);
@@ -223,8 +234,8 @@ namespace EMS.Tests
             var (designation, officeLocation) = await SeedOrgRefsAsync(db, "SAME1");
             var repo = new EmployeeRepository(db);
             var auditLogger = new RecordingAuditLogger();
-            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, NullLogger<CreateEmployeeCommandHandler>.Instance);
-            var updateHandler = new UpdateEmployeeCommandHandler(repo, auditLogger, NullLogger<UpdateEmployeeCommandHandler>.Instance);
+            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<CreateEmployeeCommandHandler>.Instance);
+            var updateHandler = new UpdateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<UpdateEmployeeCommandHandler>.Instance);
 
             var created = await createHandler.Handle(new CreateEmployeeCommand { EmployeeCode = "SAME1", FirstName = "D", LastName = "One", Email = "same@test.local", JoinDate = DateTime.UtcNow, DesignationId = designation.Id, OfficeLocationId = officeLocation.Id }, CancellationToken.None);
 
@@ -242,8 +253,8 @@ namespace EMS.Tests
             var (designation, officeLocation) = await SeedOrgRefsAsync(db, "DEL1");
             var repo = new EmployeeRepository(db);
             var auditLogger = new RecordingAuditLogger();
-            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, NullLogger<CreateEmployeeCommandHandler>.Instance);
-            var deleteHandler = new DeleteEmployeeCommandHandler(repo, auditLogger, NullLogger<DeleteEmployeeCommandHandler>.Instance);
+            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<CreateEmployeeCommandHandler>.Instance);
+            var deleteHandler = new DeleteEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<DeleteEmployeeCommandHandler>.Instance);
 
             var created = await createHandler.Handle(new CreateEmployeeCommand { EmployeeCode = "DEL1", FirstName = "E", LastName = "One", JoinDate = DateTime.UtcNow, DesignationId = designation.Id, OfficeLocationId = officeLocation.Id }, CancellationToken.None);
 
@@ -262,7 +273,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
-            var handler = new DeleteEmployeeCommandHandler(repo, new RecordingAuditLogger(), NullLogger<DeleteEmployeeCommandHandler>.Instance);
+            var handler = new DeleteEmployeeCommandHandler(repo, new RecordingAuditLogger(), new FakeCurrentUserService(), NullLogger<DeleteEmployeeCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 handler.Handle(new DeleteEmployeeCommand { Id = Guid.NewGuid() }, CancellationToken.None));
@@ -277,9 +288,9 @@ namespace EMS.Tests
             var (designation, officeLocation) = await SeedOrgRefsAsync(db, "RES1");
             var repo = new EmployeeRepository(db);
             var auditLogger = new RecordingAuditLogger();
-            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, NullLogger<CreateEmployeeCommandHandler>.Instance);
-            var deleteHandler = new DeleteEmployeeCommandHandler(repo, auditLogger, NullLogger<DeleteEmployeeCommandHandler>.Instance);
-            var restoreHandler = new RestoreEmployeeCommandHandler(repo, auditLogger, NullLogger<RestoreEmployeeCommandHandler>.Instance);
+            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<CreateEmployeeCommandHandler>.Instance);
+            var deleteHandler = new DeleteEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<DeleteEmployeeCommandHandler>.Instance);
+            var restoreHandler = new RestoreEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<RestoreEmployeeCommandHandler>.Instance);
 
             var created = await createHandler.Handle(new CreateEmployeeCommand { EmployeeCode = "RES1", FirstName = "F", LastName = "One", JoinDate = DateTime.UtcNow, DesignationId = designation.Id, OfficeLocationId = officeLocation.Id }, CancellationToken.None);
             await deleteHandler.Handle(new DeleteEmployeeCommand { Id = created.Id }, CancellationToken.None);
@@ -301,8 +312,8 @@ namespace EMS.Tests
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
             var auditLogger = new RecordingAuditLogger();
-            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, NullLogger<CreateEmployeeCommandHandler>.Instance);
-            var restoreHandler = new RestoreEmployeeCommandHandler(repo, auditLogger, NullLogger<RestoreEmployeeCommandHandler>.Instance);
+            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<CreateEmployeeCommandHandler>.Instance);
+            var restoreHandler = new RestoreEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<RestoreEmployeeCommandHandler>.Instance);
 
             var created = await createHandler.Handle(new CreateEmployeeCommand { EmployeeCode = "RES2", FirstName = "G", LastName = "One", JoinDate = DateTime.UtcNow }, CancellationToken.None);
 
@@ -319,9 +330,9 @@ namespace EMS.Tests
             var (designation, officeLocation) = await SeedOrgRefsAsync(db, "RES3");
             var repo = new EmployeeRepository(db);
             var auditLogger = new RecordingAuditLogger();
-            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, NullLogger<CreateEmployeeCommandHandler>.Instance);
-            var deactivateHandler = new DeactivateEmployeeCommandHandler(repo, auditLogger, NullLogger<DeactivateEmployeeCommandHandler>.Instance);
-            var restoreHandler = new RestoreEmployeeCommandHandler(repo, auditLogger, NullLogger<RestoreEmployeeCommandHandler>.Instance);
+            var createHandler = new CreateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<CreateEmployeeCommandHandler>.Instance);
+            var deactivateHandler = new DeactivateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<DeactivateEmployeeCommandHandler>.Instance);
+            var restoreHandler = new RestoreEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<RestoreEmployeeCommandHandler>.Instance);
 
             var created = await createHandler.Handle(new CreateEmployeeCommand { EmployeeCode = "RES3", FirstName = "H", LastName = "One", JoinDate = DateTime.UtcNow, DesignationId = designation.Id, OfficeLocationId = officeLocation.Id }, CancellationToken.None);
             await deactivateHandler.Handle(new DeactivateEmployeeCommand { Id = created.Id }, CancellationToken.None);
@@ -335,7 +346,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
-            var handler = new RestoreEmployeeCommandHandler(repo, new RecordingAuditLogger(), NullLogger<RestoreEmployeeCommandHandler>.Instance);
+            var handler = new RestoreEmployeeCommandHandler(repo, new RecordingAuditLogger(), new FakeCurrentUserService(), NullLogger<RestoreEmployeeCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 handler.Handle(new RestoreEmployeeCommand { Id = Guid.NewGuid() }, CancellationToken.None));
@@ -352,7 +363,7 @@ namespace EMS.Tests
             var repo = new EmployeeRepository(db);
             var target = db.Employees.Single();
             var auditLogger = new RecordingAuditLogger();
-            var handler = new ActivateEmployeeCommandHandler(repo, auditLogger, NullLogger<ActivateEmployeeCommandHandler>.Instance);
+            var handler = new ActivateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<ActivateEmployeeCommandHandler>.Instance);
 
             await handler.Handle(new ActivateEmployeeCommand { Id = target.Id }, CancellationToken.None);
 
@@ -365,7 +376,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
-            var handler = new ActivateEmployeeCommandHandler(repo, new RecordingAuditLogger(), NullLogger<ActivateEmployeeCommandHandler>.Instance);
+            var handler = new ActivateEmployeeCommandHandler(repo, new RecordingAuditLogger(), new FakeCurrentUserService(), NullLogger<ActivateEmployeeCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 handler.Handle(new ActivateEmployeeCommand { Id = Guid.NewGuid() }, CancellationToken.None));
@@ -380,7 +391,7 @@ namespace EMS.Tests
             var repo = new EmployeeRepository(db);
             var target = db.Employees.Single();
             var auditLogger = new RecordingAuditLogger();
-            var handler = new DeactivateEmployeeCommandHandler(repo, auditLogger, NullLogger<DeactivateEmployeeCommandHandler>.Instance);
+            var handler = new DeactivateEmployeeCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<DeactivateEmployeeCommandHandler>.Instance);
 
             await handler.Handle(new DeactivateEmployeeCommand { Id = target.Id }, CancellationToken.None);
 
@@ -393,7 +404,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
-            var handler = new DeactivateEmployeeCommandHandler(repo, new RecordingAuditLogger(), NullLogger<DeactivateEmployeeCommandHandler>.Instance);
+            var handler = new DeactivateEmployeeCommandHandler(repo, new RecordingAuditLogger(), new FakeCurrentUserService(), NullLogger<DeactivateEmployeeCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 handler.Handle(new DeactivateEmployeeCommand { Id = Guid.NewGuid() }, CancellationToken.None));
@@ -414,7 +425,7 @@ namespace EMS.Tests
             var repo = new EmployeeRepository(db);
             var target = db.Employees.Single();
             var auditLogger = new RecordingAuditLogger();
-            var handler = new UpdateEmployeeStatusCommandHandler(repo, auditLogger, NullLogger<UpdateEmployeeStatusCommandHandler>.Instance);
+            var handler = new UpdateEmployeeStatusCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<UpdateEmployeeStatusCommandHandler>.Instance);
 
             await handler.Handle(new UpdateEmployeeStatusCommand { Id = target.Id, Status = status }, CancellationToken.None);
 
@@ -432,7 +443,7 @@ namespace EMS.Tests
             await db.SaveChangesAsync();
             var repo = new EmployeeRepository(db);
             var target = db.Employees.Single();
-            var handler = new UpdateEmployeeStatusCommandHandler(repo, new RecordingAuditLogger(), NullLogger<UpdateEmployeeStatusCommandHandler>.Instance);
+            var handler = new UpdateEmployeeStatusCommandHandler(repo, new RecordingAuditLogger(), new FakeCurrentUserService(), NullLogger<UpdateEmployeeStatusCommandHandler>.Instance);
             var exitDate = DateTime.UtcNow.Date;
 
             await handler.Handle(new UpdateEmployeeStatusCommand { Id = target.Id, Status = "Terminated", ExitDate = exitDate }, CancellationToken.None);
@@ -446,7 +457,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
-            var handler = new UpdateEmployeeStatusCommandHandler(repo, new RecordingAuditLogger(), NullLogger<UpdateEmployeeStatusCommandHandler>.Instance);
+            var handler = new UpdateEmployeeStatusCommandHandler(repo, new RecordingAuditLogger(), new FakeCurrentUserService(), NullLogger<UpdateEmployeeStatusCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 handler.Handle(new UpdateEmployeeStatusCommand { Id = Guid.NewGuid(), Status = "Active" }, CancellationToken.None));
@@ -464,7 +475,7 @@ namespace EMS.Tests
             await db.SaveChangesAsync();
             var repo = new EmployeeRepository(db);
             var auditLogger = new RecordingAuditLogger();
-            var handler = new UpdateEmployeeProfileCommandHandler(repo, auditLogger, NullLogger<UpdateEmployeeProfileCommandHandler>.Instance);
+            var handler = new UpdateEmployeeProfileCommandHandler(repo, auditLogger, new FakeCurrentUserService(), NullLogger<UpdateEmployeeProfileCommandHandler>.Instance);
 
             await handler.Handle(new UpdateEmployeeProfileCommand
             {
@@ -487,7 +498,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
-            var handler = new UpdateEmployeeProfileCommandHandler(repo, new RecordingAuditLogger(), NullLogger<UpdateEmployeeProfileCommandHandler>.Instance);
+            var handler = new UpdateEmployeeProfileCommandHandler(repo, new RecordingAuditLogger(), new FakeCurrentUserService(), NullLogger<UpdateEmployeeProfileCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 handler.Handle(new UpdateEmployeeProfileCommand { Id = Guid.NewGuid() }, CancellationToken.None));
@@ -502,7 +513,7 @@ namespace EMS.Tests
             var emp = NewEmployee(db, "QRY1", "M", "One");
             await db.Employees.AddAsync(emp);
             await db.SaveChangesAsync();
-            var handler = new GetEmployeeByIdQueryHandler(new EmployeeRepository(db));
+            var handler = new GetEmployeeByIdQueryHandler(new EmployeeRepository(db), new FakeCurrentUserService());
 
             var result = await handler.Handle(new GetEmployeeByIdQuery { Id = emp.Id }, CancellationToken.None);
 
@@ -517,7 +528,7 @@ namespace EMS.Tests
             var emp = NewEmployee(db, "QRY2", "N", "One", isActive: false);
             await db.Employees.AddAsync(emp);
             await db.SaveChangesAsync();
-            var handler = new GetEmployeeByIdQueryHandler(new EmployeeRepository(db));
+            var handler = new GetEmployeeByIdQueryHandler(new EmployeeRepository(db), new FakeCurrentUserService());
 
             var result = await handler.Handle(new GetEmployeeByIdQuery { Id = emp.Id }, CancellationToken.None);
 
@@ -532,7 +543,7 @@ namespace EMS.Tests
                 NewEmployee(db, "SRCH1", "Zara", "Ahmed"),
                 NewEmployee(db, "SRCH2", "Omar", "Farouk"));
             await db.SaveChangesAsync();
-            var handler = new GetEmployeesQueryHandler(new EmployeeRepository(db));
+            var handler = new GetEmployeesQueryHandler(new EmployeeRepository(db), new FakeCurrentUserService());
 
             var result = await handler.Handle(new GetEmployeesQuery { Search = "Zara" }, CancellationToken.None);
 
@@ -550,7 +561,7 @@ namespace EMS.Tests
                 NewEmployee(db, "DEP2", "P", "Two", departmentId: deptId, status: "OnLeave"),
                 NewEmployee(db, "DEP3", "Q", "Three", departmentId: Guid.NewGuid(), status: "Active"));
             await db.SaveChangesAsync();
-            var handler = new GetEmployeesQueryHandler(new EmployeeRepository(db));
+            var handler = new GetEmployeesQueryHandler(new EmployeeRepository(db), new FakeCurrentUserService());
 
             var result = await handler.Handle(new GetEmployeesQuery { DepartmentId = deptId, Status = "Active" }, CancellationToken.None);
 
@@ -564,7 +575,7 @@ namespace EMS.Tests
             using var db = CreateDb();
             await db.Employees.AddAsync(NewEmployee(db, "PSZ1", "R", "One"));
             await db.SaveChangesAsync();
-            var handler = new GetEmployeesQueryHandler(new EmployeeRepository(db));
+            var handler = new GetEmployeesQueryHandler(new EmployeeRepository(db), new FakeCurrentUserService());
 
             var result = await handler.Handle(new GetEmployeesQuery { PageSize = 0 }, CancellationToken.None);
 
@@ -657,8 +668,8 @@ namespace EMS.Tests
             await db.SaveChangesAsync();
             var repo = new EmployeeRepository(db);
 
-            Assert.False(await repo.EmailExistsAsync(emp.Email!, emp.Id));
-            Assert.True(await repo.EmailExistsAsync(emp.Email!, null));
+            Assert.False(await repo.EmailExistsAsync(emp.Email!, TestCompanyId, emp.Id));
+            Assert.True(await repo.EmailExistsAsync(emp.Email!, TestCompanyId, null));
         }
 
         [Fact]
@@ -670,8 +681,8 @@ namespace EMS.Tests
             await db.SaveChangesAsync();
             var repo = new EmployeeRepository(db);
 
-            Assert.False(await repo.EmployeeCodeExistsAsync("SELF2", emp.Id));
-            Assert.True(await repo.EmployeeCodeExistsAsync("SELF2", null));
+            Assert.False(await repo.EmployeeCodeExistsAsync("SELF2", TestCompanyId, emp.Id));
+            Assert.True(await repo.EmployeeCodeExistsAsync("SELF2", TestCompanyId, null));
         }
 
         [Fact]
@@ -697,7 +708,7 @@ namespace EMS.Tests
             await repo.AddAsync(NewEmployee(db, "VAL1", "HH", "One"));
             await repo.SaveChangesAsync();
 
-            var validator = new EmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db));
+            var validator = new EmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db), new FakeCurrentUserService());
             var result = await validator.ValidateAsync(new CreateEmployeeCommand { EmployeeCode = "VAL1", FirstName = "II", LastName = "Two", JoinDate = DateTime.UtcNow });
 
             Assert.False(result.IsValid);
@@ -709,7 +720,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
-            var validator = new EmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db));
+            var validator = new EmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db), new FakeCurrentUserService());
 
             var result = await validator.ValidateAsync(new CreateEmployeeCommand { EmployeeCode = "VAL2", FirstName = "JJ", LastName = "One", Email = "not-an-email", JoinDate = DateTime.UtcNow });
 
@@ -723,7 +734,7 @@ namespace EMS.Tests
             using var db = CreateDb();
             var repo = new EmployeeRepository(db);
             var (designation, officeLocation) = await SeedOrgRefsAsync(db, "VAL3");
-            var validator = new EmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db));
+            var validator = new EmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db), new FakeCurrentUserService());
 
             var result = await validator.ValidateAsync(new CreateEmployeeCommand { EmployeeCode = "VAL3", FirstName = "KK", LastName = "One", Email = "kk@test.local", JoinDate = DateTime.UtcNow, DesignationId = designation.Id, OfficeLocationId = officeLocation.Id });
 
@@ -740,7 +751,7 @@ namespace EMS.Tests
             await repo.AddAsync(emp);
             await repo.SaveChangesAsync();
 
-            var validator = new UpdateEmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db));
+            var validator = new UpdateEmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db), new FakeCurrentUserService());
             var result = await validator.ValidateAsync(new UpdateEmployeeCommand { Id = emp.Id, EmployeeCode = "VAL4", FirstName = "LL", LastName = "One", Email = emp.Email, JoinDate = emp.JoinDate, DesignationId = designation.Id, OfficeLocationId = officeLocation.Id });
 
             Assert.True(result.IsValid);
@@ -756,7 +767,7 @@ namespace EMS.Tests
             await repo.AddAsync(second);
             await repo.SaveChangesAsync();
 
-            var validator = new UpdateEmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db));
+            var validator = new UpdateEmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db), new FakeCurrentUserService());
             var result = await validator.ValidateAsync(new UpdateEmployeeCommand { Id = second.Id, EmployeeCode = "VAL5", FirstName = "NN", LastName = "Two", JoinDate = second.JoinDate });
 
             Assert.False(result.IsValid);
@@ -777,7 +788,7 @@ namespace EMS.Tests
             db.Teams.Add(team);
             await db.SaveChangesAsync();
 
-            var validator = new EmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db));
+            var validator = new EmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db), new FakeCurrentUserService());
             var result = await validator.ValidateAsync(new CreateEmployeeCommand
             {
                 EmployeeCode = "TEAM1",
@@ -801,13 +812,13 @@ namespace EMS.Tests
             var repo = new EmployeeRepository(db);
             var (designation, officeLocation) = await SeedOrgRefsAsync(db, "TEAM2");
 
-            var dept = new Department { Id = Guid.NewGuid(), Name = "Dept C", Code = "DC", CreatedAtUtc = DateTime.UtcNow };
+            var dept = new Department { Id = Guid.NewGuid(), CompanyId = TestCompanyId, Name = "Dept C", Code = "DC", CreatedAtUtc = DateTime.UtcNow };
             db.Departments.Add(dept);
-            var team = new Team { Id = Guid.NewGuid(), DepartmentId = dept.Id, Name = "Team C", Code = "TC", CreatedAtUtc = DateTime.UtcNow };
+            var team = new Team { Id = Guid.NewGuid(), CompanyId = TestCompanyId, DepartmentId = dept.Id, Name = "Team C", Code = "TC", CreatedAtUtc = DateTime.UtcNow };
             db.Teams.Add(team);
             await db.SaveChangesAsync();
 
-            var validator = new EmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db));
+            var validator = new EmployeeCommandValidator(repo, new TeamRepository(db), new DesignationRepository(db), new OfficeLocationRepository(db), new FakeCurrentUserService());
             var result = await validator.ValidateAsync(new CreateEmployeeCommand
             {
                 EmployeeCode = "TEAM2",

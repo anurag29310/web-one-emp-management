@@ -23,9 +23,12 @@ namespace EMS.Tests
             return new ApplicationDbContext(options);
         }
 
+        private static readonly Guid TestCompanyId = Guid.NewGuid();
+
         private class FakeCurrentUserService : ICurrentUserService
         {
             public Guid? UserId => Guid.NewGuid();
+            public Guid? CompanyId => TestCompanyId;
             public string? IpAddress => null;
             public string? UserAgent => null;
         }
@@ -74,6 +77,7 @@ namespace EMS.Tests
             await repo.AddAsync(new EMS.Domain.Entities.OfficeLocation
             {
                 Id = Guid.NewGuid(),
+                CompanyId = TestCompanyId,
                 Name = "Existing",
                 Code = "HQ3",
                 City = "Austin",
@@ -83,7 +87,7 @@ namespace EMS.Tests
             });
             await repo.SaveChangesAsync();
 
-            var validator = new CreateOfficeLocationCommandValidator(repo);
+            var validator = new CreateOfficeLocationCommandValidator(repo, new FakeCurrentUserService());
             var result = await validator.ValidateAsync(ValidCreateCommand("HQ3"));
 
             Assert.False(result.IsValid);
@@ -95,7 +99,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new OfficeLocationRepository(db);
-            var validator = new CreateOfficeLocationCommandValidator(repo);
+            var validator = new CreateOfficeLocationCommandValidator(repo, new FakeCurrentUserService());
 
             var result = await validator.ValidateAsync(new CreateOfficeLocationCommand
             {
@@ -148,8 +152,8 @@ namespace EMS.Tests
 
             await deleteHandler.Handle(new DeleteOfficeLocationCommand { Id = created.Id }, CancellationToken.None);
 
-            Assert.Null(await repo.GetByIdAsync(created.Id, CancellationToken.None));
-            var stillThere = await repo.GetByIdIncludingDeletedAsync(created.Id, CancellationToken.None);
+            Assert.Null(await repo.GetByIdAsync(created.Id, TestCompanyId, CancellationToken.None));
+            var stillThere = await repo.GetByIdIncludingDeletedAsync(created.Id, TestCompanyId, CancellationToken.None);
             Assert.NotNull(stillThere);
             Assert.True(stillThere!.IsDeleted);
         }

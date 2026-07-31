@@ -2,6 +2,7 @@ using EMS.Application.Features.Announcements.Commands;
 using EMS.Application.Features.Announcements.Handlers;
 using EMS.Application.Features.Announcements.Queries;
 using EMS.Application.Features.Announcements.Validators;
+using EMS.Application.Interfaces;
 using EMS.Domain.Entities;
 using EMS.Persistence.Context;
 using EMS.Persistence.Repositories;
@@ -23,6 +24,14 @@ namespace EMS.Tests
                 .UseInMemoryDatabase("ems_announcements_test_" + Guid.NewGuid())
                 .Options;
             return new ApplicationDbContext(options);
+        }
+
+        private class FakeCurrentUserService : ICurrentUserService
+        {
+            public Guid? UserId => Guid.NewGuid();
+            public Guid? CompanyId => Guid.NewGuid();
+            public string? IpAddress => null;
+            public string? UserAgent => null;
         }
 
         private static async Task<(Department dept, Employee emp, User user)> SeedUserAsync(ApplicationDbContext db, string role, Guid? departmentId = null)
@@ -213,7 +222,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var departmentRepo = new DepartmentRepository(db);
-            var validator = new CreateAnnouncementCommandValidator(departmentRepo);
+            var validator = new CreateAnnouncementCommandValidator(departmentRepo, new FakeCurrentUserService());
 
             var result = await validator.ValidateAsync(new CreateAnnouncementCommand
             {
@@ -231,7 +240,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var departmentRepo = new DepartmentRepository(db);
-            var validator = new CreateAnnouncementCommandValidator(departmentRepo);
+            var validator = new CreateAnnouncementCommandValidator(departmentRepo, new FakeCurrentUserService());
 
             var result = await validator.ValidateAsync(new CreateAnnouncementCommand
             {
@@ -249,7 +258,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var departmentRepo = new DepartmentRepository(db);
-            var validator = new CreateAnnouncementCommandValidator(departmentRepo);
+            var validator = new CreateAnnouncementCommandValidator(departmentRepo, new FakeCurrentUserService());
 
             var result = await validator.ValidateAsync(new CreateAnnouncementCommand
             {

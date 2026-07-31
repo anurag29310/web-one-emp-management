@@ -4,12 +4,14 @@ import { useAuth } from '@/app/core/auth/useAuth'
 import { Avatar } from '@/app/shared/components/Avatar'
 import type { Role } from '@/app/shared/models/user'
 import { NotificationBell } from '@/app/features/notifications/components/NotificationBell'
+import { useUnreadConversationCount } from '@/app/features/messaging/hooks/useUnreadConversationCount'
 
 interface NavLeaf {
   to: string
   label: string
   icon: ReactNode
   roles?: Role[]
+  badge?: number
 }
 
 interface NavGroupDef {
@@ -201,6 +203,38 @@ const clientsIcon = (
   />
 )
 
+const goalsIcon = (
+  <path
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"
+  />
+)
+
+const reviewsIcon = (
+  <path
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    d="M9 12h6m-6 3h6m-9-9h.008v.008H6V6Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM5.25 3.75h13.5A2.25 2.25 0 0 1 21 6v12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 18V6a2.25 2.25 0 0 1 2.25-2.25Z"
+  />
+)
+
+const promotionsIcon = (
+  <path
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    d="M8.25 18.75a1.5 1.5 0 0 1-1.5-1.5V6.75a1.5 1.5 0 0 1 1.5-1.5h7.5a1.5 1.5 0 0 1 1.5 1.5v10.5a1.5 1.5 0 0 1-1.5 1.5h-7.5ZM12 5.25v13.5m6-9-2.25 2.25 2.25 2.25M6 8.25 3.75 10.5 6 12.75"
+  />
+)
+
+const messagesIcon = (
+  <path
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 0 1 .778-.332 48.294 48.294 0 0 0 5.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"
+  />
+)
+
 const navEntries: NavEntry[] = [
   { kind: 'leaf', leaf: { to: '/dashboard', label: 'Dashboard', icon: dashboardIcon } },
   { kind: 'leaf', leaf: { to: '/tasks', label: 'Tasks', icon: tasksIcon } },
@@ -218,6 +252,7 @@ const navEntries: NavEntry[] = [
         { to: '/office-locations', label: 'Office Locations', icon: officeLocationsIcon },
         { to: '/clients', label: 'Clients', icon: clientsIcon },
         { to: '/assets', label: 'Assets', icon: assetsIcon, roles: ['Admin', 'HR'] },
+        { to: '/candidates', label: 'Candidates', icon: employeesIcon, roles: ['Admin', 'HR'] },
       ],
     },
   },
@@ -236,8 +271,22 @@ const navEntries: NavEntry[] = [
       ],
     },
   },
+  { kind: 'leaf', leaf: { to: '/messages', label: 'Messages', icon: messagesIcon } },
   { kind: 'leaf', leaf: { to: '/announcements', label: 'Announcements', icon: announcementsIcon } },
   { kind: 'leaf', leaf: { to: '/reimbursements', label: 'Reimbursements', icon: payslipsIcon } },
+  {
+    kind: 'group',
+    group: {
+      key: 'performance',
+      label: 'Performance',
+      icon: goalsIcon,
+      items: [
+        { to: '/performance/goals', label: 'Goals', icon: goalsIcon },
+        { to: '/performance/reviews', label: 'Reviews', icon: reviewsIcon },
+        { to: '/performance/promotions', label: 'Promotions', icon: promotionsIcon },
+      ],
+    },
+  },
   {
     kind: 'group',
     group: {
@@ -296,7 +345,12 @@ function NavLeafLink({ leaf, indented }: { leaf: NavLeaf; indented?: boolean }) 
           >
             {leaf.icon}
           </svg>
-          {leaf.label}
+          <span className="flex-1">{leaf.label}</span>
+          {Boolean(leaf.badge) && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-semibold text-white">
+              {leaf.badge! > 9 ? '9+' : leaf.badge}
+            </span>
+          )}
         </>
       )}
     </NavLink>
@@ -371,6 +425,7 @@ function NavGroupSection({
 export function AppLayout() {
   const { user, logout } = useAuth()
   const location = useLocation()
+  const { unreadCount: unreadMessageCount } = useUnreadConversationCount()
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {}
@@ -424,7 +479,8 @@ export function AppLayout() {
           {navEntries.map((entry) => {
             if (entry.kind === 'leaf') {
               if (!isRoleVisible(entry.leaf.roles, user?.role)) return null
-              return <NavLeafLink key={entry.leaf.to} leaf={entry.leaf} />
+              const leaf = entry.leaf.to === '/messages' ? { ...entry.leaf, badge: unreadMessageCount } : entry.leaf
+              return <NavLeafLink key={entry.leaf.to} leaf={leaf} />
             }
 
             const visibleItems = entry.group.items.filter((item) => isRoleVisible(item.roles, user?.role))

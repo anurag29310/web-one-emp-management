@@ -342,37 +342,15 @@ Access: Authenticated
 Returns the current authenticated user's account, employee link, roles, and permissions,
 including `isMfaEnabled`.
 
-### 3.10 Register
+### 3.10 Register (removed — see Company Registration, §27.4)
 
-```text
-POST /auth/register
-```
-
-Access: Public
-
-Request:
-
-```json
-{
-  "userName": "jsmith",
-  "email": "jsmith@example.com",
-  "password": "Password@123"
-}
-```
-
-Response: same token response as login.
-
-There is no `roleId` field on this request, and none is accepted even if supplied — a
-self-registered account can never choose its own role. Every account is created with no role
-(the lowest-privilege `Employee` claim is issued by default) **except** the very first account
-ever created on a fresh deployment, which is automatically granted `Admin`. This bootstrap exists
-because there is otherwise no way to reach the `Admin`-only [Users API](#4-user-and-role-administration-apis)
-at all on a brand-new system. Every registration after the first gets no role, regardless of
-input — an existing Admin must assign one afterward via `PUT /users/{id}`.
-
-Rate limited per client IP (default: 5 requests / 60 seconds, configurable via `RateLimiting:Register`
-in app configuration), independently of the [Login](#31-login) endpoint's budget. Exceeding the limit
-returns `429 Too Many Requests` with a `Retry-After` header, same error body shape as login.
+`POST /auth/register` has been **removed**. Since this system became a multi-tenant platform
+(§27), a bare self-registered user with no company and no role is a dangling account that no
+longer has anywhere to belong — `POST /company-registration` (§27.4) is now the only path that
+can create a new tenant and its first (`Admin`) user. `RegisterUserCommandHandler` and its
+"first user ever becomes Admin" bootstrap are left in the codebase (and still covered by their
+own unit tests) but are no longer reachable over HTTP; the platform's first privileged account
+is now the Super Admin, bootstrapped from configuration at startup (§27.1).
 
 ### 3.11 MFA Setup
 
@@ -1205,6 +1183,11 @@ Audit APIs are useful for admin review and compliance.
 
 Query parameters: `userId`, `entityName`, `entityId`, `action`, `dateFrom`, `dateTo`, `page`, `pageSize`
 
+All three endpoints are implicitly scoped to the caller's own `CompanyId` (§27.3) — a tenant Admin
+can never see another company's audit trail, even by guessing an entry's id (treated as
+not-found on mismatch, the same "404 not 403" ownership-check convention used elsewhere in this
+API). Super Admin's cross-company equivalent is `GET /platform/audit-logs` (§27.5).
+
 ## 13. Export APIs
 
 Reporting requirements include Excel and PDF export. Export endpoints return the file directly
@@ -1308,6 +1291,7 @@ Response: `200 OK`, `Content-Type: application/vnd.openxmlformats-officedocument
 | `CanManagePerformance` (`Admin,HR,Manager` roles) | Create/edit Goals, add KPIs, start Reviews, propose Promotions (see §25) — the first policy to include `Manager`, gated further at the handler level to a caller's own direct reports unless Admin/HR |
 | `CanApprovePromotions` (`Admin,HR` roles) | Approve/Reject/Delete/Restore Promotions (see §25.3) — stricter than `CanManagePerformance` so a Manager cannot approve their own proposal |
 | `CanManageMessaging` (`Admin,HR` roles) | Delete/Restore a Conversation (see §26) — Admin/HR-only moderation; everyday messaging (create, send, list, read, add participants, leave) is open to any authenticated caller and scoped at the handler level to the caller being an active participant |
+| `IsSuperAdmin` (`SuperAdmin` role only) | Every `/platform/*` endpoint (see §27) — company management, platform dashboard, platform settings, cross-company audit logs. Entirely separate from every policy above: a Super Admin manages companies, not day-to-day tenant HR data, and none of the policies above ever grant `SuperAdmin` access |
 
 ## 16. Missing But Recommended APIs
 
@@ -2355,4 +2339,84 @@ Message response:
 ```
 
 Business rules enforced: only an active participant may send a message, view a conversation or its messages, add participants, or mark it read — a caller who isn't a participant gets `403`, and a nonexistent conversation gets `404`; sending a message advances the sender's own read watermark so their own message never shows as unread to them; a participant newly added to an existing conversation has their watermark set to the join time (not unread from the beginning), so a long conversation's prior history doesn't flood in as unread; leaving is rejected with `409` on a direct (1:1) conversation; every conversation create, participants-added, participant-left, message-sent, delete, and restore action is written to `AuditLogs`.
+
+## 27. Platform / Super Admin APIs
+
+This system is a multi-tenant SaaS platform: many companies share one deployment, distinguished by a `CompanyId` column on every tenant-scoped table (see database-design.md §24). A **Super Admin** tier sits above every tenant and manages companies through this entirely separate `/platform/*` surface — a Super Admin never touches day-to-day tenant HR data, and none of the role-based policies in §15 grant `SuperAdmin` access to it.
+
+### 27.1 Super Admin Bootstrap
+
+There is no API to create the first Super Admin — it is bootstrapped from configuration (`SuperAdmin:BootstrapEmail` / `SuperAdmin:BootstrapPassword`) on application startup, idempotently (only ever creates one row). It then logs in through the normal `POST /auth/login` like any other account; its JWT simply carries no `company_id` claim (see §27.2), and `TenantStatusMiddleware` never blocks it as a result.
+
+### 27.2 Tenant Status Enforcement
+
+Every JWT for a non-Super-Admin user carries a `company_id` claim. `TenantStatusMiddleware` runs on every authenticated request (between authentication and authorization) and rejects the request with `403 COMPANY_SUSPENDED` if that company is not `Active`/`Trial` — this closes the gap where a short-lived access token minted before a suspension would otherwise keep working until it naturally expired. `POST /auth/login` additionally rejects a suspended/inactive company's user outright at login time with the same underlying check, so tokens are never issued in the first place for a blocked tenant.
+
+### 27.3 Companies
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/platform/companies` | SuperAdmin | List companies — paginated, filterable by `status`, searchable by `search` (name) |
+| `GET` | `/platform/companies/{id}` | SuperAdmin | Company detail — includes `employeeCount` and the list of that company's Admin users |
+| `POST` | `/platform/companies` | SuperAdmin | Directly create a company (no approval gate — lands in `Active`) |
+| `PUT` | `/platform/companies/{id}` | SuperAdmin | Update name/timezone/currency/logo |
+| `DELETE` | `/platform/companies/{id}` | SuperAdmin | Soft-delete a company |
+| `POST` | `/platform/companies/{id}/restore` | SuperAdmin | Restore a soft-deleted company |
+| `POST` | `/platform/companies/{id}/activate` | SuperAdmin | `Suspended`/`Inactive` → `Active` |
+| `POST` | `/platform/companies/{id}/suspend` | SuperAdmin | → `Suspended`. Body: `{ "reason": "..." }` (optional). Revokes every refresh token for the company's users in the same operation |
+| `POST` | `/platform/companies/{id}/approve` | SuperAdmin | `PendingApproval` → `Trial` only; `409` otherwise |
+| `POST` | `/platform/companies/{id}/reject` | SuperAdmin | `PendingApproval` → `Rejected` only; `409` otherwise. Body: `{ "reason": "..." }` (optional) |
+| `POST` | `/platform/companies/{id}/force-logout` | SuperAdmin | Revokes every refresh token for the company's users without changing `Status` — for on-demand use (e.g. a suspected compromised account) |
+| `POST` | `/platform/companies/{id}/admins/{userId}/reset-password` | SuperAdmin | Issues a password reset token for one of the company's Admin users, reusing the existing self-service forgot-password mechanism |
+
+"Lock/Unlock Company" and "Activate/Suspend Company" are the same switch — `activate`/`suspend` are the only status-changing actions for an already-onboarded company; `approve`/`reject` exist solely for the one-time `PendingApproval` transition.
+
+### 27.4 Company Registration (Public)
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/company-registration/status` | Public | Whether the public registration form should currently be shown (`PlatformSettings.IsPublicRegistrationEnabled`) |
+| `POST` | `/company-registration` | Public | Register a new company and its first Admin user |
+
+Request:
+
+```json
+{
+  "companyName": "Acme Corp",
+  "timezone": "UTC",
+  "currency": "USD",
+  "adminUserName": "admin",
+  "adminEmail": "admin@acme.example.com",
+  "adminPassword": "Password@123"
+}
+```
+
+Response (`201`):
+
+```json
+{
+  "companyId": "00000000-0000-0000-0000-00000000c001",
+  "companyStatus": "PendingApproval",
+  "requiresApproval": true,
+  "accessToken": null,
+  "refreshToken": null,
+  "expiresInSeconds": null
+}
+```
+
+The Company and its first (`Admin`) User are created atomically. If `PlatformSettings.RequireApprovalForNewCompanies` is `true` (the default), the company lands in `PendingApproval` and no tokens are issued — the admin cannot log in until a Super Admin calls `POST /platform/companies/{id}/approve`. If approval is not required, the company lands directly in `Trial` and `accessToken`/`refreshToken` are populated immediately, same shape as login. Rate limited on the same `RegisterPolicy` budget the old `/auth/register` endpoint used (default: 5 requests / 60 seconds per client IP).
+
+### 27.5 Platform Dashboard And Audit
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/platform/dashboard/summary` | SuperAdmin | Cross-company counts: total/active/suspended/trial companies, total employees across every company, and the `recentCount` (default 5) most recently registered companies |
+| `GET` | `/platform/audit-logs` | SuperAdmin | Cross-company audit trail. Same filters as §12 plus an explicit optional `companyId` to drill into one tenant — omit it to see every company |
+
+### 27.6 Platform Settings
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/platform/settings` | SuperAdmin | Get the two registration toggles |
+| `PUT` | `/platform/settings` | SuperAdmin | Update them. Body: `{ "isPublicRegistrationEnabled": true, "requireApprovalForNewCompanies": true }` |
 

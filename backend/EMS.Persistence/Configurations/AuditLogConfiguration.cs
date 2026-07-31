@@ -12,6 +12,7 @@ namespace EMS.Persistence.Configurations
             builder.HasKey(x => x.Id);
 
             builder.Property(x => x.EntityName).IsRequired().HasMaxLength(150);
+            builder.HasOne<Company>().WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
             builder.Property(x => x.Action).IsRequired().HasMaxLength(100);
             builder.Property(x => x.OldValuesJson);
             builder.Property(x => x.NewValuesJson);
@@ -25,6 +26,8 @@ namespace EMS.Persistence.Configurations
                 .HasDatabaseName("IX_AuditLogs_UserId_CreatedAtUtc");
             builder.HasIndex(x => new { x.Action, x.CreatedAtUtc })
                 .HasDatabaseName("IX_AuditLogs_Action_CreatedAtUtc");
+            builder.HasIndex(x => new { x.CompanyId, x.CreatedAtUtc })
+                .HasDatabaseName("IX_AuditLogs_CompanyId_CreatedAtUtc");
         }
     }
 }

@@ -1,6 +1,7 @@
 using EMS.Application.Features.Departments;
 using EMS.Application.Features.Departments.Handlers;
 using EMS.Application.Features.Departments.Validators;
+using EMS.Application.Interfaces;
 using EMS.Persistence.Context;
 using EMS.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -23,12 +24,22 @@ namespace EMS.Tests
             return new ApplicationDbContext(options);
         }
 
+        private static readonly Guid TestCompanyId = Guid.NewGuid();
+
+        private class FakeCurrentUserService : ICurrentUserService
+        {
+            public Guid? UserId => Guid.NewGuid();
+            public Guid? CompanyId => TestCompanyId;
+            public string? IpAddress => null;
+            public string? UserAgent => null;
+        }
+
         [Fact]
         public async Task CreateDepartment_PersistsAndReturnsDepartment()
         {
             using var db = CreateDb();
             var repo = new DepartmentRepository(db);
-            var handler = new CreateDepartmentCommandHandler(repo, NullLogger<CreateDepartmentCommandHandler>.Instance);
+            var handler = new CreateDepartmentCommandHandler(repo, new FakeCurrentUserService(), NullLogger<CreateDepartmentCommandHandler>.Instance);
 
             var cmd = new CreateDepartmentCommand { Name = "Human Resources", Code = "HR" };
             var created = await handler.Handle(cmd, CancellationToken.None);
@@ -42,7 +53,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new DepartmentRepository(db);
-            var handler = new CreateDepartmentCommandHandler(repo, NullLogger<CreateDepartmentCommandHandler>.Instance);
+            var handler = new CreateDepartmentCommandHandler(repo, new FakeCurrentUserService(), NullLogger<CreateDepartmentCommandHandler>.Instance);
 
             await handler.Handle(new CreateDepartmentCommand { Name = "Finance", Code = "FIN" }, CancellationToken.None);
 
@@ -55,10 +66,10 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new DepartmentRepository(db);
-            await repo.AddAsync(new EMS.Domain.Entities.Department { Id = Guid.NewGuid(), Name = "Engineering", Code = "ENG", CreatedAtUtc = DateTime.UtcNow });
+            await repo.AddAsync(new EMS.Domain.Entities.Department { Id = Guid.NewGuid(), CompanyId = TestCompanyId, Name = "Engineering", Code = "ENG", CreatedAtUtc = DateTime.UtcNow });
             await repo.SaveChangesAsync();
 
-            var validator = new CreateDepartmentCommandValidator(repo);
+            var validator = new CreateDepartmentCommandValidator(repo, new FakeCurrentUserService());
             var result = await validator.ValidateAsync(new CreateDepartmentCommand { Name = "Engineering", Code = "ENG2" });
 
             Assert.False(result.IsValid);
@@ -70,8 +81,8 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new DepartmentRepository(db);
-            var createHandler = new CreateDepartmentCommandHandler(repo, NullLogger<CreateDepartmentCommandHandler>.Instance);
-            var updateHandler = new UpdateDepartmentCommandHandler(repo, NullLogger<UpdateDepartmentCommandHandler>.Instance);
+            var createHandler = new CreateDepartmentCommandHandler(repo, new FakeCurrentUserService(), NullLogger<CreateDepartmentCommandHandler>.Instance);
+            var updateHandler = new UpdateDepartmentCommandHandler(repo, new FakeCurrentUserService(), NullLogger<UpdateDepartmentCommandHandler>.Instance);
 
             var created = await createHandler.Handle(new CreateDepartmentCommand { Name = "Sales", Code = "SAL" }, CancellationToken.None);
 
@@ -86,17 +97,17 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new DepartmentRepository(db);
-            var createHandler = new CreateDepartmentCommandHandler(repo, NullLogger<CreateDepartmentCommandHandler>.Instance);
-            var deleteHandler = new DeleteDepartmentCommandHandler(repo, NullLogger<DeleteDepartmentCommandHandler>.Instance);
-            var restoreHandler = new RestoreDepartmentCommandHandler(repo, NullLogger<RestoreDepartmentCommandHandler>.Instance);
+            var createHandler = new CreateDepartmentCommandHandler(repo, new FakeCurrentUserService(), NullLogger<CreateDepartmentCommandHandler>.Instance);
+            var deleteHandler = new DeleteDepartmentCommandHandler(repo, new FakeCurrentUserService(), NullLogger<DeleteDepartmentCommandHandler>.Instance);
+            var restoreHandler = new RestoreDepartmentCommandHandler(repo, new FakeCurrentUserService(), NullLogger<RestoreDepartmentCommandHandler>.Instance);
 
             var created = await createHandler.Handle(new CreateDepartmentCommand { Name = "Legal", Code = "LEG" }, CancellationToken.None);
 
             await deleteHandler.Handle(new DeleteDepartmentCommand { Id = created.Id }, CancellationToken.None);
-            Assert.Null(await repo.GetByIdAsync(created.Id, CancellationToken.None));
+            Assert.Null(await repo.GetByIdAsync(created.Id, TestCompanyId, CancellationToken.None));
 
             await restoreHandler.Handle(new RestoreDepartmentCommand { Id = created.Id }, CancellationToken.None);
-            var restored = await repo.GetByIdAsync(created.Id, CancellationToken.None);
+            var restored = await repo.GetByIdAsync(created.Id, TestCompanyId, CancellationToken.None);
             Assert.NotNull(restored);
             Assert.False(restored!.IsDeleted);
         }
@@ -106,8 +117,8 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new DepartmentRepository(db);
-            var createHandler = new CreateDepartmentCommandHandler(repo, NullLogger<CreateDepartmentCommandHandler>.Instance);
-            var restoreHandler = new RestoreDepartmentCommandHandler(repo, NullLogger<RestoreDepartmentCommandHandler>.Instance);
+            var createHandler = new CreateDepartmentCommandHandler(repo, new FakeCurrentUserService(), NullLogger<CreateDepartmentCommandHandler>.Instance);
+            var restoreHandler = new RestoreDepartmentCommandHandler(repo, new FakeCurrentUserService(), NullLogger<RestoreDepartmentCommandHandler>.Instance);
 
             var created = await createHandler.Handle(new CreateDepartmentCommand { Name = "Marketing", Code = "MKT" }, CancellationToken.None);
 

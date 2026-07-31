@@ -57,6 +57,8 @@ namespace EMS.Persistence.Context
         public DbSet<EMS.Domain.Entities.Conversation> Conversations => Set<EMS.Domain.Entities.Conversation>();
         public DbSet<EMS.Domain.Entities.MessageParticipant> MessageParticipants => Set<EMS.Domain.Entities.MessageParticipant>();
         public DbSet<EMS.Domain.Entities.Message> Messages => Set<EMS.Domain.Entities.Message>();
+        public DbSet<EMS.Domain.Entities.Company> Companies => Set<EMS.Domain.Entities.Company>();
+        public DbSet<EMS.Domain.Entities.PlatformSettings> PlatformSettings => Set<EMS.Domain.Entities.PlatformSettings>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -109,6 +111,8 @@ namespace EMS.Persistence.Context
             modelBuilder.ApplyConfiguration(new Configurations.ConversationConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.MessageParticipantConfiguration());
             modelBuilder.ApplyConfiguration(new Configurations.MessageConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.CompanyConfiguration());
+            modelBuilder.ApplyConfiguration(new Configurations.PlatformSettingsConfiguration());
         }
     }
 }

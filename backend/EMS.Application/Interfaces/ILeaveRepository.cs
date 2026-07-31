@@ -28,14 +28,14 @@ namespace EMS.Application.Interfaces
         Task UpdateHolidayAsync(Holiday holiday, CancellationToken ct = default);
         Task DeleteHolidayAsync(Holiday holiday, CancellationToken ct = default);
 
-        Task<LeaveType?> GetLeaveTypeByIdAsync(Guid id, CancellationToken ct = default);
-        Task<LeaveType?> GetLeaveTypeByIdIncludingDeletedAsync(Guid id, CancellationToken ct = default);
-        Task<IEnumerable<LeaveType>> GetLeaveTypesAsync(CancellationToken ct = default);
+        Task<LeaveType?> GetLeaveTypeByIdAsync(Guid id, Guid companyId, CancellationToken ct = default);
+        Task<LeaveType?> GetLeaveTypeByIdIncludingDeletedAsync(Guid id, Guid companyId, CancellationToken ct = default);
+        Task<IEnumerable<LeaveType>> GetLeaveTypesAsync(Guid companyId, CancellationToken ct = default);
         Task AddLeaveTypeAsync(LeaveType leaveType, CancellationToken ct = default);
         Task UpdateLeaveTypeAsync(LeaveType leaveType, CancellationToken ct = default);
         Task DeleteLeaveTypeAsync(LeaveType leaveType, CancellationToken ct = default);
         Task RestoreLeaveTypeAsync(LeaveType leaveType, CancellationToken ct = default);
-        Task<bool> LeaveTypeCodeExistsAsync(string code, Guid? excludeId = null, CancellationToken ct = default);
+        Task<bool> LeaveTypeCodeExistsAsync(string code, Guid companyId, Guid? excludeId = null, CancellationToken ct = default);
 
         Task SaveChangesAsync(CancellationToken ct = default);
     }

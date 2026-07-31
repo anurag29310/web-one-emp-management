@@ -10,6 +10,7 @@ namespace EMS.Persistence.Configurations
         {
             builder.ToTable("Employees");
             builder.HasKey(x => x.Id);
+            builder.Property(x => x.CompanyId).IsRequired();
             builder.Property(x => x.EmployeeCode).IsRequired().HasMaxLength(50);
             builder.Property(x => x.FirstName).IsRequired().HasMaxLength(100);
             builder.Property(x => x.MiddleName).HasMaxLength(100);
@@ -28,13 +29,15 @@ namespace EMS.Persistence.Configurations
             builder.Property(x => x.EmploymentStatus).HasMaxLength(50);
             builder.Property(x => x.IsDeleted).HasDefaultValue(false);
 
-            builder.HasIndex(x => x.EmployeeCode).IsUnique();
-            builder.HasIndex(x => x.Email).IsUnique();
+            builder.HasIndex(x => new { x.CompanyId, x.EmployeeCode }).IsUnique();
+            builder.HasIndex(x => new { x.CompanyId, x.Email }).IsUnique();
+            builder.HasIndex(x => x.CompanyId);
             builder.HasIndex(x => x.DepartmentId);
             builder.HasIndex(x => x.ManagerId);
             builder.HasIndex(x => x.DesignationId);
             builder.HasIndex(x => x.OfficeLocationId);
 
+            builder.HasOne(x => x.Company).WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
             builder.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.SetNull);
             builder.HasOne(x => x.Team).WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.SetNull);
             builder.HasOne(x => x.Designation).WithMany().HasForeignKey(x => x.DesignationId).OnDelete(DeleteBehavior.Restrict);

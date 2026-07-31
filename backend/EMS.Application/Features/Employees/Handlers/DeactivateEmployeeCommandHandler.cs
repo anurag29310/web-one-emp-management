@@ -9,19 +9,22 @@ namespace EMS.Application.Features.Employees.Handlers
     {
         private readonly IEmployeeRepository _repo;
         private readonly IAuditLogger _auditLogger;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<DeactivateEmployeeCommandHandler> _logger;
 
-        public DeactivateEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ILogger<DeactivateEmployeeCommandHandler> logger)
+        public DeactivateEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ICurrentUserService currentUser, ILogger<DeactivateEmployeeCommandHandler> logger)
         {
             _repo = repo;
             _auditLogger = auditLogger;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
         public async Task<Unit> Handle(Commands.DeactivateEmployeeCommand request, CancellationToken cancellationToken)
         {
-            var emp = await _repo.GetByIdAsync(request.Id, cancellationToken)
-                ?? throw new System.InvalidOperationException($"Employee {request.Id} not found.");
+            var emp = await _repo.GetByIdAsync(request.Id, cancellationToken);
+            if (emp == null || emp.CompanyId != _currentUser.CompanyId!.Value)
+                throw new System.InvalidOperationException($"Employee {request.Id} not found.");
             emp.IsActive = false;
             emp.UpdatedAtUtc = System.DateTime.UtcNow;
             await _repo.UpdateAsync(emp, cancellationToken);

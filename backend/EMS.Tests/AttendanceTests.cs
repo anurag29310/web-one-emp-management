@@ -30,6 +30,16 @@ namespace EMS.Tests
         private static IGeocodingService CreateGeocodingStub(string? address = "123 Test St, Test City") =>
             Mock.Of<IGeocodingService>(g => g.ReverseGeocodeAsync(It.IsAny<decimal>(), It.IsAny<decimal>(), It.IsAny<CancellationToken>()) == Task.FromResult(address));
 
+        private static readonly Guid DefaultTestCompanyId = Guid.NewGuid();
+
+        private class FakeCurrentUserService : ICurrentUserService
+        {
+            public Guid? UserId => Guid.NewGuid();
+            public Guid? CompanyId => DefaultTestCompanyId;
+            public string? IpAddress => null;
+            public string? UserAgent => null;
+        }
+
         private static async Task<User> SeedUserAsync(ApplicationDbContext db, Guid? employeeId)
         {
             var user = new User
@@ -135,10 +145,27 @@ namespace EMS.Tests
             using var db = CreateDb();
             var employeeId = Guid.NewGuid();
             var user = await SeedUserAsync(db, employeeId);
+            var designationId = Guid.NewGuid();
+            var officeLocationId = Guid.NewGuid();
+            await db.Designations.AddAsync(new Designation { Id = designationId, CompanyId = DefaultTestCompanyId, Name = "Designation-" + designationId, Code = "DSG-" + designationId.ToString("N")[..8], CreatedAtUtc = DateTime.UtcNow });
+            await db.OfficeLocations.AddAsync(new OfficeLocation { Id = officeLocationId, CompanyId = DefaultTestCompanyId, Name = "Location-" + officeLocationId, Code = "LOC-" + officeLocationId.ToString("N")[..8], City = "City", Country = "Country", TimeZoneId = "UTC", CreatedAtUtc = DateTime.UtcNow });
+            await db.Employees.AddAsync(new Employee
+            {
+                Id = employeeId,
+                CompanyId = DefaultTestCompanyId,
+                EmployeeCode = "EMP" + employeeId.ToString("N")[..6],
+                FirstName = "Test",
+                LastName = "Employee",
+                DesignationId = designationId,
+                OfficeLocationId = officeLocationId,
+                JoinDate = DateTime.UtcNow.Date,
+                IsActive = true
+            });
 
             var shift = new Shift
             {
                 Id = Guid.NewGuid(),
+                CompanyId = DefaultTestCompanyId,
                 Name = "Day Shift",
                 StartTime = new TimeSpan(9, 0, 0),
                 EndTime = new TimeSpan(17, 0, 0),
@@ -184,7 +211,7 @@ namespace EMS.Tests
 
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
-            var handler = new CheckOutCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckOutCommandHandler>.Instance);
+            var handler = new CheckOutCommandHandler(repo, authRepo, CreateGeocodingStub(), new FakeCurrentUserService(), NullLogger<CheckOutCommandHandler>.Instance);
 
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(new CheckOutCommand
             {
@@ -207,7 +234,7 @@ namespace EMS.Tests
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
             var checkInHandler = new CheckInCommandHandler(repo, authRepo, new EmployeeRepository(db), new OfficeLocationRepository(db), CreateGeocodingStub(), NullLogger<CheckInCommandHandler>.Instance);
-            var checkOutHandler = new CheckOutCommandHandler(repo, authRepo, CreateGeocodingStub(), NullLogger<CheckOutCommandHandler>.Instance);
+            var checkOutHandler = new CheckOutCommandHandler(repo, authRepo, CreateGeocodingStub(), new FakeCurrentUserService(), NullLogger<CheckOutCommandHandler>.Instance);
 
             var checkInTime = new DateTime(2026, 6, 12, 9, 0, 0, DateTimeKind.Utc);
             await checkInHandler.Handle(new CheckInCommand
@@ -235,7 +262,7 @@ namespace EMS.Tests
             using var db = CreateDb();
             var employeeId = Guid.NewGuid();
             var repo = new AttendanceRepository(db);
-            var handler = new CreateAttendanceRecordCommandHandler(repo, NullLogger<CreateAttendanceRecordCommandHandler>.Instance);
+            var handler = new CreateAttendanceRecordCommandHandler(repo, new FakeCurrentUserService(), NullLogger<CreateAttendanceRecordCommandHandler>.Instance);
 
             var cmd = new CreateAttendanceRecordCommand
             {
@@ -414,7 +441,7 @@ namespace EMS.Tests
 
             var repo = new AttendanceRepository(db);
             var authRepo = new AuthRepository(db);
-            var handler = new ApproveAttendanceCorrectionCommandHandler(repo, authRepo, NullLogger<ApproveAttendanceCorrectionCommandHandler>.Instance);
+            var handler = new ApproveAttendanceCorrectionCommandHandler(repo, authRepo, new FakeCurrentUserService(), NullLogger<ApproveAttendanceCorrectionCommandHandler>.Instance);
 
             // The employee cannot approve their own correction.
             await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(new ApproveAttendanceCorrectionCommand
@@ -493,9 +520,9 @@ namespace EMS.Tests
             using var db = CreateDb();
             var repo = new AttendanceRepository(db);
 
-            var createHandler = new CreateShiftCommandHandler(repo, NullLogger<CreateShiftCommandHandler>.Instance);
-            var updateHandler = new UpdateShiftCommandHandler(repo, NullLogger<UpdateShiftCommandHandler>.Instance);
-            var deleteHandler = new DeleteShiftCommandHandler(repo, NullLogger<DeleteShiftCommandHandler>.Instance);
+            var createHandler = new CreateShiftCommandHandler(repo, new FakeCurrentUserService(), NullLogger<CreateShiftCommandHandler>.Instance);
+            var updateHandler = new UpdateShiftCommandHandler(repo, new FakeCurrentUserService(), NullLogger<UpdateShiftCommandHandler>.Instance);
+            var deleteHandler = new DeleteShiftCommandHandler(repo, new FakeCurrentUserService(), NullLogger<DeleteShiftCommandHandler>.Instance);
 
             var created = await createHandler.Handle(new CreateShiftCommand
             {
@@ -516,7 +543,7 @@ namespace EMS.Tests
             Assert.Equal("Morning Shift (Updated)", updated.Name);
 
             await deleteHandler.Handle(new DeleteShiftCommand { Id = created.Id }, CancellationToken.None);
-            Assert.Null(await repo.GetShiftByIdAsync(created.Id, CancellationToken.None));
+            Assert.Null(await repo.GetShiftByIdAsync(created.Id, DefaultTestCompanyId, CancellationToken.None));
         }
 
         [Fact]
@@ -525,10 +552,27 @@ namespace EMS.Tests
             using var db = CreateDb();
             var employeeId = Guid.NewGuid();
             var user = await SeedUserAsync(db, employeeId);
+            var designationId = Guid.NewGuid();
+            var officeLocationId = Guid.NewGuid();
+            await db.Designations.AddAsync(new Designation { Id = designationId, CompanyId = DefaultTestCompanyId, Name = "Designation-" + designationId, Code = "DSG-" + designationId.ToString("N")[..8], CreatedAtUtc = DateTime.UtcNow });
+            await db.OfficeLocations.AddAsync(new OfficeLocation { Id = officeLocationId, CompanyId = DefaultTestCompanyId, Name = "Location-" + officeLocationId, Code = "LOC-" + officeLocationId.ToString("N")[..8], City = "City", Country = "Country", TimeZoneId = "UTC", CreatedAtUtc = DateTime.UtcNow });
+            await db.Employees.AddAsync(new Employee
+            {
+                Id = employeeId,
+                CompanyId = DefaultTestCompanyId,
+                EmployeeCode = "EMP" + employeeId.ToString("N")[..6],
+                FirstName = "Test",
+                LastName = "Employee",
+                DesignationId = designationId,
+                OfficeLocationId = officeLocationId,
+                JoinDate = DateTime.UtcNow.Date,
+                IsActive = true
+            });
+            await db.SaveChangesAsync();
 
             var attendanceRepo = new AttendanceRepository(db);
-            var shiftHandler = new CreateShiftCommandHandler(attendanceRepo, NullLogger<CreateShiftCommandHandler>.Instance);
-            var assignHandler = new AssignEmployeeShiftCommandHandler(attendanceRepo, NullLogger<AssignEmployeeShiftCommandHandler>.Instance);
+            var shiftHandler = new CreateShiftCommandHandler(attendanceRepo, new FakeCurrentUserService(), NullLogger<CreateShiftCommandHandler>.Instance);
+            var assignHandler = new AssignEmployeeShiftCommandHandler(attendanceRepo, new FakeCurrentUserService(), NullLogger<AssignEmployeeShiftCommandHandler>.Instance);
 
             var shift = await shiftHandler.Handle(new CreateShiftCommand
             {
@@ -577,7 +621,7 @@ namespace EMS.Tests
                 .ReturnsAsync("Client Site, Chennai");
 
             var checkInHandler = new CheckInCommandHandler(repo, authRepo, new EmployeeRepository(db), new OfficeLocationRepository(db), geocodingMock.Object, NullLogger<CheckInCommandHandler>.Instance);
-            var checkOutHandler = new CheckOutCommandHandler(repo, authRepo, geocodingMock.Object, NullLogger<CheckOutCommandHandler>.Instance);
+            var checkOutHandler = new CheckOutCommandHandler(repo, authRepo, geocodingMock.Object, new FakeCurrentUserService(), NullLogger<CheckOutCommandHandler>.Instance);
 
             var checkInTime = new DateTime(2026, 6, 12, 9, 0, 0, DateTimeKind.Utc);
             await checkInHandler.Handle(new CheckInCommand
@@ -844,8 +888,8 @@ namespace EMS.Tests
         public async Task CreateOfficeLocationCommandValidator_RejectsOutOfRangeGeofenceValues(double latitude, double longitude, int radius)
         {
             var repo = new Mock<IOfficeLocationRepository>();
-            repo.Setup(r => r.CodeExistsAsync(It.IsAny<string>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
-            var validator = new EMS.Application.Features.OfficeLocations.Validators.CreateOfficeLocationCommandValidator(repo.Object);
+            repo.Setup(r => r.CodeExistsAsync(It.IsAny<string>(), It.IsAny<Guid>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+            var validator = new EMS.Application.Features.OfficeLocations.Validators.CreateOfficeLocationCommandValidator(repo.Object, Mock.Of<ICurrentUserService>(c => c.CompanyId == Guid.NewGuid()));
 
             var result = await validator.ValidateAsync(new EMS.Application.Features.OfficeLocations.CreateOfficeLocationCommand
             {
@@ -866,8 +910,8 @@ namespace EMS.Tests
         public async Task CreateOfficeLocationCommandValidator_RejectsPartiallySetGeofenceFields()
         {
             var repo = new Mock<IOfficeLocationRepository>();
-            repo.Setup(r => r.CodeExistsAsync(It.IsAny<string>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
-            var validator = new EMS.Application.Features.OfficeLocations.Validators.CreateOfficeLocationCommandValidator(repo.Object);
+            repo.Setup(r => r.CodeExistsAsync(It.IsAny<string>(), It.IsAny<Guid>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+            var validator = new EMS.Application.Features.OfficeLocations.Validators.CreateOfficeLocationCommandValidator(repo.Object, Mock.Of<ICurrentUserService>(c => c.CompanyId == Guid.NewGuid()));
 
             var result = await validator.ValidateAsync(new EMS.Application.Features.OfficeLocations.CreateOfficeLocationCommand
             {
@@ -888,8 +932,8 @@ namespace EMS.Tests
         public async Task CreateOfficeLocationCommandValidator_AcceptsFullyConfiguredGeofence()
         {
             var repo = new Mock<IOfficeLocationRepository>();
-            repo.Setup(r => r.CodeExistsAsync(It.IsAny<string>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
-            var validator = new EMS.Application.Features.OfficeLocations.Validators.CreateOfficeLocationCommandValidator(repo.Object);
+            repo.Setup(r => r.CodeExistsAsync(It.IsAny<string>(), It.IsAny<Guid>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+            var validator = new EMS.Application.Features.OfficeLocations.Validators.CreateOfficeLocationCommandValidator(repo.Object, Mock.Of<ICurrentUserService>(c => c.CompanyId == Guid.NewGuid()));
 
             var result = await validator.ValidateAsync(new EMS.Application.Features.OfficeLocations.CreateOfficeLocationCommand
             {

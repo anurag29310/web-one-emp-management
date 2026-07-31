@@ -5,12 +5,12 @@ namespace EMS.Application.Features.OfficeLocations.Validators
 {
     public class CreateOfficeLocationCommandValidator : AbstractValidator<CreateOfficeLocationCommand>
     {
-        public CreateOfficeLocationCommandValidator(IOfficeLocationRepository repo)
+        public CreateOfficeLocationCommandValidator(IOfficeLocationRepository repo, ICurrentUserService currentUser)
         {
             RuleFor(x => x.Name).NotEmpty().MaximumLength(150);
 
             RuleFor(x => x.Code).NotEmpty().MaximumLength(50)
-                .MustAsync(async (code, ct) => !await repo.CodeExistsAsync(code, null, ct)).WithMessage("Office location code already exists.");
+                .MustAsync(async (code, ct) => !await repo.CodeExistsAsync(code, currentUser.CompanyId!.Value, null, ct)).WithMessage("Office location code already exists.");
 
             RuleFor(x => x.City).NotEmpty().MaximumLength(100);
             RuleFor(x => x.Country).NotEmpty().MaximumLength(100);
@@ -31,12 +31,12 @@ namespace EMS.Application.Features.OfficeLocations.Validators
 
     public class UpdateOfficeLocationCommandValidator : AbstractValidator<UpdateOfficeLocationCommand>
     {
-        public UpdateOfficeLocationCommandValidator(IOfficeLocationRepository repo)
+        public UpdateOfficeLocationCommandValidator(IOfficeLocationRepository repo, ICurrentUserService currentUser)
         {
             RuleFor(x => x.Name).NotEmpty().MaximumLength(150);
 
             RuleFor(x => x.Code).NotEmpty().MaximumLength(50)
-                .MustAsync(async (cmd, code, ct) => !await repo.CodeExistsAsync(code, cmd.Id, ct)).WithMessage("Office location code already exists.");
+                .MustAsync(async (cmd, code, ct) => !await repo.CodeExistsAsync(code, currentUser.CompanyId!.Value, cmd.Id, ct)).WithMessage("Office location code already exists.");
 
             RuleFor(x => x.City).NotEmpty().MaximumLength(100);
             RuleFor(x => x.Country).NotEmpty().MaximumLength(100);

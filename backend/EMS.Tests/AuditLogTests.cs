@@ -28,6 +28,7 @@ namespace EMS.Tests
         private class FakeCurrentUserService : ICurrentUserService
         {
             public Guid? UserId { get; set; }
+            public Guid? CompanyId { get; set; } = Guid.NewGuid();
             public string? IpAddress { get; set; } = "127.0.0.1";
             public string? UserAgent { get; set; } = "xunit-test-agent";
         }
@@ -88,7 +89,7 @@ namespace EMS.Tests
             await repo.AddAsync(new AuditLog { Id = Guid.NewGuid(), EntityName = "Department", EntityId = Guid.NewGuid(), Action = "Created", CreatedAtUtc = DateTime.UtcNow });
             await repo.SaveChangesAsync();
 
-            var results = (await repo.GetPagedAsync(null, "Employee", null, null, null, null, 1, 20)).ToList();
+            var results = (await repo.GetPagedAsync(null, null, "Employee", null, null, null, null, 1, 20)).ToList();
 
             Assert.Equal(2, results.Count);
             Assert.All(results, r => Assert.Equal("Employee", r.EntityName));
@@ -106,7 +107,7 @@ namespace EMS.Tests
             await repo.AddAsync(new AuditLog { Id = Guid.NewGuid(), EntityName = "Employee", Action = "Created", CreatedAtUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc) });
             await repo.SaveChangesAsync();
 
-            var results = await repo.GetPagedAsync(null, null, null, null,
+            var results = await repo.GetPagedAsync(null, null, null, null, null,
                 new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc), 1, 20);
 
             Assert.Single(results);
@@ -124,7 +125,7 @@ namespace EMS.Tests
             await repo.AddAsync(new AuditLog { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), EntityName = "Employee", Action = "Created", CreatedAtUtc = DateTime.UtcNow });
             await repo.SaveChangesAsync();
 
-            var count = await repo.CountAsync(userId, null, null, null, null, null);
+            var count = await repo.CountAsync(null, userId, null, null, null, null, null);
 
             Assert.Equal(1, count);
         }
@@ -142,8 +143,8 @@ namespace EMS.Tests
             await repo.AddAsync(new AuditLog { Id = Guid.NewGuid(), EntityName = "Employee", EntityId = otherId, Action = "Created", CreatedAtUtc = DateTime.UtcNow });
             await repo.SaveChangesAsync();
 
-            var history = (await repo.GetForEntityAsync("Employee", employeeId, 1, 20)).ToList();
-            var count = await repo.CountForEntityAsync("Employee", employeeId);
+            var history = (await repo.GetForEntityAsync(null, "Employee", employeeId, 1, 20)).ToList();
+            var count = await repo.CountForEntityAsync(null, "Employee", employeeId);
 
             Assert.Equal(2, history.Count);
             Assert.Equal(2, count);
@@ -172,7 +173,7 @@ namespace EMS.Tests
                 await repo.AddAsync(new AuditLog { Id = Guid.NewGuid(), EntityName = "Employee", Action = "Created", CreatedAtUtc = DateTime.UtcNow.AddMinutes(-i) });
             await repo.SaveChangesAsync();
 
-            var handler = new GetAuditLogsQueryHandler(repo);
+            var handler = new GetAuditLogsQueryHandler(repo, new FakeCurrentUserService { CompanyId = null });
             var result = await handler.Handle(new GetAuditLogsQuery(), CancellationToken.None);
 
             Assert.Equal(3, result.TotalCount);
@@ -186,7 +187,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new AuditLogRepository(db);
-            var handler = new GetAuditLogByIdQueryHandler(repo);
+            var handler = new GetAuditLogByIdQueryHandler(repo, new FakeCurrentUserService { CompanyId = null });
 
             var result = await handler.Handle(new GetAuditLogByIdQuery { Id = Guid.NewGuid() }, CancellationToken.None);
 
@@ -203,7 +204,7 @@ namespace EMS.Tests
             await repo.AddAsync(new AuditLog { Id = Guid.NewGuid(), EntityName = "Department", EntityId = Guid.NewGuid(), Action = "Created", CreatedAtUtc = DateTime.UtcNow });
             await repo.SaveChangesAsync();
 
-            var handler = new GetAuditLogsForEntityQueryHandler(repo);
+            var handler = new GetAuditLogsForEntityQueryHandler(repo, new FakeCurrentUserService { CompanyId = null });
             var result = await handler.Handle(new GetAuditLogsForEntityQuery { EntityName = "Employee", EntityId = employeeId }, CancellationToken.None);
 
             Assert.Equal(1, result.TotalCount);

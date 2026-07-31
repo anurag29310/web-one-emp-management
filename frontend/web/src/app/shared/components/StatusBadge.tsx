@@ -13,6 +13,17 @@ const STATUS_STYLES: Record<string, string> = {
   Pending: 'bg-warning/15 text-warning ring-warning/30',
   Approved: 'bg-success/15 text-success ring-success/30',
   Rejected: 'bg-danger/15 text-danger ring-danger/30',
+  // Goal statuses (backend/EMS.Domain/Enums/GoalStatus.cs)
+  NotStarted: 'bg-surface-2 text-ink-subtle ring-hairline-strong',
+  InProgress: 'bg-primary/15 text-primary-hover ring-primary/30',
+  Completed: 'bg-success/15 text-success ring-success/30',
+  Cancelled: 'bg-danger/15 text-danger ring-danger/30',
+  // Review statuses (backend/EMS.Domain/Enums/ReviewStatus.cs)
+  Draft: 'bg-surface-2 text-ink-subtle ring-hairline-strong',
+  SelfAssessmentSubmitted: 'bg-warning/15 text-warning ring-warning/30',
+  // Promotion statuses (backend/EMS.Domain/Enums/PromotionStatus.cs)
+  Proposed: 'bg-warning/15 text-warning ring-warning/30',
+  Withdrawn: 'bg-surface-2 text-ink-subtle ring-hairline-strong',
 }
 
 export function StatusBadge({ status }: { status: string }) {

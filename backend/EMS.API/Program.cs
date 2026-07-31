@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 
 // Bootstrap logger: captures anything that happens before the host's own
@@ -33,7 +34,13 @@ try
         .Enrich.WithProperty("EnvironmentName", context.HostingEnvironment.EnvironmentName));
 
     // Add services to the container.
-    builder.Services.AddControllers();
+    // api-specification.md documents every enum field (task Priority, asset Status, interview
+    // Mode/Outcome, etc.) as a JSON string in both requests and responses, and response DTOs
+    // already convert enums to strings manually via .ToString() — but without this converter,
+    // System.Text.Json's default (numeric-by-ordinal) binding would reject those same string
+    // values on the way in for any command whose property is still a raw enum type.
+    builder.Services.AddControllers()
+        .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 // DbContext (PostgreSQL)
 builder.Services.AddDbContext<ApplicationDbContext>(opt =>
     opt.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -61,6 +68,8 @@ builder.Services.AddScoped<EMS.Application.Interfaces.IReimbursementRepository, 
 builder.Services.AddScoped<EMS.Application.Interfaces.IRecruitmentRepository, EMS.Persistence.Repositories.RecruitmentRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IAssetRepository, EMS.Persistence.Repositories.AssetRepository>();
 builder.Services.AddScoped<EMS.Application.Interfaces.IPerformanceRepository, EMS.Persistence.Repositories.PerformanceRepository>();
+builder.Services.AddScoped<EMS.Application.Interfaces.ICompanyRepository, EMS.Persistence.Repositories.CompanyRepository>();
+builder.Services.AddScoped<EMS.Application.Interfaces.IPlatformSettingsRepository, EMS.Persistence.Repositories.PlatformSettingsRepository>();
 
 // Background jobs
 builder.Services.AddHostedService<EMS.Infrastructure.BackgroundJobs.DailySweepHostedService>();
@@ -108,6 +117,11 @@ builder.Services.AddMediatR(cfg =>
 // Validators
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Employees.Commands.CreateEmployeeCommand>, EMS.Application.Features.Employees.Validators.EmployeeCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Employees.Commands.UpdateEmployeeCommand>, EMS.Application.Features.Employees.Validators.UpdateEmployeeCommandValidator>();
+// Company validators
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Companies.Commands.CreateCompanyCommand>, EMS.Application.Features.Companies.Validators.CreateCompanyCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Companies.Commands.UpdateCompanyCommand>, EMS.Application.Features.Companies.Validators.UpdateCompanyCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Companies.Commands.SuspendCompanyCommand>, EMS.Application.Features.Companies.Validators.SuspendCompanyCommandValidator>();
+builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Companies.Commands.RegisterCompanyCommand>, EMS.Application.Features.Companies.Validators.RegisterCompanyCommandValidator>();
 // Department validators
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Departments.CreateDepartmentCommand>, EMS.Application.Features.Departments.Validators.CreateDepartmentCommandValidator>();
 builder.Services.AddScoped<FluentValidation.IValidator<EMS.Application.Features.Departments.UpdateDepartmentCommand>, EMS.Application.Features.Departments.Validators.UpdateDepartmentCommandValidator>();
@@ -317,6 +331,10 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanManagePerformance", policy => policy.RequireRole("Admin", "HR", "Manager"));
     options.AddPolicy("CanApprovePromotions", policy => policy.RequireRole("Admin", "HR"));
     options.AddPolicy("CanManageMessaging", policy => policy.RequireRole("Admin", "HR"));
+
+    // Sits above every tenant policy above — SuperAdmin manages Companies via the separate
+    // /api/v1/platform surface, never the tenant-scoped endpoints those policies guard.
+    options.AddPolicy("IsSuperAdmin", policy => policy.RequireRole("SuperAdmin"));
 });
 
 // Rate limiting: login and register are the two unauthenticated endpoints an attacker can hammer
@@ -396,6 +414,37 @@ using (var scope = app.Services.CreateScope())
     {
         db.Database.EnsureCreated();
     }
+
+    // Bootstraps the first-ever SuperAdmin from configuration rather than an implicit "first user
+    // in the system" race (the old bootstrap-admin trick in RegisterUserCommandHandler, now
+    // superseded by company registration) — idempotent, so this only ever creates one row.
+    var bootstrapEmail = builder.Configuration["SuperAdmin:BootstrapEmail"];
+    var bootstrapPassword = builder.Configuration["SuperAdmin:BootstrapPassword"];
+    if (!string.IsNullOrWhiteSpace(bootstrapEmail) && !string.IsNullOrWhiteSpace(bootstrapPassword))
+    {
+        var superAdminExists = db.Users.Any(u => u.Role != null && u.Role.Name == "SuperAdmin" && !u.IsDeleted);
+        if (!superAdminExists)
+        {
+            var superAdminRole = db.Roles.FirstOrDefault(r => r.Name == "SuperAdmin");
+            if (superAdminRole != null)
+            {
+                var passwordHasher = scope.ServiceProvider.GetRequiredService<EMS.Application.Interfaces.IPasswordHashService>();
+                db.Users.Add(new EMS.Domain.Entities.User
+                {
+                    Id = Guid.NewGuid(),
+                    UserName = "superadmin",
+                    Email = bootstrapEmail,
+                    PasswordHash = passwordHasher.Hash(bootstrapPassword),
+                    RoleId = superAdminRole.Id,
+                    CompanyId = null,
+                    IsActive = true,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+                db.SaveChanges();
+                Log.Information("Bootstrapped initial SuperAdmin account ({Email})", bootstrapEmail);
+            }
+        }
+    }
 }
 
 // Configure the HTTP request pipeline.
@@ -432,6 +481,7 @@ app.UseCors(CorsPolicyName);
 app.UseRateLimiter();
 
 app.UseAuthentication();
+app.UseMiddleware<EMS.API.Middleware.TenantStatusMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();

@@ -221,6 +221,36 @@ const ReimbursementReviewQueuePage = lazy(() =>
     default: m.ReimbursementReviewQueuePage,
   })),
 )
+const CandidateListPage = lazy(() =>
+  import('@/app/features/recruitment/pages/CandidateListPage').then((m) => ({ default: m.CandidateListPage })),
+)
+const CandidateDetailPage = lazy(() =>
+  import('@/app/features/recruitment/pages/CandidateDetailPage').then((m) => ({ default: m.CandidateDetailPage })),
+)
+const GoalListPage = lazy(() =>
+  import('@/app/features/performance/pages/GoalListPage').then((m) => ({ default: m.GoalListPage })),
+)
+const GoalDetailPage = lazy(() =>
+  import('@/app/features/performance/pages/GoalDetailPage').then((m) => ({ default: m.GoalDetailPage })),
+)
+const ReviewListPage = lazy(() =>
+  import('@/app/features/performance/pages/ReviewListPage').then((m) => ({ default: m.ReviewListPage })),
+)
+const ReviewDetailPage = lazy(() =>
+  import('@/app/features/performance/pages/ReviewDetailPage').then((m) => ({ default: m.ReviewDetailPage })),
+)
+const PromotionListPage = lazy(() =>
+  import('@/app/features/performance/pages/PromotionListPage').then((m) => ({ default: m.PromotionListPage })),
+)
+const PromotionDetailPage = lazy(() =>
+  import('@/app/features/performance/pages/PromotionDetailPage').then((m) => ({ default: m.PromotionDetailPage })),
+)
+const ConversationListPage = lazy(() =>
+  import('@/app/features/messaging/pages/ConversationListPage').then((m) => ({ default: m.ConversationListPage })),
+)
+const ConversationDetailPage = lazy(() =>
+  import('@/app/features/messaging/pages/ConversationDetailPage').then((m) => ({ default: m.ConversationDetailPage })),
+)
 
 function PageFallback() {
   return <div className="min-h-screen bg-canvas p-6 text-sm text-ink-subtle">Loading…</div>
@@ -285,6 +315,16 @@ export function AppRouter() {
               <Route path="/reimbursements" element={<ReimbursementListPage />} />
               <Route path="/reimbursements/review" element={<ReimbursementReviewQueuePage />} />
               <Route path="/reimbursements/:id" element={<ReimbursementDetailPage />} />
+              <Route path="/candidates" element={<CandidateListPage />} />
+              <Route path="/candidates/:id" element={<CandidateDetailPage />} />
+              <Route path="/performance/goals" element={<GoalListPage />} />
+              <Route path="/performance/goals/:id" element={<GoalDetailPage />} />
+              <Route path="/performance/reviews" element={<ReviewListPage />} />
+              <Route path="/performance/reviews/:id" element={<ReviewDetailPage />} />
+              <Route path="/performance/promotions" element={<PromotionListPage />} />
+              <Route path="/performance/promotions/:id" element={<PromotionDetailPage />} />
+              <Route path="/messages" element={<ConversationListPage />} />
+              <Route path="/messages/:id" element={<ConversationDetailPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>
           </Route>

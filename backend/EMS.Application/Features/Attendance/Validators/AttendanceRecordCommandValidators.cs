@@ -7,7 +7,7 @@ namespace EMS.Application.Features.Attendance.Validators
 {
     public class CreateAttendanceRecordCommandValidator : AbstractValidator<CreateAttendanceRecordCommand>
     {
-        public CreateAttendanceRecordCommandValidator(IAttendanceRepository repo)
+        public CreateAttendanceRecordCommandValidator(IAttendanceRepository repo, ICurrentUserService currentUser)
         {
             RuleFor(x => x.EmployeeId).NotEmpty();
             RuleFor(x => x.AttendanceDate).NotEqual(default(System.DateTime));
@@ -18,7 +18,7 @@ namespace EMS.Application.Features.Attendance.Validators
             RuleFor(x => x.Notes).MaximumLength(500);
 
             RuleFor(x => x.ShiftId)
-                .MustAsync(async (shiftId, ct) => !shiftId.HasValue || await repo.GetShiftByIdAsync(shiftId.Value, ct) != null)
+                .MustAsync(async (shiftId, ct) => !shiftId.HasValue || await repo.GetShiftByIdAsync(shiftId.Value, currentUser.CompanyId!.Value, ct) != null)
                 .WithMessage("Shift not found.");
 
             RuleFor(x => x.CheckOutAtUtc)
@@ -30,7 +30,7 @@ namespace EMS.Application.Features.Attendance.Validators
 
     public class UpdateAttendanceRecordCommandValidator : AbstractValidator<UpdateAttendanceRecordCommand>
     {
-        public UpdateAttendanceRecordCommandValidator(IAttendanceRepository repo)
+        public UpdateAttendanceRecordCommandValidator(IAttendanceRepository repo, ICurrentUserService currentUser)
         {
             RuleFor(x => x.Id).NotEmpty();
             RuleFor(x => x.Status)
@@ -40,7 +40,7 @@ namespace EMS.Application.Features.Attendance.Validators
             RuleFor(x => x.Notes).MaximumLength(500);
 
             RuleFor(x => x.ShiftId)
-                .MustAsync(async (shiftId, ct) => !shiftId.HasValue || await repo.GetShiftByIdAsync(shiftId.Value, ct) != null)
+                .MustAsync(async (shiftId, ct) => !shiftId.HasValue || await repo.GetShiftByIdAsync(shiftId.Value, currentUser.CompanyId!.Value, ct) != null)
                 .WithMessage("Shift not found.");
 
             RuleFor(x => x.CheckOutAtUtc)

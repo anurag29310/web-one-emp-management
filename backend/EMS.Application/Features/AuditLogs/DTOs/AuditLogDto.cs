@@ -6,6 +6,7 @@ namespace EMS.Application.Features.AuditLogs.DTOs
     public class AuditLogDto
     {
         public Guid Id { get; set; }
+        public Guid? CompanyId { get; set; }
         public Guid? UserId { get; set; }
         public string EntityName { get; set; } = null!;
         public Guid? EntityId { get; set; }
@@ -19,6 +20,7 @@ namespace EMS.Application.Features.AuditLogs.DTOs
         public static AuditLogDto FromEntity(AuditLog log) => new()
         {
             Id = log.Id,
+            CompanyId = log.CompanyId,
             UserId = log.UserId,
             EntityName = log.EntityName,
             EntityId = log.EntityId,

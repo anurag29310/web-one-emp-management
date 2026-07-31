@@ -11,22 +11,26 @@ namespace EMS.Application.Features.Leave.Handlers
     public class CreateLeaveTypeCommandHandler : IRequestHandler<Commands.CreateLeaveTypeCommand, LeaveType>
     {
         private readonly ILeaveRepository _repo;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<CreateLeaveTypeCommandHandler> _logger;
 
-        public CreateLeaveTypeCommandHandler(ILeaveRepository repo, ILogger<CreateLeaveTypeCommandHandler> logger)
+        public CreateLeaveTypeCommandHandler(ILeaveRepository repo, ICurrentUserService currentUser, ILogger<CreateLeaveTypeCommandHandler> logger)
         {
             _repo = repo;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
         public async Task<LeaveType> Handle(Commands.CreateLeaveTypeCommand request, CancellationToken cancellationToken)
         {
-            if (!string.IsNullOrWhiteSpace(request.Code) && await _repo.LeaveTypeCodeExistsAsync(request.Code, ct: cancellationToken))
+            var companyId = _currentUser.CompanyId!.Value;
+            if (!string.IsNullOrWhiteSpace(request.Code) && await _repo.LeaveTypeCodeExistsAsync(request.Code, companyId, ct: cancellationToken))
                 throw new InvalidOperationException("Leave type code already exists.");
 
             var leaveType = new LeaveType
             {
                 Id = Guid.NewGuid(),
+                CompanyId = companyId,
                 Name = request.Name,
                 Code = request.Code,
                 IsPaid = request.IsPaid,

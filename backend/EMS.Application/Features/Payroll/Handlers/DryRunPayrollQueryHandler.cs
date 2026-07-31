@@ -16,15 +16,17 @@ namespace EMS.Application.Features.Payroll.Handlers
         private readonly IPayrollRepository _repo;
         private readonly IReimbursementRepository _reimbursementRepo;
         private readonly IAttendanceRepository _attendanceRepo;
+        private readonly ICurrentUserService _currentUser;
         private readonly decimal _standardMonthlyHours;
         private readonly decimal _overtimeMultiplier;
         private readonly int _defaultDailyShiftMinutes;
 
-        public DryRunPayrollQueryHandler(IPayrollRepository repo, IReimbursementRepository reimbursementRepo, IAttendanceRepository attendanceRepo, IConfiguration config)
+        public DryRunPayrollQueryHandler(IPayrollRepository repo, IReimbursementRepository reimbursementRepo, IAttendanceRepository attendanceRepo, ICurrentUserService currentUser, IConfiguration config)
         {
             _repo = repo;
             _reimbursementRepo = reimbursementRepo;
             _attendanceRepo = attendanceRepo;
+            _currentUser = currentUser;
             _standardMonthlyHours = decimal.TryParse(config["Payroll:StandardMonthlyHours"], out var hours) ? hours : 208m;
             _overtimeMultiplier = decimal.TryParse(config["Payroll:OvertimeMultiplier"], out var multiplier) ? multiplier : 1.5m;
             _defaultDailyShiftMinutes = int.TryParse(config["Payroll:DefaultDailyShiftMinutes"], out var minutes) ? minutes : 480;
@@ -45,7 +47,7 @@ namespace EMS.Application.Features.Payroll.Handlers
             foreach (var record in records)
             {
                 if (!record.TotalWorkMinutes.HasValue) continue;
-                var shift = record.ShiftId.HasValue ? await _attendanceRepo.GetShiftByIdAsync(record.ShiftId.Value, ct) : null;
+                var shift = record.ShiftId.HasValue ? await _attendanceRepo.GetShiftByIdAsync(record.ShiftId.Value, _currentUser.CompanyId!.Value, ct) : null;
                 var standardMinutes = OvertimeCalculator.StandardDailyMinutes(shift, _defaultDailyShiftMinutes);
                 overtimeMinutes += OvertimeCalculator.OvertimeMinutesForDay(record.TotalWorkMinutes, standardMinutes);
             }

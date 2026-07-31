@@ -48,13 +48,13 @@ namespace EMS.Application.Features.Attendance.Handlers
             var employee = await _employeeRepo.GetByIdAsync(request.EmployeeId, cancellationToken);
             if (employee != null)
             {
-                var office = await _officeLocationRepo.GetByIdAsync(employee.OfficeLocationId, cancellationToken);
+                var office = await _officeLocationRepo.GetByIdAsync(employee.OfficeLocationId, employee.CompanyId, cancellationToken);
                 if (office != null && !GeofenceCalculator.IsWithinGeofence(request.Latitude, request.Longitude, office.Latitude, office.Longitude, office.GeofenceRadiusMeters))
                     throw new InvalidOperationException($"Punch In must originate within {office.GeofenceRadiusMeters}m of {office.Name}.");
             }
 
             var activeShift = await _repo.GetActiveEmployeeShiftAsync(request.EmployeeId, date, cancellationToken);
-            var shift = activeShift != null ? await _repo.GetShiftByIdAsync(activeShift.ShiftId, cancellationToken) : null;
+            var shift = activeShift != null && employee != null ? await _repo.GetShiftByIdAsync(activeShift.ShiftId, employee.CompanyId, cancellationToken) : null;
             var isLate = AttendanceCalculator.IsLateArrival(request.CheckInAtUtc, shift);
             var status = isLate ? AttendanceStatus.Late : AttendanceStatus.Present;
             var address = await _geocodingService.ReverseGeocodeAsync(request.Latitude, request.Longitude, cancellationToken);

@@ -7,7 +7,7 @@ namespace EMS.Application.Features.Recruitment.Validators
 {
     public class CreateOfferCommandValidator : AbstractValidator<CreateOfferCommand>
     {
-        public CreateOfferCommandValidator(IDesignationRepository designationRepo, IDepartmentRepository departmentRepo)
+        public CreateOfferCommandValidator(IDesignationRepository designationRepo, IDepartmentRepository departmentRepo, ICurrentUserService currentUser)
         {
             RuleFor(x => x.CandidateId).NotEmpty();
             RuleFor(x => x.OfferedSalary).GreaterThan(0);
@@ -16,11 +16,11 @@ namespace EMS.Application.Features.Recruitment.Validators
             RuleFor(x => x.Notes).MaximumLength(1000);
 
             RuleFor(x => x.DesignationId).NotEmpty()
-                .MustAsync(async (id, ct) => await designationRepo.GetByIdAsync(id, ct) != null)
+                .MustAsync(async (id, ct) => await designationRepo.GetByIdAsync(id, currentUser.CompanyId!.Value, ct) != null)
                 .WithMessage("Designation does not exist.");
 
             RuleFor(x => x.DepartmentId)
-                .MustAsync(async (id, ct) => id == null || await departmentRepo.GetByIdAsync(id.Value, ct) != null)
+                .MustAsync(async (id, ct) => id == null || await departmentRepo.GetByIdAsync(id.Value, currentUser.CompanyId!.Value, ct) != null)
                 .WithMessage("Department does not exist.");
         }
     }

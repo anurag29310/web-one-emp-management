@@ -23,6 +23,15 @@ namespace EMS.Infrastructure.Services
             }
         }
 
+        public Guid? CompanyId
+        {
+            get
+            {
+                var claim = _httpContextAccessor.HttpContext?.User?.FindFirstValue("company_id");
+                return Guid.TryParse(claim, out var id) ? id : null;
+            }
+        }
+
         public string? IpAddress => _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
 
         public string? UserAgent => _httpContextAccessor.HttpContext?.Request?.Headers.UserAgent.ToString();

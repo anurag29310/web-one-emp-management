@@ -20,17 +20,19 @@ namespace EMS.Application.Features.Exports.Handlers
 
         private readonly IEmployeeRepository _repo;
         private readonly IExcelExportService _excelService;
+        private readonly ICurrentUserService _currentUser;
 
-        public ExportEmployeesQueryHandler(IEmployeeRepository repo, IExcelExportService excelService)
+        public ExportEmployeesQueryHandler(IEmployeeRepository repo, IExcelExportService excelService, ICurrentUserService currentUser)
         {
             _repo = repo;
             _excelService = excelService;
+            _currentUser = currentUser;
         }
 
         public async Task<ExportFileResult> Handle(ExportEmployeesQuery request, CancellationToken cancellationToken)
         {
             var employees = await _repo.GetAllForExportAsync(
-                request.Search, request.SortBy, request.SortDir, request.DepartmentId, request.Status, ct: cancellationToken);
+                _currentUser.CompanyId!.Value, request.Search, request.SortBy, request.SortDir, request.DepartmentId, request.Status, ct: cancellationToken);
 
             var rows = new List<IReadOnlyList<object?>>();
             foreach (var e in employees)

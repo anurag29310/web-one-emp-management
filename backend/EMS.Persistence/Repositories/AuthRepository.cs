@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,11 +22,11 @@ namespace EMS.Persistence.Repositories
         public AuthRepository(ApplicationDbContext db) => _db = db;
 
         public async Task<User?> GetByUsernameOrEmailAsync(string userNameOrEmail, CancellationToken ct = default) =>
-            await _db.Users.Include(u => u.Role)
+            await _db.Users.Include(u => u.Role).Include(u => u.Company)
                 .FirstOrDefaultAsync(u => !u.IsDeleted && (u.UserName == userNameOrEmail || u.Email == userNameOrEmail), ct);
 
         public async Task<User?> GetByIdAsync(Guid userId, CancellationToken ct = default) =>
-            await _db.Users.Include(u => u.Role)
+            await _db.Users.Include(u => u.Role).Include(u => u.Company)
                 .FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted, ct);
 
         public async Task AddUserAsync(User user, CancellationToken ct = default) =>
@@ -61,6 +62,17 @@ namespace EMS.Persistence.Repositories
         {
             var tokens = await _db.RefreshTokens
                 .Where(r => r.UserId == userId && !r.IsRevoked)
+                .ToListAsync(ct);
+
+            foreach (var t in tokens)
+                t.IsRevoked = true;
+        }
+
+        public async Task RevokeAllRefreshTokensForCompanyAsync(Guid companyId, CancellationToken ct = default)
+        {
+            var companyUserIds = _db.Users.Where(u => u.CompanyId == companyId).Select(u => u.Id);
+            var tokens = await _db.RefreshTokens
+                .Where(r => !r.IsRevoked && companyUserIds.Contains(r.UserId))
                 .ToListAsync(ct);
 
             foreach (var t in tokens)

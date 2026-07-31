@@ -11,19 +11,22 @@ namespace EMS.Application.Features.Employees.Handlers
     {
         private readonly IEmployeeRepository _repo;
         private readonly IAuditLogger _auditLogger;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<DeleteEmployeeCommandHandler> _logger;
 
-        public DeleteEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ILogger<DeleteEmployeeCommandHandler> logger)
+        public DeleteEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ICurrentUserService currentUser, ILogger<DeleteEmployeeCommandHandler> logger)
         {
             _repo = repo;
             _auditLogger = auditLogger;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
         public async Task<Unit> Handle(Commands.DeleteEmployeeCommand request, CancellationToken cancellationToken)
         {
-            var emp = await _repo.GetByIdAsync(request.Id, cancellationToken)
-                ?? throw new System.InvalidOperationException($"Employee {request.Id} not found.");
+            var emp = await _repo.GetByIdAsync(request.Id, cancellationToken);
+            if (emp == null || emp.CompanyId != _currentUser.CompanyId!.Value)
+                throw new System.InvalidOperationException($"Employee {request.Id} not found.");
             await _repo.DeleteAsync(emp, cancellationToken);
             await _repo.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Deleted (deactivated) employee {EmployeeId}", emp.Id);

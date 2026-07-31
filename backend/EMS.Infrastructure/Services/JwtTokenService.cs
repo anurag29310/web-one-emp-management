@@ -25,12 +25,19 @@ namespace EMS.Infrastructure.Services
             var issuer = _config["Jwt:Issuer"] ?? "ems";
             var expires = DateTime.UtcNow.AddMinutes(15);
 
-            var claims = new[] {
+            var claims = new System.Collections.Generic.List<Claim> {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.UserName),
                 new Claim(ClaimTypes.Email, user.Email ?? ""),
                 new Claim(ClaimTypes.Role, user.Role?.Name ?? "Employee")
             };
+
+            // Absent only for SuperAdmin-role users, who sit above every tenant. A bare custom
+            // claim type (not a ClaimTypes.* constant) so it survives the JwtSecurityTokenHandler's
+            // default inbound claim map untouched, the same way ClaimTypes.NameIdentifier already
+            // round-trips today via Sub.
+            if (user.CompanyId.HasValue)
+                claims.Add(new Claim("company_id", user.CompanyId.Value.ToString()));
 
             var signing = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
             var creds = new SigningCredentials(signing, SecurityAlgorithms.HmacSha256);

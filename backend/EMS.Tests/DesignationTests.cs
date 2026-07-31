@@ -23,9 +23,12 @@ namespace EMS.Tests
             return new ApplicationDbContext(options);
         }
 
+        private static readonly Guid TestCompanyId = Guid.NewGuid();
+
         private class FakeCurrentUserService : ICurrentUserService
         {
             public Guid? UserId => Guid.NewGuid();
+            public Guid? CompanyId => TestCompanyId;
             public string? IpAddress => null;
             public string? UserAgent => null;
         }
@@ -76,10 +79,10 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new DesignationRepository(db);
-            await repo.AddAsync(new EMS.Domain.Entities.Designation { Id = Guid.NewGuid(), Name = "Analyst", Code = "ANL", CreatedAtUtc = DateTime.UtcNow });
+            await repo.AddAsync(new EMS.Domain.Entities.Designation { Id = Guid.NewGuid(), CompanyId = TestCompanyId, Name = "Analyst", Code = "ANL", CreatedAtUtc = DateTime.UtcNow });
             await repo.SaveChangesAsync();
 
-            var validator = new CreateDesignationCommandValidator(repo);
+            var validator = new CreateDesignationCommandValidator(repo, new FakeCurrentUserService());
             var result = await validator.ValidateAsync(new CreateDesignationCommand { Name = "Analyst", Code = "ANL2" });
 
             Assert.False(result.IsValid);
@@ -115,8 +118,8 @@ namespace EMS.Tests
 
             await deleteHandler.Handle(new DeleteDesignationCommand { Id = created.Id }, CancellationToken.None);
 
-            Assert.Null(await repo.GetByIdAsync(created.Id, CancellationToken.None));
-            var stillThere = await repo.GetByIdIncludingDeletedAsync(created.Id, CancellationToken.None);
+            Assert.Null(await repo.GetByIdAsync(created.Id, TestCompanyId, CancellationToken.None));
+            var stillThere = await repo.GetByIdIncludingDeletedAsync(created.Id, TestCompanyId, CancellationToken.None);
             Assert.NotNull(stillThere);
             Assert.True(stillThere!.IsDeleted);
         }

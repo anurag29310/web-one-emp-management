@@ -10,17 +10,19 @@ namespace EMS.Application.Features.Departments.Handlers
     public class RestoreDepartmentCommandHandler : IRequestHandler<RestoreDepartmentCommand>
     {
         private readonly IDepartmentRepository _repo;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<RestoreDepartmentCommandHandler> _logger;
 
-        public RestoreDepartmentCommandHandler(IDepartmentRepository repo, ILogger<RestoreDepartmentCommandHandler> logger)
+        public RestoreDepartmentCommandHandler(IDepartmentRepository repo, ICurrentUserService currentUser, ILogger<RestoreDepartmentCommandHandler> logger)
         {
             _repo = repo;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
         public async Task Handle(RestoreDepartmentCommand request, CancellationToken cancellationToken)
         {
-            var dept = await _repo.GetByIdIncludingDeletedAsync(request.Id, cancellationToken)
+            var dept = await _repo.GetByIdIncludingDeletedAsync(request.Id, _currentUser.CompanyId!.Value, cancellationToken)
                 ?? throw new InvalidOperationException($"Department {request.Id} not found.");
 
             if (!dept.IsDeleted)

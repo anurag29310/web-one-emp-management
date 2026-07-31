@@ -12,11 +12,13 @@ namespace EMS.Application.Features.Attendance.Handlers
     public class CreateAttendanceRecordCommandHandler : IRequestHandler<Commands.CreateAttendanceRecordCommand, AttendanceRecord>
     {
         private readonly IAttendanceRepository _repo;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<CreateAttendanceRecordCommandHandler> _logger;
 
-        public CreateAttendanceRecordCommandHandler(IAttendanceRepository repo, ILogger<CreateAttendanceRecordCommandHandler> logger)
+        public CreateAttendanceRecordCommandHandler(IAttendanceRepository repo, ICurrentUserService currentUser, ILogger<CreateAttendanceRecordCommandHandler> logger)
         {
             _repo = repo;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
@@ -27,7 +29,7 @@ namespace EMS.Application.Features.Attendance.Handlers
             if (existing != null)
                 throw new InvalidOperationException("An attendance record already exists for this employee on this date.");
 
-            Shift? shift = request.ShiftId.HasValue ? await _repo.GetShiftByIdAsync(request.ShiftId.Value, cancellationToken) : null;
+            Shift? shift = request.ShiftId.HasValue ? await _repo.GetShiftByIdAsync(request.ShiftId.Value, _currentUser.CompanyId!.Value, cancellationToken) : null;
             var status = Enum.Parse<AttendanceStatus>(request.Status, true);
 
             var record = new AttendanceRecord

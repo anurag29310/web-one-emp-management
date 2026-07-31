@@ -489,6 +489,68 @@ Paid (after payroll, from Approved only)
 
 ---
 
+# Multi-Tenancy & Super Admin Portal
+
+This system is a multi-tenant SaaS platform: many companies (from 50 to 100+ employees each) share one deployment, each seeing only their own data, with a **Super Admin** tier above every tenant that can onboard, monitor, and suspend a company (immediately blocking login for every one of that company's admins and employees).
+
+See database-design.md §24 and api-specification.md §27 for the schema and endpoint details.
+
+## Phase 1 (Must Have — Delivered)
+
+### Dashboard
+
+* Cross-company counts: total / active / suspended / trial companies
+* Total employees across every company
+* Most recently registered companies
+
+### Company Management
+
+* List, search, and filter companies by status
+* View a company's detail: employee count, admin list
+* Create, update, soft-delete, and restore a company
+* Activate / Suspend a company (the same switch — see below)
+* Force-logout a company's users on demand, independent of suspension
+
+### Company Registration
+
+* Public, unauthenticated self-service registration URL — creates a company and its first Admin user atomically
+* Gated by a platform-wide toggle (registration can be turned off entirely)
+* New registrations require Super Admin approval by default (configurable) before the admin can log in
+
+### Company Activation / Suspension
+
+* Suspending a company immediately revokes every refresh token for its users and blocks all subsequent requests from their still-valid access tokens — not just future logins
+* "Lock/Unlock Company" and "Activate/Suspend Company" are the same status switch, not two independent flags
+
+### User Management (Company-Admin Actions)
+
+* Super Admin can view a company's Admin users and issue a password reset for one, reusing the existing self-service forgot-password mechanism
+* Day-to-day user/employee management within a company remains the existing tenant-scoped Users/Employees APIs — Super Admin does not manage individual employees
+
+### Audit Logs
+
+* Every company-management action (create, update, suspend, activate, approve, reject, force-logout) is written to the existing audit log
+* A tenant Admin's audit log view is scoped to their own company; Super Admin has a separate cross-company view, optionally filterable to one company
+
+### Platform Settings
+
+* Two toggles: whether public registration is enabled at all, and whether new registrations require approval before activation
+
+## Phase 2 (Nice to Have — Deferred)
+
+* Subscription Management (plans, billing, trial expiry enforcement)
+* Feature Management (per-company feature flags / module entitlements)
+* Company branding/settings beyond name, timezone, currency, and logo
+* Retrofitting tenant-scoping onto the remaining business-process entities not covered in Phase 1: Attendance records, Leave requests/balances, Payroll, Tasks, Reimbursements, Recruitment, Assets, Performance, Messaging, Notifications, Announcements, Clients (these are reached today only through an already-scoped Employee/Department/etc., so there is no direct cross-tenant data leak, but a query written directly against one of them would not itself be tenant-safe)
+
+### Design Decisions
+
+* Email/username uniqueness is global across the whole platform (one email = one account = one company), not per-company — no login-flow changes needed as a result
+* New registrations require Super Admin approval by default; a Super Admin can flip this off later via Platform Settings
+* The first-ever Super Admin is bootstrapped from configuration on startup, not created via any API
+
+---
+
 # Non-Functional Requirements
 
 ## Security

@@ -19,6 +19,9 @@ namespace EMS.Application.Interfaces
         Task RevokeRefreshTokenAsync(RefreshToken token, CancellationToken ct = default);
         Task RevokeAllRefreshTokensAsync(Guid userId, CancellationToken ct = default);
 
+        /// <summary>Force-logout: revokes every not-yet-revoked refresh token belonging to any user of the given company. Used when a company is suspended, and standalone via ForceLogoutCompanyCommand.</summary>
+        Task RevokeAllRefreshTokensForCompanyAsync(Guid companyId, CancellationToken ct = default);
+
         Task<string> CreatePasswordResetTokenAsync(Guid userId, CancellationToken ct = default);
         Task<Guid?> ValidatePasswordResetTokenAsync(string token, CancellationToken ct = default);
         Task InvalidatePasswordResetTokenAsync(string token, CancellationToken ct = default);

@@ -12,6 +12,10 @@ namespace EMS.Domain.Entities
         public bool IsActive { get; set; } = true;
         public Guid? RoleId { get; set; }
         public Role? Role { get; set; }
+
+        /// <summary>Null only for SuperAdmin-role users, who sit above every tenant. Every other role requires this to be set (enforced at the application layer).</summary>
+        public Guid? CompanyId { get; set; }
+        public Company? Company { get; set; }
         public Guid? EmployeeId { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime CreatedAtUtc { get; set; }

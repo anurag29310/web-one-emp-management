@@ -19,17 +19,17 @@ namespace EMS.Persistence.Repositories
             _db = db;
         }
 
-        public async Task<Team?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
-            await _db.Teams.Include(t => t.Department).FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted, ct);
+        public async Task<Team?> GetByIdAsync(Guid id, Guid companyId, CancellationToken ct = default) =>
+            await _db.Teams.Include(t => t.Department).FirstOrDefaultAsync(t => t.Id == id && t.CompanyId == companyId && !t.IsDeleted, ct);
 
-        public async Task<Team?> GetByIdIncludingDeletedAsync(Guid id, CancellationToken ct = default) =>
-            await _db.Teams.Include(t => t.Department).FirstOrDefaultAsync(t => t.Id == id, ct);
+        public async Task<Team?> GetByIdIncludingDeletedAsync(Guid id, Guid companyId, CancellationToken ct = default) =>
+            await _db.Teams.Include(t => t.Department).FirstOrDefaultAsync(t => t.Id == id && t.CompanyId == companyId, ct);
 
-        public async Task<IEnumerable<Team>> GetAllAsync(CancellationToken ct = default) =>
-            await _db.Teams.AsNoTracking().Include(t => t.Department).Where(t => !t.IsDeleted).ToListAsync(ct);
+        public async Task<IEnumerable<Team>> GetAllAsync(Guid companyId, CancellationToken ct = default) =>
+            await _db.Teams.AsNoTracking().Include(t => t.Department).Where(t => t.CompanyId == companyId && !t.IsDeleted).ToListAsync(ct);
 
-        public async Task<IEnumerable<Team>> GetByDepartmentAsync(Guid departmentId, CancellationToken ct = default) =>
-            await _db.Teams.AsNoTracking().Include(t => t.Department).Where(t => t.DepartmentId == departmentId && !t.IsDeleted).ToListAsync(ct);
+        public async Task<IEnumerable<Team>> GetByDepartmentAsync(Guid departmentId, Guid companyId, CancellationToken ct = default) =>
+            await _db.Teams.AsNoTracking().Include(t => t.Department).Where(t => t.DepartmentId == departmentId && t.CompanyId == companyId && !t.IsDeleted).ToListAsync(ct);
 
         public async Task AddAsync(Team team, CancellationToken ct = default) =>
             await _db.Teams.AddAsync(team, ct);
@@ -47,8 +47,8 @@ namespace EMS.Persistence.Repositories
             return Task.CompletedTask;
         }
 
-        public async Task<bool> CodeExistsAsync(Guid departmentId, string code, Guid? excludeId = null, CancellationToken ct = default) =>
-            await _db.Teams.AnyAsync(t => t.DepartmentId == departmentId && t.Code == code && !t.IsDeleted && (excludeId == null || t.Id != excludeId), ct);
+        public async Task<bool> CodeExistsAsync(Guid departmentId, string code, Guid companyId, Guid? excludeId = null, CancellationToken ct = default) =>
+            await _db.Teams.AnyAsync(t => t.DepartmentId == departmentId && t.Code == code && t.CompanyId == companyId && !t.IsDeleted && (excludeId == null || t.Id != excludeId), ct);
 
         public async Task SaveChangesAsync(CancellationToken ct = default) =>
             await _db.SaveChangesAsync(ct);

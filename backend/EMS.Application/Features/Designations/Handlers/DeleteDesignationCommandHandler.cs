@@ -22,7 +22,7 @@ namespace EMS.Application.Features.Designations.Handlers
 
         public async Task Handle(DeleteDesignationCommand request, CancellationToken cancellationToken)
         {
-            var designation = await _repo.GetByIdAsync(request.Id, cancellationToken)
+            var designation = await _repo.GetByIdAsync(request.Id, _currentUser.CompanyId!.Value, cancellationToken)
                 ?? throw new InvalidOperationException($"Designation {request.Id} not found.");
 
             designation.DeletedAtUtc = DateTime.UtcNow;

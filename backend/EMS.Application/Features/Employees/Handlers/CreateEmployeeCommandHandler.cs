@@ -12,25 +12,29 @@ namespace EMS.Application.Features.Employees.Handlers
     {
         private readonly IEmployeeRepository _repo;
         private readonly IAuditLogger _auditLogger;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<CreateEmployeeCommandHandler> _logger;
 
-        public CreateEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ILogger<CreateEmployeeCommandHandler> logger)
+        public CreateEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ICurrentUserService currentUser, ILogger<CreateEmployeeCommandHandler> logger)
         {
             _repo = repo;
             _auditLogger = auditLogger;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
         public async Task<Employee> Handle(Commands.CreateEmployeeCommand request, CancellationToken cancellationToken)
         {
-            if (await _repo.EmployeeCodeExistsAsync(request.EmployeeCode, ct: cancellationToken))
+            var companyId = _currentUser.CompanyId!.Value;
+            if (await _repo.EmployeeCodeExistsAsync(request.EmployeeCode, companyId, ct: cancellationToken))
                 throw new InvalidOperationException("Employee code already exists.");
-            if (!string.IsNullOrWhiteSpace(request.Email) && await _repo.EmailExistsAsync(request.Email, ct: cancellationToken))
+            if (!string.IsNullOrWhiteSpace(request.Email) && await _repo.EmailExistsAsync(request.Email, companyId, ct: cancellationToken))
                 throw new InvalidOperationException("Email already exists.");
 
             var emp = new Employee
             {
                 Id = Guid.NewGuid(),
+                CompanyId = companyId,
                 EmployeeCode = request.EmployeeCode,
                 FirstName = request.FirstName,
                 MiddleName = request.MiddleName,

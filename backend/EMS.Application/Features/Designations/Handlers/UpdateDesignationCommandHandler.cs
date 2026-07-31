@@ -23,12 +23,13 @@ namespace EMS.Application.Features.Designations.Handlers
 
         public async Task<Designation> Handle(UpdateDesignationCommand request, CancellationToken cancellationToken)
         {
-            var designation = await _repo.GetByIdAsync(request.Id, cancellationToken)
+            var companyId = _currentUser.CompanyId!.Value;
+            var designation = await _repo.GetByIdAsync(request.Id, companyId, cancellationToken)
                 ?? throw new InvalidOperationException($"Designation {request.Id} not found.");
 
-            if (await _repo.NameExistsAsync(request.Name, request.Id, cancellationToken))
+            if (await _repo.NameExistsAsync(request.Name, companyId, request.Id, cancellationToken))
                 throw new InvalidOperationException("Designation name already exists.");
-            if (await _repo.CodeExistsAsync(request.Code, request.Id, cancellationToken))
+            if (await _repo.CodeExistsAsync(request.Code, companyId, request.Id, cancellationToken))
                 throw new InvalidOperationException("Designation code already exists.");
 
             designation.Name = request.Name;

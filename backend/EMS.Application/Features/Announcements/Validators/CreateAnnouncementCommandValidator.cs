@@ -11,7 +11,7 @@ namespace EMS.Application.Features.Announcements.Validators
         private static readonly string[] ValidAudienceTypes = { "All", "Department", "Role" };
         private static readonly string[] ValidPriorities = { "Normal", "Important", "Critical" };
 
-        public CreateAnnouncementCommandValidator(IDepartmentRepository departmentRepo)
+        public CreateAnnouncementCommandValidator(IDepartmentRepository departmentRepo, ICurrentUserService currentUser)
         {
             RuleFor(x => x.Title).NotEmpty().MaximumLength(250);
             RuleFor(x => x.Message).NotEmpty().MaximumLength(2000);
@@ -22,7 +22,7 @@ namespace EMS.Application.Features.Announcements.Validators
 
             RuleFor(x => x.DepartmentId)
                 .NotNull().WithMessage("DepartmentId is required when AudienceType is Department.")
-                .MustAsync(async (id, ct) => id == null || await departmentRepo.GetByIdAsync(id.Value, ct) != null)
+                .MustAsync(async (id, ct) => id == null || await departmentRepo.GetByIdAsync(id.Value, currentUser.CompanyId!.Value, ct) != null)
                 .WithMessage("DepartmentId does not refer to an existing department.")
                 .When(x => x.AudienceType == "Department");
 

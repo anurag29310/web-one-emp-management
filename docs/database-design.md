@@ -75,8 +75,9 @@ Stores application login accounts.
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
 | `EmployeeId` | `uuid` | Nullable FK to `Employees` |
-| `UserName` | `varchar(100)` | Unique |
-| `Email` | `varchar(256)` | Unique |
+| `CompanyId` | `uuid` | Nullable FK to `Companies` (§24). Null only for `SuperAdmin`-role users, who sit above every tenant |
+| `UserName` | `varchar(100)` | Unique (platform-wide — see §24) |
+| `Email` | `varchar(256)` | Unique (platform-wide — see §24) |
 | `PasswordHash` | `text` | Required |
 | `IsActive` | `boolean` | Required |
 | `IsMfaEnabled` | `boolean` | Required |
@@ -90,7 +91,7 @@ Stores role definitions.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
-| `Name` | `varchar(50)` | Unique: `Admin`, `HR`, `Manager`, `Employee` |
+| `Name` | `varchar(50)` | Unique: `Admin`, `HR`, `Manager`, `Employee`, `SuperAdmin` (§24 — platform tier, sits above every company) |
 | `Description` | `varchar(250)` | Nullable |
 | Audit fields | Shared | Include audit and soft delete fields |
 
@@ -182,11 +183,12 @@ Stores employee profile and employment information.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
-| `EmployeeCode` | `varchar(50)` | Unique |
+| `CompanyId` | `uuid` | Required FK to `Companies` (§24) |
+| `EmployeeCode` | `varchar(50)` | Unique per company |
 | `FirstName` | `varchar(100)` | Required |
 | `MiddleName` | `varchar(100)` | Nullable |
 | `LastName` | `varchar(100)` | Required |
-| `Email` | `varchar(256)` | Unique for active employees |
+| `Email` | `varchar(256)` | Unique per company for active employees |
 | `PhoneNumber` | `varchar(30)` | Nullable |
 | `DateOfBirth` | `date` | Nullable |
 | `Gender` | `varchar(50)` | Nullable |
@@ -215,8 +217,9 @@ Stores employee profile and employment information.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
-| `Name` | `varchar(150)` | Unique |
-| `Code` | `varchar(50)` | Unique |
+| `CompanyId` | `uuid` | Required FK to `Companies` (§24) |
+| `Name` | `varchar(150)` | Unique per company |
+| `Code` | `varchar(50)` | Unique per company |
 | `Description` | `varchar(500)` | Nullable |
 | `HeadEmployeeId` | `uuid` | Nullable FK to `Employees` |
 | Audit fields | Shared | Include audit and soft delete fields |
@@ -226,21 +229,23 @@ Stores employee profile and employment information.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
+| `CompanyId` | `uuid` | Required FK to `Companies` (§24) |
 | `DepartmentId` | `uuid` | FK to `Departments` |
 | `Name` | `varchar(150)` | Required |
 | `Code` | `varchar(50)` | Required |
 | `LeadEmployeeId` | `uuid` | Nullable FK to `Employees` |
 | Audit fields | Shared | Include audit and soft delete fields |
 
-Unique constraint: `DepartmentId`, `Code`.
+Unique constraint: `CompanyId`, `DepartmentId`, `Code`.
 
 ### 5.4 Designations
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
-| `Name` | `varchar(150)` | Unique |
-| `Code` | `varchar(50)` | Unique |
+| `CompanyId` | `uuid` | Required FK to `Companies` (§24) |
+| `Name` | `varchar(150)` | Unique per company |
+| `Code` | `varchar(50)` | Unique per company |
 | `Level` | `int` | Optional hierarchy level |
 | Audit fields | Shared | Include audit and soft delete fields |
 
@@ -249,8 +254,9 @@ Unique constraint: `DepartmentId`, `Code`.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
+| `CompanyId` | `uuid` | Required FK to `Companies` (§24) |
 | `Name` | `varchar(150)` | Required |
-| `Code` | `varchar(50)` | Unique |
+| `Code` | `varchar(50)` | Unique per company |
 | `AddressLine1` | `varchar(250)` | Nullable |
 | `AddressLine2` | `varchar(250)` | Nullable |
 | `City` | `varchar(100)` | Required |
@@ -289,6 +295,7 @@ Stores metadata for files stored in Azure Blob Storage.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
+| `CompanyId` | `uuid` | Required FK to `Companies` (§24) |
 | `Name` | `varchar(150)` | Required |
 | `StartTime` | `time` | Required |
 | `EndTime` | `time` | Required |
@@ -363,8 +370,9 @@ Unique constraint: `EmployeeId`, `AttendanceDate`.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
+| `CompanyId` | `uuid` | Required FK to `Companies` (§24) |
 | `Name` | `varchar(100)` | Casual Leave, Sick Leave, Earned Leave, Unpaid Leave, Work From Home |
-| `Code` | `varchar(50)` | Unique |
+| `Code` | `varchar(50)` | Unique per company |
 | `IsPaid` | `boolean` | Required |
 | `RequiresApproval` | `boolean` | Required |
 | `AnnualEntitlementDays` | `decimal(5,2)` | Nullable |
@@ -424,6 +432,7 @@ Stores immutable audit events for security-sensitive and HR-sensitive operations
 | Column | Type | Notes |
 | --- | --- | --- |
 | `Id` | `uuid` | Primary key |
+| `CompanyId` | `uuid` | Nullable FK to `Companies` (§24). Null for platform-level events (Super Admin creating/suspending a company, Super Admin login) that have no single tenant to attach to |
 | `UserId` | `uuid` | Nullable FK to `Users` |
 | `EntityName` | `varchar(150)` | Required |
 | `EntityId` | `uuid` | Nullable |
@@ -435,6 +444,8 @@ Stores immutable audit events for security-sensitive and HR-sensitive operations
 | `CreatedAtUtc` | `timestamptz` | Required |
 
 Audit logs should be append-only. They should not use normal soft delete.
+
+A tenant Admin's view (`GET /api/v1/audit-logs`, §12) is always implicitly filtered to their own `CompanyId`; Super Admin's platform view (`GET /api/v1/platform/audit-logs`, §24) sees every company and may optionally filter by one.
 
 ## 9. Notifications And Announcement Tables
 
@@ -553,18 +564,21 @@ Unique constraint: `AnnouncementId`, `UserId`.
 
 ### 11.2 Employee And Organization Indexes
 
+As of §24's multi-tenancy retrofit, every single-column unique index below on `Employees`, `Departments`, `Teams`, `Designations`, and `OfficeLocations` was replaced with a composite index that leads with `CompanyId` — uniqueness is now per-company, not platform-wide. See §24.4 for the full before/after list.
+
 | Table | Index | Type | Purpose |
 | --- | --- | --- | --- |
-| `Employees` | `IX_Employees_EmployeeCode` | Unique, filtered by `IsDeleted = 0` | Employee lookup |
-| `Employees` | `IX_Employees_Email` | Unique, filtered by `IsDeleted = 0` | Contact and user linking |
+| `Employees` | `IX_Employees_CompanyId_EmployeeCode` | Unique, filtered by `IsDeleted = 0` | Employee lookup, scoped per company |
+| `Employees` | `IX_Employees_CompanyId_Email` | Unique, filtered by `IsDeleted = 0` | Contact and user linking, scoped per company |
 | `Employees` | `IX_Employees_DepartmentId_Status` | Non-unique | Department dashboard |
 | `Employees` | `IX_Employees_ManagerId` | Non-unique | Reporting hierarchy |
 | `Employees` | `IX_Employees_DesignationId` | Non-unique | Employee filters |
 | `Employees` | `IX_Employees_OfficeLocationId` | Non-unique | Location filters |
-| `Departments` | `IX_Departments_Code` | Unique, filtered by `IsDeleted = 0` | Department lookup |
-| `Teams` | `IX_Teams_DepartmentId_Code` | Unique, filtered by `IsDeleted = 0` | Team lookup |
-| `Designations` | `IX_Designations_Code` | Unique, filtered by `IsDeleted = 0` | Designation lookup |
-| `OfficeLocations` | `IX_OfficeLocations_Code` | Unique, filtered by `IsDeleted = 0` | Location lookup |
+| `Departments` | `IX_Departments_CompanyId_Name` | Non-unique | Department lookup, scoped per company |
+| `Teams` | `IX_Teams_CompanyId_DepartmentId_Code` | Unique, filtered by `IsDeleted = 0` | Team lookup, scoped per company |
+| `Designations` | `IX_Designations_CompanyId_Code` | Unique, filtered by `IsDeleted = 0` | Designation lookup, scoped per company |
+| `Designations` | `IX_Designations_CompanyId_Name` | Unique, filtered by `IsDeleted = 0` | Designation lookup, scoped per company |
+| `OfficeLocations` | `IX_OfficeLocations_CompanyId_Code` | Unique, filtered by `IsDeleted = 0` | Location lookup, scoped per company |
 | `EmployeeDocuments` | `IX_EmployeeDocuments_EmployeeId_DocumentType` | Non-unique | Document list screens |
 | `Clients` | `IX_Clients_ClientName` | Unique, not filtered (see §16.1) | Client lookup and duplicate-name prevention |
 | `Clients` | `IX_Clients_IsActive` | Non-unique | Active-status filter on the client list |
@@ -594,7 +608,7 @@ Unique constraint: `AnnouncementId`, `UserId`.
 
 | Table | Index | Type | Purpose |
 | --- | --- | --- | --- |
-| `LeaveTypes` | `IX_LeaveTypes_Code` | Unique, filtered by `IsDeleted = 0` | Leave type lookup |
+| `LeaveTypes` | `IX_LeaveTypes_CompanyId_Code` | Unique, filtered by `IsDeleted = 0` | Leave type lookup, scoped per company (§24) |
 | `LeaveBalances` | `IX_LeaveBalances_EmployeeId_LeaveTypeId_Year` | Unique, filtered by `IsDeleted = 0` | Balance lookup |
 | `LeaveRequests` | `IX_LeaveRequests_EmployeeId_StartDate_EndDate` | Non-unique | Leave history |
 | `LeaveRequests` | `IX_LeaveRequests_ApproverEmployeeId_Status` | Non-unique | Approval queue |
@@ -608,6 +622,7 @@ Unique constraint: `AnnouncementId`, `UserId`.
 | `AuditLogs` | `IX_AuditLogs_EntityName_EntityId_CreatedAtUtc` | Non-unique | Entity audit history |
 | `AuditLogs` | `IX_AuditLogs_UserId_CreatedAtUtc` | Non-unique | User activity lookup |
 | `AuditLogs` | `IX_AuditLogs_Action_CreatedAtUtc` | Non-unique | Security reporting |
+| `AuditLogs` | `IX_AuditLogs_CompanyId_CreatedAtUtc` | Non-unique | Per-tenant audit trail (§24) |
 
 ### 11.6 Notification And Announcement Indexes
 
@@ -1318,4 +1333,71 @@ The first (and so far only) recurring background job in this system, added to cl
 `DailySweepHostedService` (`EMS.Infrastructure/BackgroundJobs/`, a standard ASP.NET Core `BackgroundService`) dispatches `RunDailySweepCommand` once at application startup and then on a recurring interval — default 24 hours, configurable via `BackgroundJobs:DailySweepIntervalHours` in `appsettings.json`. Since `DailySweepHostedService` itself is registered as a singleton (required by `IHostedService`) but the command handler depends on scoped repositories/`DbContext`, a new DI scope is created for each run.
 
 Nothing else in this system runs on a schedule yet — no email delivery, no notification digests, no data-retention purges (§12/§13 describe those as manual/administrative for now). Future scheduled work should be added as additional MediatR commands dispatched from the same `DailySweepHostedService` (or a second hosted service, if a materially different interval is needed) rather than introducing a new scheduling mechanism per module.
+
+## 24. Multi-Tenancy Tables
+
+This system is a shared-database, shared-schema multi-tenant SaaS platform: many companies ("tenants") share one deployment and one set of tables, distinguished by a `CompanyId` discriminator column — not database-per-tenant or schema-per-tenant. A **Super Admin** tier sits above every tenant, managing companies via a separate `/api/v1/platform/*` API surface (see api-specification.md §27) rather than the normal tenant-facing endpoints.
+
+### 24.1 Companies
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key |
+| `Name` | `varchar(200)` | Required |
+| `Status` | `varchar(20)` | `Trial`, `Active`, `Suspended`, `Inactive`, `PendingApproval`, `Rejected` |
+| `Timezone` | `varchar(100)` | Required |
+| `Currency` | `varchar(10)` | Required |
+| `LogoUrl` | `varchar(500)` | Nullable |
+| `RegisteredAtUtc` | `timestamptz` | Required |
+| `ApprovedAtUtc` | `timestamptz` | Nullable — set when a `PendingApproval` registration is approved |
+| `SuspendedAtUtc` | `timestamptz` | Nullable |
+| `SuspendedReason` | `varchar(500)` | Nullable |
+| `RejectedAtUtc` | `timestamptz` | Nullable |
+| `RejectedReason` | `varchar(500)` | Nullable |
+| Audit fields | Shared | Include audit and soft delete fields |
+
+"Lock/Unlock Company" and "Activate/Suspend Company" are the same switch — one `Status` column, no second independent flag. Suspending a company (`PUT /api/v1/platform/companies/{id}/suspend`) immediately revokes every refresh token belonging to that company's users in the same unit of work, and `TenantStatusMiddleware` additionally blocks their still-valid (but now stale) access tokens on every subsequent request — so a suspension takes effect immediately, not just on next login.
+
+`Rejected` is distinct from `Suspended`/`Inactive` so the audit trail and dashboard don't conflate "we rejected this registration" with "an admin later deactivated their own company."
+
+Every pre-existing row before this migration (the one deployment that existed pre-multi-tenancy) was assigned to one seeded default `Company` (`Status = Active`, fixed id `00000000-0000-0000-0000-000000000001`) — see the `AddMultiTenancy` migration for the exact backfill sequence.
+
+### 24.2 PlatformSettings
+
+Singleton row — no Create/Delete, only Get/Update against a fixed seeded `Id`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `Id` | `uuid` | Primary key, fixed seeded value |
+| `IsPublicRegistrationEnabled` | `boolean` | Required, default `true` |
+| `RequireApprovalForNewCompanies` | `boolean` | Required, default `true` |
+| `UpdatedAtUtc` | `timestamptz` | Required |
+
+`RequireApprovalForNewCompanies` gates whether `POST /api/v1/company-registration` lands a new company in `PendingApproval` (awaiting Super Admin approval, the default) or directly in `Trial`. `IsPublicRegistrationEnabled` gates whether the registration endpoint accepts new signups at all.
+
+### 24.3 Tenant Scoping Rules
+
+- **Global (platform-wide) uniqueness**: `Users.UserName`, `Users.Email` — one email/username maps to exactly one account at exactly one company. This was a deliberate decision (not a default) so the login flow needs no per-tenant lookup disambiguation.
+- **Per-company uniqueness**: `Employees.EmployeeCode`/`Email`, `Departments.Name`, `Designations.Name`/`Code`, `Teams.(DepartmentId, Code)`, `OfficeLocations.Code`, `LeaveTypes.Code` — two different companies may use the identical code/name; the same code/name may not repeat within one company.
+- **Retrofitted this phase**: `Employees`, `Departments`, `Teams`, `Designations`, `OfficeLocations`, `LeaveTypes` (only — not `LeaveRequests`/`LeaveBalances`), `Shifts` (only — not `AttendanceRecords`/`EmployeeShifts`/`AttendanceCorrections`), `AuditLogs` (nullable, read-scoping only), `Users` (nullable).
+- **Deliberately deferred** to a later phase: every other business-process entity (`AttendanceRecords`, `LeaveRequests`, `LeaveBalances`, Payroll, Tasks, Reimbursements, Recruitment, Assets, Performance, Messaging, Notifications, Announcements, Clients). These are reached today only through an already-tenant-scoped `Employee`/`Department`/etc., so there is no direct cross-tenant leak — but a query written directly against one of them without going through that scoped path would not be tenant-safe. Retrofitting all remaining entities in one pass was deliberately avoided (see requirements.md's Multi-Tenancy & Super Admin Portal section) to keep each phase's blast radius reviewable.
+
+### 24.4 Composite Unique Index Changes
+
+Every single-column unique index below was dropped and replaced by a composite index leading with `CompanyId`:
+
+| Table | Old index (dropped) | New index |
+| --- | --- | --- |
+| `Employees` | `IX_Employees_EmployeeCode` | `IX_Employees_CompanyId_EmployeeCode` |
+| `Employees` | `IX_Employees_Email` | `IX_Employees_CompanyId_Email` |
+| `Departments` | `IX_Departments_Name` | `IX_Departments_CompanyId_Name` |
+| `Teams` | `IX_Teams_DepartmentId_Code` | `IX_Teams_CompanyId_DepartmentId_Code` |
+| `Designations` | `IX_Designations_Name` | `IX_Designations_CompanyId_Name` |
+| `Designations` | `IX_Designations_Code` | `IX_Designations_CompanyId_Code` |
+| `OfficeLocations` | `IX_OfficeLocations_Code` | `IX_OfficeLocations_CompanyId_Code` |
+| `LeaveTypes` | `IX_LeaveTypes_Code` | `IX_LeaveTypes_CompanyId_Code` |
+
+### 24.5 Super Admin Bootstrap
+
+The first-ever `SuperAdmin` is created from configuration (`SuperAdmin:BootstrapEmail` / `SuperAdmin:BootstrapPassword`) on application startup — if no `SuperAdmin`-role user exists yet, one is created idempotently. This replaces the old "first user in the system becomes Admin" bootstrap hack (`RegisterUserCommandHandler`), which is now dead weight superseded by company registration and is intentionally left in place but unreachable (see api-specification.md §3.10).
 

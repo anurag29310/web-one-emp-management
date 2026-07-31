@@ -19,14 +19,14 @@ namespace EMS.Persistence.Repositories
             _db = db;
         }
 
-        public async Task<OfficeLocation?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
-            await _db.OfficeLocations.FirstOrDefaultAsync(o => o.Id == id && !o.IsDeleted, ct);
+        public async Task<OfficeLocation?> GetByIdAsync(Guid id, Guid companyId, CancellationToken ct = default) =>
+            await _db.OfficeLocations.FirstOrDefaultAsync(o => o.Id == id && o.CompanyId == companyId && !o.IsDeleted, ct);
 
-        public async Task<OfficeLocation?> GetByIdIncludingDeletedAsync(Guid id, CancellationToken ct = default) =>
-            await _db.OfficeLocations.FirstOrDefaultAsync(o => o.Id == id, ct);
+        public async Task<OfficeLocation?> GetByIdIncludingDeletedAsync(Guid id, Guid companyId, CancellationToken ct = default) =>
+            await _db.OfficeLocations.FirstOrDefaultAsync(o => o.Id == id && o.CompanyId == companyId, ct);
 
-        public async Task<IEnumerable<OfficeLocation>> GetAllAsync(CancellationToken ct = default) =>
-            await _db.OfficeLocations.AsNoTracking().Where(o => !o.IsDeleted).ToListAsync(ct);
+        public async Task<IEnumerable<OfficeLocation>> GetAllAsync(Guid companyId, CancellationToken ct = default) =>
+            await _db.OfficeLocations.AsNoTracking().Where(o => o.CompanyId == companyId && !o.IsDeleted).ToListAsync(ct);
 
         public async Task AddAsync(OfficeLocation officeLocation, CancellationToken ct = default) =>
             await _db.OfficeLocations.AddAsync(officeLocation, ct);
@@ -44,8 +44,8 @@ namespace EMS.Persistence.Repositories
             return Task.CompletedTask;
         }
 
-        public async Task<bool> CodeExistsAsync(string code, Guid? excludeId = null, CancellationToken ct = default) =>
-            await _db.OfficeLocations.AnyAsync(o => o.Code == code && !o.IsDeleted && (excludeId == null || o.Id != excludeId), ct);
+        public async Task<bool> CodeExistsAsync(string code, Guid companyId, Guid? excludeId = null, CancellationToken ct = default) =>
+            await _db.OfficeLocations.AnyAsync(o => o.Code == code && o.CompanyId == companyId && !o.IsDeleted && (excludeId == null || o.Id != excludeId), ct);
 
         public async Task SaveChangesAsync(CancellationToken ct = default) =>
             await _db.SaveChangesAsync(ct);

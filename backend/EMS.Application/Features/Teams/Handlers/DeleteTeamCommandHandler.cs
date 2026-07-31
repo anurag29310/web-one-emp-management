@@ -22,7 +22,7 @@ namespace EMS.Application.Features.Teams.Handlers
 
         public async Task Handle(DeleteTeamCommand request, CancellationToken cancellationToken)
         {
-            var team = await _repo.GetByIdAsync(request.Id, cancellationToken)
+            var team = await _repo.GetByIdAsync(request.Id, _currentUser.CompanyId!.Value, cancellationToken)
                 ?? throw new InvalidOperationException($"Team {request.Id} not found.");
 
             team.DeletedAtUtc = DateTime.UtcNow;

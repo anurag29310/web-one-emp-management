@@ -5,6 +5,9 @@ namespace EMS.Domain.Entities
     public class AuditLog
     {
         public Guid Id { get; set; }
+
+        /// <summary>Nullable — platform-level events (Super Admin creating/suspending a company, Super Admin login) have no single tenant to attach to.</summary>
+        public Guid? CompanyId { get; set; }
         public Guid? UserId { get; set; }
         public string EntityName { get; set; } = null!;
         public Guid? EntityId { get; set; }

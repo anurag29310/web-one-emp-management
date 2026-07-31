@@ -20,12 +20,13 @@ namespace EMS.Application.Features.Payroll.Handlers
         private readonly IPdfService _pdf;
         private readonly IFileStorageService _storage;
         private readonly IAuditLogger _auditLogger;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<ProcessPayrollCommandHandler> _logger;
         private readonly decimal _standardMonthlyHours;
         private readonly decimal _overtimeMultiplier;
         private readonly int _defaultDailyShiftMinutes;
 
-        public ProcessPayrollCommandHandler(IPayrollRepository repo, IReimbursementRepository reimbursementRepo, IAttendanceRepository attendanceRepo, IPdfService pdf, IFileStorageService storage, IAuditLogger auditLogger, IConfiguration config, ILogger<ProcessPayrollCommandHandler> logger)
+        public ProcessPayrollCommandHandler(IPayrollRepository repo, IReimbursementRepository reimbursementRepo, IAttendanceRepository attendanceRepo, IPdfService pdf, IFileStorageService storage, IAuditLogger auditLogger, ICurrentUserService currentUser, IConfiguration config, ILogger<ProcessPayrollCommandHandler> logger)
         {
             _repo = repo;
             _reimbursementRepo = reimbursementRepo;
@@ -33,6 +34,7 @@ namespace EMS.Application.Features.Payroll.Handlers
             _pdf = pdf;
             _storage = storage;
             _auditLogger = auditLogger;
+            _currentUser = currentUser;
             _logger = logger;
             _standardMonthlyHours = decimal.TryParse(config["Payroll:StandardMonthlyHours"], out var hours) ? hours : 208m;
             _overtimeMultiplier = decimal.TryParse(config["Payroll:OvertimeMultiplier"], out var multiplier) ? multiplier : 1.5m;
@@ -56,7 +58,7 @@ namespace EMS.Application.Features.Payroll.Handlers
             foreach (var record in records)
             {
                 if (!record.TotalWorkMinutes.HasValue) continue;
-                var shift = record.ShiftId.HasValue ? await _attendanceRepo.GetShiftByIdAsync(record.ShiftId.Value, ct) : null;
+                var shift = record.ShiftId.HasValue ? await _attendanceRepo.GetShiftByIdAsync(record.ShiftId.Value, _currentUser.CompanyId!.Value, ct) : null;
                 var standardMinutes = OvertimeCalculator.StandardDailyMinutes(shift, _defaultDailyShiftMinutes);
                 overtimeMinutes += OvertimeCalculator.OvertimeMinutesForDay(record.TotalWorkMinutes, standardMinutes);
             }

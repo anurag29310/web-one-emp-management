@@ -40,14 +40,16 @@ namespace EMS.Application.Features.Recruitment.Handlers
             var acceptedOffer = offers.FirstOrDefault(o => o.Status == OfferStatus.Accepted)
                 ?? throw new InvalidOperationException($"Candidate {candidate.CandidateNumber} has no Accepted offer to convert from.");
 
-            if (await _employeeRepo.EmployeeCodeExistsAsync(request.EmployeeCode, ct: cancellationToken))
+            var companyId = _currentUser.CompanyId!.Value;
+            if (await _employeeRepo.EmployeeCodeExistsAsync(request.EmployeeCode, companyId, ct: cancellationToken))
                 throw new InvalidOperationException("Employee code already exists.");
-            if (await _employeeRepo.EmailExistsAsync(candidate.Email, ct: cancellationToken))
+            if (await _employeeRepo.EmailExistsAsync(candidate.Email, companyId, ct: cancellationToken))
                 throw new InvalidOperationException("Email already exists.");
 
             var employee = new Employee
             {
                 Id = Guid.NewGuid(),
+                CompanyId = companyId,
                 EmployeeCode = request.EmployeeCode,
                 FirstName = candidate.FirstName,
                 LastName = candidate.LastName,

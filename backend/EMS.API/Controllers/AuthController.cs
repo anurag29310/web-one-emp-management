@@ -15,7 +15,6 @@ namespace EMS.API.Controllers
     public class AuthController : ControllerBase
     {
         private readonly LoginCommandHandler _loginHandler;
-        private readonly RegisterUserCommandHandler _registerHandler;
         private readonly RefreshTokenCommandHandler _refreshHandler;
         private readonly LogoutCommandHandler _logoutHandler;
         private readonly LogoutAllCommandHandler _logoutAllHandler;
@@ -31,7 +30,6 @@ namespace EMS.API.Controllers
 
         public AuthController(
             LoginCommandHandler loginHandler,
-            RegisterUserCommandHandler registerHandler,
             RefreshTokenCommandHandler refreshHandler,
             LogoutCommandHandler logoutHandler,
             LogoutAllCommandHandler logoutAllHandler,
@@ -46,7 +44,6 @@ namespace EMS.API.Controllers
             VerifyMfaCommandHandler verifyMfaHandler)
         {
             _loginHandler = loginHandler;
-            _registerHandler = registerHandler;
             _refreshHandler = refreshHandler;
             _logoutHandler = logoutHandler;
             _logoutAllHandler = logoutAllHandler;
@@ -87,18 +84,11 @@ namespace EMS.API.Controllers
             return Ok(ApiResponse<LoginResult>.Success(result));
         }
 
-        /// <summary>Register a new user account.</summary>
-        [AllowAnonymous]
-        [EnableRateLimiting("RegisterPolicy")]
-        [HttpPost("register")]
-        [ProducesResponseType(typeof(ApiResponse<LoginResult>), 201)]
-        [ProducesResponseType(typeof(ApiErrorResponse), 409)]
-        [ProducesResponseType(typeof(ApiErrorResponse), 429)]
-        public async Task<IActionResult> Register([FromBody] RegisterUserCommand cmd, CancellationToken ct)
-        {
-            var result = await _registerHandler.Handle(cmd, ct);
-            return StatusCode(201, ApiResponse<LoginResult>.Success(result, "Account created successfully."));
-        }
+        // Note: the legacy POST /auth/register route (self-registration producing a company-less,
+        // roleless User) has been intentionally removed. CompanyRegistrationController is now the
+        // only path that can create a new tenant + its first (Admin) user; RegisterUserCommandHandler
+        // itself is left in place (and still covered by RegisterUserCommandHandler tests) but is no
+        // longer reachable over HTTP.
 
         /// <summary>Exchange a valid refresh token for a new access token and rotated refresh token.</summary>
         [AllowAnonymous]

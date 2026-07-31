@@ -23,12 +23,14 @@ namespace EMS.Application.Features.OfficeLocations.Handlers
 
         public async Task<OfficeLocation> Handle(CreateOfficeLocationCommand request, CancellationToken cancellationToken)
         {
-            if (await _repo.CodeExistsAsync(request.Code, ct: cancellationToken))
+            var companyId = _currentUser.CompanyId!.Value;
+            if (await _repo.CodeExistsAsync(request.Code, companyId, ct: cancellationToken))
                 throw new InvalidOperationException("Office location code already exists.");
 
             var location = new OfficeLocation
             {
                 Id = Guid.NewGuid(),
+                CompanyId = companyId,
                 Name = request.Name,
                 Code = request.Code,
                 AddressLine1 = request.AddressLine1,

@@ -12,19 +12,22 @@ namespace EMS.Application.Features.Employees.Handlers
     {
         private readonly IEmployeeRepository _repo;
         private readonly IAuditLogger _auditLogger;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<RestoreEmployeeCommandHandler> _logger;
 
-        public RestoreEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ILogger<RestoreEmployeeCommandHandler> logger)
+        public RestoreEmployeeCommandHandler(IEmployeeRepository repo, IAuditLogger auditLogger, ICurrentUserService currentUser, ILogger<RestoreEmployeeCommandHandler> logger)
         {
             _repo = repo;
             _auditLogger = auditLogger;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
         public async Task Handle(RestoreEmployeeCommand request, CancellationToken cancellationToken)
         {
-            var emp = await _repo.GetByIdIncludingDeletedAsync(request.Id, cancellationToken)
-                ?? throw new InvalidOperationException($"Employee {request.Id} not found.");
+            var emp = await _repo.GetByIdIncludingDeletedAsync(request.Id, cancellationToken);
+            if (emp == null || emp.CompanyId != _currentUser.CompanyId!.Value)
+                throw new InvalidOperationException($"Employee {request.Id} not found.");
 
             if (!emp.IsDeleted)
                 throw new InvalidOperationException("Employee is not deleted and cannot be restored.");

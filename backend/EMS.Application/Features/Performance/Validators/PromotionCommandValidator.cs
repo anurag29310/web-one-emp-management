@@ -7,7 +7,7 @@ namespace EMS.Application.Features.Performance.Validators
 {
     public class ProposePromotionCommandValidator : AbstractValidator<ProposePromotionCommand>
     {
-        public ProposePromotionCommandValidator(IEmployeeRepository employeeRepo, IDesignationRepository designationRepo, IDepartmentRepository departmentRepo)
+        public ProposePromotionCommandValidator(IEmployeeRepository employeeRepo, IDesignationRepository designationRepo, IDepartmentRepository departmentRepo, ICurrentUserService currentUser)
         {
             RuleFor(x => x.EffectiveDate).NotEqual(default(DateTime));
             RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000);
@@ -17,11 +17,11 @@ namespace EMS.Application.Features.Performance.Validators
                 .WithMessage("Employee does not exist.");
 
             RuleFor(x => x.ToDesignationId).NotEmpty()
-                .MustAsync(async (id, ct) => await designationRepo.GetByIdAsync(id, ct) != null)
+                .MustAsync(async (id, ct) => await designationRepo.GetByIdAsync(id, currentUser.CompanyId!.Value, ct) != null)
                 .WithMessage("Target designation does not exist.");
 
             RuleFor(x => x.ToDepartmentId)
-                .MustAsync(async (id, ct) => id == null || await departmentRepo.GetByIdAsync(id.Value, ct) != null)
+                .MustAsync(async (id, ct) => id == null || await departmentRepo.GetByIdAsync(id.Value, currentUser.CompanyId!.Value, ct) != null)
                 .WithMessage("Target department does not exist.");
         }
     }

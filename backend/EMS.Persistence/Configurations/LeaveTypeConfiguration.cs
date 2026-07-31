@@ -10,10 +10,14 @@ namespace EMS.Persistence.Configurations
         {
             builder.ToTable("LeaveTypes");
             builder.HasKey(x => x.Id);
+            builder.Property(x => x.CompanyId).IsRequired();
             builder.Property(x => x.Name).IsRequired().HasMaxLength(100);
             builder.Property(x => x.Code).HasMaxLength(50);
             builder.Property(x => x.AnnualEntitlementDays).HasColumnType("decimal(5,2)");
-            builder.HasIndex(x => x.Code).IsUnique();
+            builder.HasIndex(x => x.CompanyId);
+            builder.HasIndex(x => new { x.CompanyId, x.Code }).IsUnique();
+
+            builder.HasOne(x => x.Company).WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

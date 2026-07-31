@@ -10,6 +10,7 @@ namespace EMS.Persistence.Configurations
         {
             builder.ToTable("OfficeLocations");
             builder.HasKey(o => o.Id);
+            builder.Property(o => o.CompanyId).IsRequired();
             builder.Property(o => o.Name).IsRequired().HasMaxLength(150);
             builder.Property(o => o.Code).IsRequired().HasMaxLength(50);
             builder.Property(o => o.AddressLine1).HasMaxLength(250);
@@ -21,7 +22,10 @@ namespace EMS.Persistence.Configurations
             builder.Property(o => o.Latitude).HasColumnType("decimal(9,6)");
             builder.Property(o => o.Longitude).HasColumnType("decimal(9,6)");
 
-            builder.HasIndex(o => o.Code).IsUnique();
+            builder.HasIndex(o => o.CompanyId);
+            builder.HasIndex(o => new { o.CompanyId, o.Code }).IsUnique();
+
+            builder.HasOne(o => o.Company).WithMany().HasForeignKey(o => o.CompanyId).OnDelete(DeleteBehavior.Restrict);
 
             builder.Property(o => o.RowVersion).IsRowVersion();
         }

@@ -13,13 +13,15 @@ namespace EMS.Application.Features.Attendance.Handlers
         private readonly IAttendanceRepository _repo;
         private readonly IAuthRepository _authRepo;
         private readonly IGeocodingService _geocodingService;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<CheckOutCommandHandler> _logger;
 
-        public CheckOutCommandHandler(IAttendanceRepository repo, IAuthRepository authRepo, IGeocodingService geocodingService, ILogger<CheckOutCommandHandler> logger)
+        public CheckOutCommandHandler(IAttendanceRepository repo, IAuthRepository authRepo, IGeocodingService geocodingService, ICurrentUserService currentUser, ILogger<CheckOutCommandHandler> logger)
         {
             _repo = repo;
             _authRepo = authRepo;
             _geocodingService = geocodingService;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
@@ -39,7 +41,7 @@ namespace EMS.Application.Features.Attendance.Handlers
             if (existing.CheckOutAtUtc != null)
                 throw new InvalidOperationException("Already checked out for this date.");
 
-            var shift = existing.ShiftId.HasValue ? await _repo.GetShiftByIdAsync(existing.ShiftId.Value, cancellationToken) : null;
+            var shift = existing.ShiftId.HasValue ? await _repo.GetShiftByIdAsync(existing.ShiftId.Value, _currentUser.CompanyId!.Value, cancellationToken) : null;
             var address = await _geocodingService.ReverseGeocodeAsync(request.Latitude, request.Longitude, cancellationToken);
 
             existing.CheckOutAtUtc = request.CheckOutAtUtc;

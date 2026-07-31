@@ -19,14 +19,14 @@ namespace EMS.Persistence.Repositories
             _db = db;
         }
 
-        public async Task<Designation?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
-            await _db.Designations.FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, ct);
+        public async Task<Designation?> GetByIdAsync(Guid id, Guid companyId, CancellationToken ct = default) =>
+            await _db.Designations.FirstOrDefaultAsync(d => d.Id == id && d.CompanyId == companyId && !d.IsDeleted, ct);
 
-        public async Task<Designation?> GetByIdIncludingDeletedAsync(Guid id, CancellationToken ct = default) =>
-            await _db.Designations.FirstOrDefaultAsync(d => d.Id == id, ct);
+        public async Task<Designation?> GetByIdIncludingDeletedAsync(Guid id, Guid companyId, CancellationToken ct = default) =>
+            await _db.Designations.FirstOrDefaultAsync(d => d.Id == id && d.CompanyId == companyId, ct);
 
-        public async Task<IEnumerable<Designation>> GetAllAsync(CancellationToken ct = default) =>
-            await _db.Designations.AsNoTracking().Where(d => !d.IsDeleted).ToListAsync(ct);
+        public async Task<IEnumerable<Designation>> GetAllAsync(Guid companyId, CancellationToken ct = default) =>
+            await _db.Designations.AsNoTracking().Where(d => d.CompanyId == companyId && !d.IsDeleted).ToListAsync(ct);
 
         public async Task AddAsync(Designation designation, CancellationToken ct = default) =>
             await _db.Designations.AddAsync(designation, ct);
@@ -44,11 +44,11 @@ namespace EMS.Persistence.Repositories
             return Task.CompletedTask;
         }
 
-        public async Task<bool> NameExistsAsync(string name, Guid? excludeId = null, CancellationToken ct = default) =>
-            await _db.Designations.AnyAsync(d => d.Name == name && !d.IsDeleted && (excludeId == null || d.Id != excludeId), ct);
+        public async Task<bool> NameExistsAsync(string name, Guid companyId, Guid? excludeId = null, CancellationToken ct = default) =>
+            await _db.Designations.AnyAsync(d => d.Name == name && d.CompanyId == companyId && !d.IsDeleted && (excludeId == null || d.Id != excludeId), ct);
 
-        public async Task<bool> CodeExistsAsync(string code, Guid? excludeId = null, CancellationToken ct = default) =>
-            await _db.Designations.AnyAsync(d => d.Code == code && !d.IsDeleted && (excludeId == null || d.Id != excludeId), ct);
+        public async Task<bool> CodeExistsAsync(string code, Guid companyId, Guid? excludeId = null, CancellationToken ct = default) =>
+            await _db.Designations.AnyAsync(d => d.Code == code && d.CompanyId == companyId && !d.IsDeleted && (excludeId == null || d.Id != excludeId), ct);
 
         public async Task SaveChangesAsync(CancellationToken ct = default) =>
             await _db.SaveChangesAsync(ct);

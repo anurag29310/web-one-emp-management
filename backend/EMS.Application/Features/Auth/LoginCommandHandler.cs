@@ -1,5 +1,6 @@
 using EMS.Application.Interfaces;
 using EMS.Domain.Entities;
+using EMS.Domain.Enums;
 using System.Threading.Tasks;
 using System;
 
@@ -33,6 +34,14 @@ namespace EMS.Application.Features.Auth
 
             if (!user.IsActive)
                 throw new UnauthorizedAccessException("Account is disabled.");
+
+            // Company-null (SuperAdmin) tokens never hit this check. Every other user belongs to
+            // exactly one company; a non-Active/Trial company blocks login outright — the same
+            // condition TenantStatusMiddleware enforces on every subsequent authenticated request,
+            // checked here too so login fails fast with a clear message rather than issuing tokens
+            // that would just get rejected on first use.
+            if (user.Company != null && user.Company.Status is not (CompanyStatus.Active or CompanyStatus.Trial))
+                throw new UnauthorizedAccessException($"This company's account is {user.Company.Status}. Contact your administrator.");
 
             if (user.IsMfaEnabled)
             {

@@ -24,9 +24,12 @@ namespace EMS.Tests
                 => Task.CompletedTask;
         }
 
+        private static readonly Guid TestCompanyId = Guid.NewGuid();
+
         private class FakeCurrentUserService : ICurrentUserService
         {
             public Guid? UserId => Guid.NewGuid();
+            public Guid? CompanyId => TestCompanyId;
             public string? IpAddress => null;
             public string? UserAgent => null;
         }

@@ -5,6 +5,8 @@ namespace EMS.Domain.Entities
     public class Team
     {
         public Guid Id { get; set; }
+        public Guid CompanyId { get; set; }
+        public Company? Company { get; set; }
         public Guid DepartmentId { get; set; }
         public string Name { get; set; } = null!;
         public string Code { get; set; } = null!;

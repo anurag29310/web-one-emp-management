@@ -1,5 +1,6 @@
 using EMS.Application.Features.Leave.Commands;
 using EMS.Application.Features.Leave.Handlers;
+using EMS.Application.Interfaces;
 using EMS.Persistence.Context;
 using EMS.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -21,12 +22,22 @@ namespace EMS.Tests
             return new ApplicationDbContext(options);
         }
 
+        private static readonly Guid TestCompanyId = Guid.NewGuid();
+
+        private class FakeCurrentUserService : ICurrentUserService
+        {
+            public Guid? UserId => Guid.NewGuid();
+            public Guid? CompanyId => TestCompanyId;
+            public string? IpAddress => null;
+            public string? UserAgent => null;
+        }
+
         [Fact]
         public async Task CreateLeaveType_Succeeds()
         {
             using var db = CreateDb();
             var repo = new LeaveRepository(db);
-            var handler = new CreateLeaveTypeCommandHandler(repo, NullLogger<CreateLeaveTypeCommandHandler>.Instance);
+            var handler = new CreateLeaveTypeCommandHandler(repo, new FakeCurrentUserService(), NullLogger<CreateLeaveTypeCommandHandler>.Instance);
 
             var result = await handler.Handle(new CreateLeaveTypeCommand { Name = "Sick Leave", Code = "SICK", IsPaid = true, AnnualEntitlementDays = 10 }, CancellationToken.None);
 
@@ -39,7 +50,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new LeaveRepository(db);
-            var handler = new CreateLeaveTypeCommandHandler(repo, NullLogger<CreateLeaveTypeCommandHandler>.Instance);
+            var handler = new CreateLeaveTypeCommandHandler(repo, new FakeCurrentUserService(), NullLogger<CreateLeaveTypeCommandHandler>.Instance);
 
             await handler.Handle(new CreateLeaveTypeCommand { Name = "Sick Leave", Code = "SICK" }, CancellationToken.None);
 
@@ -52,14 +63,14 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new LeaveRepository(db);
-            var createHandler = new CreateLeaveTypeCommandHandler(repo, NullLogger<CreateLeaveTypeCommandHandler>.Instance);
+            var createHandler = new CreateLeaveTypeCommandHandler(repo, new FakeCurrentUserService(), NullLogger<CreateLeaveTypeCommandHandler>.Instance);
             var created = await createHandler.Handle(new CreateLeaveTypeCommand { Name = "Casual Leave" }, CancellationToken.None);
 
-            var deleteHandler = new DeleteLeaveTypeCommandHandler(repo, NullLogger<DeleteLeaveTypeCommandHandler>.Instance);
+            var deleteHandler = new DeleteLeaveTypeCommandHandler(repo, new FakeCurrentUserService(), NullLogger<DeleteLeaveTypeCommandHandler>.Instance);
             await deleteHandler.Handle(new DeleteLeaveTypeCommand { Id = created.Id }, CancellationToken.None);
 
-            Assert.Null(await repo.GetLeaveTypeByIdAsync(created.Id, CancellationToken.None));
-            var stored = await repo.GetLeaveTypeByIdIncludingDeletedAsync(created.Id, CancellationToken.None);
+            Assert.Null(await repo.GetLeaveTypeByIdAsync(created.Id, TestCompanyId, CancellationToken.None));
+            var stored = await repo.GetLeaveTypeByIdIncludingDeletedAsync(created.Id, TestCompanyId, CancellationToken.None);
             Assert.NotNull(stored);
             Assert.True(stored!.IsDeleted);
         }
@@ -69,10 +80,10 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new LeaveRepository(db);
-            var createHandler = new CreateLeaveTypeCommandHandler(repo, NullLogger<CreateLeaveTypeCommandHandler>.Instance);
+            var createHandler = new CreateLeaveTypeCommandHandler(repo, new FakeCurrentUserService(), NullLogger<CreateLeaveTypeCommandHandler>.Instance);
             var created = await createHandler.Handle(new CreateLeaveTypeCommand { Name = "Casual Leave", Code = "CASUAL" }, CancellationToken.None);
 
-            var deleteHandler = new DeleteLeaveTypeCommandHandler(repo, NullLogger<DeleteLeaveTypeCommandHandler>.Instance);
+            var deleteHandler = new DeleteLeaveTypeCommandHandler(repo, new FakeCurrentUserService(), NullLogger<DeleteLeaveTypeCommandHandler>.Instance);
             await deleteHandler.Handle(new DeleteLeaveTypeCommand { Id = created.Id }, CancellationToken.None);
 
             // Code should be free again since the original leave type using it is soft-deleted.
@@ -85,16 +96,16 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new LeaveRepository(db);
-            var createHandler = new CreateLeaveTypeCommandHandler(repo, NullLogger<CreateLeaveTypeCommandHandler>.Instance);
+            var createHandler = new CreateLeaveTypeCommandHandler(repo, new FakeCurrentUserService(), NullLogger<CreateLeaveTypeCommandHandler>.Instance);
             var created = await createHandler.Handle(new CreateLeaveTypeCommand { Name = "Casual Leave" }, CancellationToken.None);
 
-            var deleteHandler = new DeleteLeaveTypeCommandHandler(repo, NullLogger<DeleteLeaveTypeCommandHandler>.Instance);
+            var deleteHandler = new DeleteLeaveTypeCommandHandler(repo, new FakeCurrentUserService(), NullLogger<DeleteLeaveTypeCommandHandler>.Instance);
             await deleteHandler.Handle(new DeleteLeaveTypeCommand { Id = created.Id }, CancellationToken.None);
 
-            var restoreHandler = new RestoreLeaveTypeCommandHandler(repo, NullLogger<RestoreLeaveTypeCommandHandler>.Instance);
+            var restoreHandler = new RestoreLeaveTypeCommandHandler(repo, new FakeCurrentUserService(), NullLogger<RestoreLeaveTypeCommandHandler>.Instance);
             await restoreHandler.Handle(new RestoreLeaveTypeCommand { Id = created.Id }, CancellationToken.None);
 
-            var restored = await repo.GetLeaveTypeByIdAsync(created.Id, CancellationToken.None);
+            var restored = await repo.GetLeaveTypeByIdAsync(created.Id, TestCompanyId, CancellationToken.None);
             Assert.NotNull(restored);
             Assert.False(restored!.IsDeleted);
         }
@@ -104,10 +115,10 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new LeaveRepository(db);
-            var createHandler = new CreateLeaveTypeCommandHandler(repo, NullLogger<CreateLeaveTypeCommandHandler>.Instance);
+            var createHandler = new CreateLeaveTypeCommandHandler(repo, new FakeCurrentUserService(), NullLogger<CreateLeaveTypeCommandHandler>.Instance);
             var created = await createHandler.Handle(new CreateLeaveTypeCommand { Name = "Casual Leave" }, CancellationToken.None);
 
-            var restoreHandler = new RestoreLeaveTypeCommandHandler(repo, NullLogger<RestoreLeaveTypeCommandHandler>.Instance);
+            var restoreHandler = new RestoreLeaveTypeCommandHandler(repo, new FakeCurrentUserService(), NullLogger<RestoreLeaveTypeCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 restoreHandler.Handle(new RestoreLeaveTypeCommand { Id = created.Id }, CancellationToken.None));
@@ -118,7 +129,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new LeaveRepository(db);
-            var restoreHandler = new RestoreLeaveTypeCommandHandler(repo, NullLogger<RestoreLeaveTypeCommandHandler>.Instance);
+            var restoreHandler = new RestoreLeaveTypeCommandHandler(repo, new FakeCurrentUserService(), NullLogger<RestoreLeaveTypeCommandHandler>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 restoreHandler.Handle(new RestoreLeaveTypeCommand { Id = Guid.NewGuid() }, CancellationToken.None));

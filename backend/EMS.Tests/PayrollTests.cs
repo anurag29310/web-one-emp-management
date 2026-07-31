@@ -29,9 +29,12 @@ namespace EMS.Tests
                 => Task.CompletedTask;
         }
 
+        private static readonly Guid TestCompanyId = Guid.NewGuid();
+
         private class FakeCurrentUserService : ICurrentUserService
         {
             public Guid? UserId => Guid.NewGuid();
+            public Guid? CompanyId => TestCompanyId;
             public string? IpAddress => null;
             public string? UserAgent => null;
         }
@@ -119,7 +122,7 @@ namespace EMS.Tests
             var logger = new NullLogger<EMS.Application.Features.Payroll.Handlers.ProcessPayrollCommandHandler>();
             var config = new ConfigurationBuilder().Build();
 
-            var handler = new EMS.Application.Features.Payroll.Handlers.ProcessPayrollCommandHandler(repo, reimbursementRepo, attendanceRepo, pdf, storage, new RecordingAuditLogger(), config, logger);
+            var handler = new EMS.Application.Features.Payroll.Handlers.ProcessPayrollCommandHandler(repo, reimbursementRepo, attendanceRepo, pdf, storage, new RecordingAuditLogger(), new FakeCurrentUserService(), config, logger);
 
             var cmd = new ProcessPayrollCommand { PeriodStart = DateTime.UtcNow.AddDays(-7), PeriodEnd = DateTime.UtcNow, ProcessedBy = Guid.NewGuid() };
             var runId = await handler.Handle(cmd, CancellationToken.None);
@@ -405,7 +408,7 @@ namespace EMS.Tests
             var attendanceRepo = new AttendanceRepository(db);
             var tempBase = Path.Combine(Path.GetTempPath(), "ems-payroll-softdelete-tests", Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempBase);
-            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, new PdfSharpDocumentService(), new LocalFileStorageService(tempBase), new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<ProcessPayrollCommandHandler>.Instance);
+            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, new PdfSharpDocumentService(), new LocalFileStorageService(tempBase), new RecordingAuditLogger(), new FakeCurrentUserService(), new ConfigurationBuilder().Build(), NullLogger<ProcessPayrollCommandHandler>.Instance);
 
             await handler.Handle(new ProcessPayrollCommand { PeriodStart = DateTime.UtcNow.AddDays(-7), PeriodEnd = DateTime.UtcNow, ProcessedBy = Guid.NewGuid() }, CancellationToken.None);
 
@@ -591,7 +594,7 @@ namespace EMS.Tests
             var attendanceRepo = new AttendanceRepository(db);
             var tempBase = Path.Combine(Path.GetTempPath(), "ems-payroll-overtime-tests", Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempBase);
-            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, new PdfSharpDocumentService(), new LocalFileStorageService(tempBase), new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<ProcessPayrollCommandHandler>.Instance);
+            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, new PdfSharpDocumentService(), new LocalFileStorageService(tempBase), new RecordingAuditLogger(), new FakeCurrentUserService(), new ConfigurationBuilder().Build(), NullLogger<ProcessPayrollCommandHandler>.Instance);
 
             await handler.Handle(new ProcessPayrollCommand { PeriodStart = periodStart, PeriodEnd = periodEnd, ProcessedBy = Guid.NewGuid() }, CancellationToken.None);
 
@@ -631,7 +634,7 @@ namespace EMS.Tests
             var attendanceRepo = new AttendanceRepository(db);
             var tempBase = Path.Combine(Path.GetTempPath(), "ems-payroll-overtime-tests", Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempBase);
-            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, new PdfSharpDocumentService(), new LocalFileStorageService(tempBase), new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<ProcessPayrollCommandHandler>.Instance);
+            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, new PdfSharpDocumentService(), new LocalFileStorageService(tempBase), new RecordingAuditLogger(), new FakeCurrentUserService(), new ConfigurationBuilder().Build(), NullLogger<ProcessPayrollCommandHandler>.Instance);
 
             await handler.Handle(new ProcessPayrollCommand
             {
@@ -665,7 +668,7 @@ namespace EMS.Tests
             var attendanceRepo = new AttendanceRepository(db);
             var tempBase = Path.Combine(Path.GetTempPath(), "ems-payroll-overtime-tests", Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempBase);
-            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, new PdfSharpDocumentService(), new LocalFileStorageService(tempBase), new RecordingAuditLogger(), new ConfigurationBuilder().Build(), NullLogger<ProcessPayrollCommandHandler>.Instance);
+            var handler = new ProcessPayrollCommandHandler(payrollRepo, reimbursementRepo, attendanceRepo, new PdfSharpDocumentService(), new LocalFileStorageService(tempBase), new RecordingAuditLogger(), new FakeCurrentUserService(), new ConfigurationBuilder().Build(), NullLogger<ProcessPayrollCommandHandler>.Instance);
 
             await handler.Handle(new ProcessPayrollCommand { PeriodStart = periodStart, PeriodEnd = periodEnd, ProcessedBy = Guid.NewGuid() }, CancellationToken.None);
 
@@ -700,7 +703,7 @@ namespace EMS.Tests
             var payrollRepo = new PayrollRepository(db);
             var reimbursementRepo = new ReimbursementRepository(db);
             var attendanceRepo = new AttendanceRepository(db);
-            var handler = new DryRunPayrollQueryHandler(payrollRepo, reimbursementRepo, attendanceRepo, new ConfigurationBuilder().Build());
+            var handler = new DryRunPayrollQueryHandler(payrollRepo, reimbursementRepo, attendanceRepo, new FakeCurrentUserService(), new ConfigurationBuilder().Build());
 
             var previews = await handler.Handle(new DryRunPayrollQuery { PeriodStart = periodStart, PeriodEnd = periodEnd }, CancellationToken.None);
             var preview = previews.Single(p => p.EmployeeId == employee.Id);

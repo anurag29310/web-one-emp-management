@@ -22,7 +22,7 @@ namespace EMS.Application.Features.OfficeLocations.Handlers
 
         public async Task Handle(DeleteOfficeLocationCommand request, CancellationToken cancellationToken)
         {
-            var location = await _repo.GetByIdAsync(request.Id, cancellationToken)
+            var location = await _repo.GetByIdAsync(request.Id, _currentUser.CompanyId!.Value, cancellationToken)
                 ?? throw new InvalidOperationException($"Office location {request.Id} not found.");
 
             location.DeletedAtUtc = DateTime.UtcNow;

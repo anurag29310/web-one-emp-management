@@ -20,6 +20,16 @@ namespace EMS.Tests
                 => Task.CompletedTask;
         }
 
+        private static readonly Guid TestCompanyId = Guid.NewGuid();
+
+        private class FakeCurrentUserService : ICurrentUserService
+        {
+            public Guid? UserId => Guid.NewGuid();
+            public Guid? CompanyId => TestCompanyId;
+            public string? IpAddress => null;
+            public string? UserAgent => null;
+        }
+
         private static ApplicationDbContext CreateDb()
         {
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -291,11 +301,11 @@ namespace EMS.Tests
             var leaveRepo = new LeaveRepository(db);
 
             var createHandler = new EMS.Application.Features.Leave.Handlers.CreateLeaveTypeCommandHandler(
-                leaveRepo, NullLogger<EMS.Application.Features.Leave.Handlers.CreateLeaveTypeCommandHandler>.Instance);
+                leaveRepo, new FakeCurrentUserService(), NullLogger<EMS.Application.Features.Leave.Handlers.CreateLeaveTypeCommandHandler>.Instance);
             var updateHandler = new EMS.Application.Features.Leave.Handlers.UpdateLeaveTypeCommandHandler(
-                leaveRepo, NullLogger<EMS.Application.Features.Leave.Handlers.UpdateLeaveTypeCommandHandler>.Instance);
+                leaveRepo, new FakeCurrentUserService(), NullLogger<EMS.Application.Features.Leave.Handlers.UpdateLeaveTypeCommandHandler>.Instance);
             var deleteHandler = new EMS.Application.Features.Leave.Handlers.DeleteLeaveTypeCommandHandler(
-                leaveRepo, NullLogger<EMS.Application.Features.Leave.Handlers.DeleteLeaveTypeCommandHandler>.Instance);
+                leaveRepo, new FakeCurrentUserService(), NullLogger<EMS.Application.Features.Leave.Handlers.DeleteLeaveTypeCommandHandler>.Instance);
 
             var created = await createHandler.Handle(new CreateLeaveTypeCommand
             {
@@ -324,7 +334,7 @@ namespace EMS.Tests
             Assert.Equal("Casual Leave (Updated)", updated.Name);
 
             await deleteHandler.Handle(new DeleteLeaveTypeCommand { Id = created.Id }, CancellationToken.None);
-            Assert.Null(await leaveRepo.GetLeaveTypeByIdAsync(created.Id, CancellationToken.None));
+            Assert.Null(await leaveRepo.GetLeaveTypeByIdAsync(created.Id, TestCompanyId, CancellationToken.None));
         }
     }
 }

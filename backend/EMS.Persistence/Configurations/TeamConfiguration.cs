@@ -10,11 +10,14 @@ namespace EMS.Persistence.Configurations
         {
             builder.ToTable("Teams");
             builder.HasKey(t => t.Id);
+            builder.Property(t => t.CompanyId).IsRequired();
             builder.Property(t => t.Name).IsRequired().HasMaxLength(150);
             builder.Property(t => t.Code).IsRequired().HasMaxLength(50);
 
-            builder.HasIndex(t => new { t.DepartmentId, t.Code }).IsUnique();
+            builder.HasIndex(t => t.CompanyId);
+            builder.HasIndex(t => new { t.CompanyId, t.DepartmentId, t.Code }).IsUnique();
 
+            builder.HasOne(t => t.Company).WithMany().HasForeignKey(t => t.CompanyId).OnDelete(DeleteBehavior.Restrict);
             builder.HasOne(t => t.Department).WithMany().HasForeignKey(t => t.DepartmentId).OnDelete(DeleteBehavior.Restrict);
             builder.HasOne(t => t.LeadEmployee).WithMany().HasForeignKey(t => t.LeadEmployeeId).OnDelete(DeleteBehavior.SetNull);
 

@@ -40,9 +40,10 @@ namespace EMS.Tests
         public async Task EmployeeRepository_GetAllForExportAsync_ReturnsAllMatchingEmployees_WithoutPagination()
         {
             using var db = CreateDb("ems_export_emp_" + Guid.NewGuid());
-            var dept = new Department { Id = Guid.NewGuid(), Name = "Engineering" };
-            var designation = new Designation { Id = Guid.NewGuid(), Name = "Engineer", Code = "ENG", CreatedAtUtc = DateTime.UtcNow };
-            var officeLocation = new OfficeLocation { Id = Guid.NewGuid(), Name = "HQ", Code = "HQ", City = "City", Country = "Country", TimeZoneId = "UTC", CreatedAtUtc = DateTime.UtcNow };
+            var companyId = Guid.NewGuid();
+            var dept = new Department { Id = Guid.NewGuid(), CompanyId = companyId, Name = "Engineering" };
+            var designation = new Designation { Id = Guid.NewGuid(), CompanyId = companyId, Name = "Engineer", Code = "ENG", CreatedAtUtc = DateTime.UtcNow };
+            var officeLocation = new OfficeLocation { Id = Guid.NewGuid(), CompanyId = companyId, Name = "HQ", Code = "HQ", City = "City", Country = "Country", TimeZoneId = "UTC", CreatedAtUtc = DateTime.UtcNow };
             db.Departments.Add(dept);
             db.Designations.Add(designation);
             db.OfficeLocations.Add(officeLocation);
@@ -51,6 +52,7 @@ namespace EMS.Tests
                 db.Employees.Add(new Employee
                 {
                     Id = Guid.NewGuid(),
+                    CompanyId = companyId,
                     EmployeeCode = $"E{i:000}",
                     FirstName = "First" + i,
                     LastName = "Last" + i,
@@ -65,7 +67,7 @@ namespace EMS.Tests
             await db.SaveChangesAsync();
 
             var repo = new EmployeeRepository(db);
-            var result = (await repo.GetAllForExportAsync(null, null, null, dept.Id, "Active", ct: CancellationToken.None)).ToList();
+            var result = (await repo.GetAllForExportAsync(companyId, null, null, null, dept.Id, "Active", ct: CancellationToken.None)).ToList();
 
             Assert.Equal(25, result.Count);
             Assert.All(result, e => Assert.Equal("Engineering", e.Department!.Name));
@@ -228,7 +230,7 @@ namespace EMS.Tests
         {
             var employeeRepo = new Mock<IEmployeeRepository>();
             employeeRepo
-                .Setup(r => r.GetAllForExportAsync(null, null, null, null, null, null, null, null, It.IsAny<CancellationToken>()))
+                .Setup(r => r.GetAllForExportAsync(It.IsAny<Guid>(), null, null, null, null, null, null, null, null, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new[]
                 {
                     new Employee { Id = Guid.NewGuid(), EmployeeCode = "E1", FirstName = "Ada", LastName = "Lovelace", IsActive = true, JoinDate = DateTime.UtcNow }
@@ -239,7 +241,7 @@ namespace EMS.Tests
                 .Setup(s => s.GenerateAsync("Employees", It.IsAny<IReadOnlyList<string>>(), It.IsAny<IEnumerable<IReadOnlyList<object?>>>()))
                 .ReturnsAsync(new byte[] { 1, 2, 3 });
 
-            var handler = new ExportEmployeesQueryHandler(employeeRepo.Object, excelService.Object);
+            var handler = new ExportEmployeesQueryHandler(employeeRepo.Object, excelService.Object, Mock.Of<ICurrentUserService>(c => c.CompanyId == Guid.NewGuid()));
 
             var result = await handler.Handle(new ExportEmployeesQuery(), CancellationToken.None);
 
@@ -354,7 +356,7 @@ namespace EMS.Tests
             var leaveRepo = new Mock<ILeaveRepository>();
             leaveRepo.Setup(r => r.GetAllLeavesAsync(null, null, null, null, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new[] { leaveRequest });
-            leaveRepo.Setup(r => r.GetLeaveTypeByIdIncludingDeletedAsync(leaveType.Id, It.IsAny<CancellationToken>()))
+            leaveRepo.Setup(r => r.GetLeaveTypeByIdIncludingDeletedAsync(leaveType.Id, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(leaveType);
 
             var employeeRepo = new Mock<IEmployeeRepository>();
@@ -368,7 +370,7 @@ namespace EMS.Tests
                 .Callback<string, IReadOnlyList<string>, IEnumerable<IReadOnlyList<object?>>>((_, _, rows) => capturedRows = rows)
                 .ReturnsAsync(Array.Empty<byte>());
 
-            var handler = new ExportLeaveRequestsQueryHandler(leaveRepo.Object, employeeRepo.Object, excelService.Object);
+            var handler = new ExportLeaveRequestsQueryHandler(leaveRepo.Object, employeeRepo.Object, excelService.Object, Mock.Of<ICurrentUserService>(c => c.CompanyId == Guid.NewGuid()));
 
             var result = await handler.Handle(new ExportLeaveRequestsQuery(), CancellationToken.None);
 
@@ -384,13 +386,13 @@ namespace EMS.Tests
         {
             var summary = new DashboardSummaryDto { TotalEmployees = 10, ActiveEmployees = 8, InactiveEmployees = 2 };
             var repo = new Mock<IDashboardRepository>();
-            repo.Setup(r => r.GetSummaryAsync(null, It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(summary);
+            repo.Setup(r => r.GetSummaryAsync(It.IsAny<Guid>(), null, It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(summary);
 
             var pdfService = new Mock<IPdfService>();
             pdfService.Setup(p => p.GenerateDashboardSummaryPdfAsync(summary, It.IsAny<DateTime>(), null))
                 .ReturnsAsync(new byte[] { 9, 9, 9 });
 
-            var handler = new ExportDashboardSummaryQueryHandler(repo.Object, pdfService.Object);
+            var handler = new ExportDashboardSummaryQueryHandler(repo.Object, Mock.Of<ICurrentUserService>(c => c.CompanyId == Guid.NewGuid()), pdfService.Object);
 
             var result = await handler.Handle(new ExportDashboardSummaryQuery(), CancellationToken.None);
 

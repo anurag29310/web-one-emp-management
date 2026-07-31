@@ -24,10 +24,11 @@ namespace EMS.Persistence.Repositories
 
         // ─── Dashboard ─────────────────────────────────────────────────────────────
 
-        public async Task<AttendanceSummaryDto> GetDailyCountsAsync(DateTime date, Guid? departmentId, CancellationToken ct = default)
+        public async Task<AttendanceSummaryDto> GetDailyCountsAsync(Guid companyId, DateTime date, Guid? departmentId, CancellationToken ct = default)
         {
             var query = _db.AttendanceRecords.AsNoTracking()
-                .Where(a => !a.IsDeleted && a.AttendanceDate == date.Date);
+                .Where(a => !a.IsDeleted && a.AttendanceDate == date.Date
+                    && _db.Employees.Any(e => e.Id == a.EmployeeId && e.CompanyId == companyId));
 
             if (departmentId.HasValue)
             {
@@ -116,11 +117,11 @@ namespace EMS.Persistence.Repositories
 
         // ─── Shifts ─────────────────────────────────────────────────────────────────
 
-        public async Task<Shift?> GetShiftByIdAsync(Guid id, CancellationToken ct = default) =>
-            await _db.Shifts.FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted, ct);
+        public async Task<Shift?> GetShiftByIdAsync(Guid id, Guid companyId, CancellationToken ct = default) =>
+            await _db.Shifts.FirstOrDefaultAsync(s => s.Id == id && s.CompanyId == companyId && !s.IsDeleted, ct);
 
-        public async Task<IEnumerable<Shift>> GetShiftsAsync(CancellationToken ct = default) =>
-            await _db.Shifts.AsNoTracking().Where(s => !s.IsDeleted).OrderBy(s => s.Name).ToListAsync(ct);
+        public async Task<IEnumerable<Shift>> GetShiftsAsync(Guid companyId, CancellationToken ct = default) =>
+            await _db.Shifts.AsNoTracking().Where(s => s.CompanyId == companyId && !s.IsDeleted).OrderBy(s => s.Name).ToListAsync(ct);
 
         public async Task AddShiftAsync(Shift shift, CancellationToken ct = default) =>
             await _db.Shifts.AddAsync(shift, ct);

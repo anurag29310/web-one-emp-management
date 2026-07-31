@@ -13,12 +13,14 @@ namespace EMS.Application.Features.Attendance.Handlers
     {
         private readonly IAttendanceRepository _repo;
         private readonly IAuthRepository _authRepo;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<ApproveAttendanceCorrectionCommandHandler> _logger;
 
-        public ApproveAttendanceCorrectionCommandHandler(IAttendanceRepository repo, IAuthRepository authRepo, ILogger<ApproveAttendanceCorrectionCommandHandler> logger)
+        public ApproveAttendanceCorrectionCommandHandler(IAttendanceRepository repo, IAuthRepository authRepo, ICurrentUserService currentUser, ILogger<ApproveAttendanceCorrectionCommandHandler> logger)
         {
             _repo = repo;
             _authRepo = authRepo;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
@@ -43,7 +45,7 @@ namespace EMS.Application.Features.Attendance.Handlers
             if (correction.RequestedCheckInAtUtc.HasValue) record.CheckInAtUtc = correction.RequestedCheckInAtUtc;
             if (correction.RequestedCheckOutAtUtc.HasValue) record.CheckOutAtUtc = correction.RequestedCheckOutAtUtc;
 
-            Shift? shift = record.ShiftId.HasValue ? await _repo.GetShiftByIdAsync(record.ShiftId.Value, cancellationToken) : null;
+            Shift? shift = record.ShiftId.HasValue ? await _repo.GetShiftByIdAsync(record.ShiftId.Value, _currentUser.CompanyId!.Value, cancellationToken) : null;
             if (record.CheckInAtUtc.HasValue) record.IsLateArrival = AttendanceCalculator.IsLateArrival(record.CheckInAtUtc.Value, shift);
             if (record.CheckOutAtUtc.HasValue) record.IsEarlyLeave = AttendanceCalculator.IsEarlyLeave(record.CheckOutAtUtc.Value, shift);
             record.TotalWorkMinutes = AttendanceCalculator.WorkMinutes(record.CheckInAtUtc, record.CheckOutAtUtc);

@@ -25,9 +25,12 @@ namespace EMS.Tests
                 => Task.CompletedTask;
         }
 
+        private static readonly Guid TestCompanyId = Guid.NewGuid();
+
         private class FakeCurrentUserService : ICurrentUserService
         {
             public Guid? UserId => Guid.NewGuid();
+            public Guid? CompanyId => TestCompanyId;
             public string? IpAddress => null;
             public string? UserAgent => null;
         }
@@ -111,10 +114,10 @@ namespace EMS.Tests
         public async Task CreateCandidateCommandValidator_RejectsNonexistentDesignation()
         {
             var designationRepo = new Mock<IDesignationRepository>();
-            designationRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Designation?)null);
+            designationRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Designation?)null);
             var departmentRepo = new Mock<IDepartmentRepository>();
 
-            var validator = new CreateCandidateCommandValidator(designationRepo.Object, departmentRepo.Object);
+            var validator = new CreateCandidateCommandValidator(designationRepo.Object, departmentRepo.Object, new FakeCurrentUserService());
             var result = await validator.ValidateAsync(new CreateCandidateCommand
             {
                 FirstName = "Jane",

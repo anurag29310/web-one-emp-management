@@ -29,6 +29,7 @@ namespace EMS.Infrastructure.Services
             var log = new AuditLog
             {
                 Id = Guid.NewGuid(),
+                CompanyId = _currentUser.CompanyId,
                 UserId = _currentUser.UserId,
                 EntityName = entityName,
                 EntityId = entityId,

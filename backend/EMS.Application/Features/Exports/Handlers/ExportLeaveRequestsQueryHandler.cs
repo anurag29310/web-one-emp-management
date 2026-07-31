@@ -25,12 +25,14 @@ namespace EMS.Application.Features.Exports.Handlers
         private readonly ILeaveRepository _repo;
         private readonly IEmployeeRepository _employeeRepo;
         private readonly IExcelExportService _excelService;
+        private readonly ICurrentUserService _currentUser;
 
-        public ExportLeaveRequestsQueryHandler(ILeaveRepository repo, IEmployeeRepository employeeRepo, IExcelExportService excelService)
+        public ExportLeaveRequestsQueryHandler(ILeaveRepository repo, IEmployeeRepository employeeRepo, IExcelExportService excelService, ICurrentUserService currentUser)
         {
             _repo = repo;
             _employeeRepo = employeeRepo;
             _excelService = excelService;
+            _currentUser = currentUser;
         }
 
         public async Task<ExportFileResult> Handle(ExportLeaveRequestsQuery request, CancellationToken cancellationToken)
@@ -44,7 +46,7 @@ namespace EMS.Application.Features.Exports.Handlers
             var leaveTypesById = new Dictionary<Guid, string>();
             foreach (var leaveTypeId in requests.Select(r => r.LeaveTypeId).Distinct())
             {
-                var leaveType = await _repo.GetLeaveTypeByIdIncludingDeletedAsync(leaveTypeId, cancellationToken);
+                var leaveType = await _repo.GetLeaveTypeByIdIncludingDeletedAsync(leaveTypeId, _currentUser.CompanyId!.Value, cancellationToken);
                 if (leaveType != null)
                     leaveTypesById[leaveTypeId] = leaveType.Name;
             }

@@ -6,12 +6,12 @@ namespace EMS.Application.Features.Leave.Validators
 {
     public class CreateLeaveTypeCommandValidator : AbstractValidator<CreateLeaveTypeCommand>
     {
-        public CreateLeaveTypeCommandValidator(ILeaveRepository repo)
+        public CreateLeaveTypeCommandValidator(ILeaveRepository repo, ICurrentUserService currentUser)
         {
             RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
 
             RuleFor(x => x.Code).MaximumLength(50)
-                .MustAsync(async (code, ct) => string.IsNullOrWhiteSpace(code) || !await repo.LeaveTypeCodeExistsAsync(code, null, ct))
+                .MustAsync(async (code, ct) => string.IsNullOrWhiteSpace(code) || !await repo.LeaveTypeCodeExistsAsync(code, currentUser.CompanyId!.Value, null, ct))
                 .WithMessage("Leave type code already exists.");
 
             RuleFor(x => x.AnnualEntitlementDays).GreaterThanOrEqualTo(0)
@@ -21,12 +21,12 @@ namespace EMS.Application.Features.Leave.Validators
 
     public class UpdateLeaveTypeCommandValidator : AbstractValidator<UpdateLeaveTypeCommand>
     {
-        public UpdateLeaveTypeCommandValidator(ILeaveRepository repo)
+        public UpdateLeaveTypeCommandValidator(ILeaveRepository repo, ICurrentUserService currentUser)
         {
             RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
 
             RuleFor(x => x.Code).MaximumLength(50)
-                .MustAsync(async (cmd, code, ct) => string.IsNullOrWhiteSpace(code) || !await repo.LeaveTypeCodeExistsAsync(code, cmd.Id, ct))
+                .MustAsync(async (cmd, code, ct) => string.IsNullOrWhiteSpace(code) || !await repo.LeaveTypeCodeExistsAsync(code, currentUser.CompanyId!.Value, cmd.Id, ct))
                 .WithMessage("Leave type code already exists.");
 
             RuleFor(x => x.AnnualEntitlementDays).GreaterThanOrEqualTo(0)

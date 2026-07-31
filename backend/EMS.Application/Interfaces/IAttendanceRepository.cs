@@ -11,7 +11,7 @@ namespace EMS.Application.Interfaces
     public interface IAttendanceRepository
     {
         // ─── Dashboard ─────────────────────────────────────────────────────────────
-        Task<AttendanceSummaryDto> GetDailyCountsAsync(DateTime date, Guid? departmentId, CancellationToken ct = default);
+        Task<AttendanceSummaryDto> GetDailyCountsAsync(Guid companyId, DateTime date, Guid? departmentId, CancellationToken ct = default);
 
         // ─── Attendance records ────────────────────────────────────────────────────
         Task<AttendanceRecord?> GetRecordByIdAsync(Guid id, CancellationToken ct = default);
@@ -31,8 +31,8 @@ namespace EMS.Application.Interfaces
         Task UpdateCorrectionAsync(AttendanceCorrection correction, CancellationToken ct = default);
 
         // ─── Shifts ─────────────────────────────────────────────────────────────────
-        Task<Shift?> GetShiftByIdAsync(Guid id, CancellationToken ct = default);
-        Task<IEnumerable<Shift>> GetShiftsAsync(CancellationToken ct = default);
+        Task<Shift?> GetShiftByIdAsync(Guid id, Guid companyId, CancellationToken ct = default);
+        Task<IEnumerable<Shift>> GetShiftsAsync(Guid companyId, CancellationToken ct = default);
         Task AddShiftAsync(Shift shift, CancellationToken ct = default);
         Task UpdateShiftAsync(Shift shift, CancellationToken ct = default);
         Task DeleteShiftAsync(Shift shift, CancellationToken ct = default);

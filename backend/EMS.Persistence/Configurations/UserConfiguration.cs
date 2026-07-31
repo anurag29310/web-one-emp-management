@@ -20,6 +20,8 @@ namespace EMS.Persistence.Configurations
             builder.HasIndex(x => x.Email);
             builder.HasMany(x => x.RefreshTokens).WithOne(x => x.User).HasForeignKey(x => x.UserId);
             builder.HasOne(x => x.Role).WithMany(r => r.Users).HasForeignKey(x => x.RoleId);
+            builder.HasOne(x => x.Company).WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            builder.HasIndex(x => x.CompanyId);
             builder.HasIndex(x => x.EmployeeId);
         }
     }

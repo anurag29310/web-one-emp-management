@@ -11,17 +11,19 @@ namespace EMS.Application.Features.Attendance.Handlers
     public class AssignEmployeeShiftCommandHandler : IRequestHandler<Commands.AssignEmployeeShiftCommand, EmployeeShift>
     {
         private readonly IAttendanceRepository _repo;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<AssignEmployeeShiftCommandHandler> _logger;
 
-        public AssignEmployeeShiftCommandHandler(IAttendanceRepository repo, ILogger<AssignEmployeeShiftCommandHandler> logger)
+        public AssignEmployeeShiftCommandHandler(IAttendanceRepository repo, ICurrentUserService currentUser, ILogger<AssignEmployeeShiftCommandHandler> logger)
         {
             _repo = repo;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
         public async Task<EmployeeShift> Handle(Commands.AssignEmployeeShiftCommand request, CancellationToken cancellationToken)
         {
-            var shift = await _repo.GetShiftByIdAsync(request.ShiftId, cancellationToken)
+            var shift = await _repo.GetShiftByIdAsync(request.ShiftId, _currentUser.CompanyId!.Value, cancellationToken)
                 ?? throw new InvalidOperationException("Shift not found.");
 
             var assignment = new EmployeeShift

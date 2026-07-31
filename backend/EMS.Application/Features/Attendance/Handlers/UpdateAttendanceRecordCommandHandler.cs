@@ -12,11 +12,13 @@ namespace EMS.Application.Features.Attendance.Handlers
     public class UpdateAttendanceRecordCommandHandler : IRequestHandler<Commands.UpdateAttendanceRecordCommand, AttendanceRecord>
     {
         private readonly IAttendanceRepository _repo;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<UpdateAttendanceRecordCommandHandler> _logger;
 
-        public UpdateAttendanceRecordCommandHandler(IAttendanceRepository repo, ILogger<UpdateAttendanceRecordCommandHandler> logger)
+        public UpdateAttendanceRecordCommandHandler(IAttendanceRepository repo, ICurrentUserService currentUser, ILogger<UpdateAttendanceRecordCommandHandler> logger)
         {
             _repo = repo;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
@@ -25,7 +27,7 @@ namespace EMS.Application.Features.Attendance.Handlers
             var record = await _repo.GetRecordByIdAsync(request.Id, cancellationToken)
                 ?? throw new InvalidOperationException($"Attendance record {request.Id} not found.");
 
-            Shift? shift = request.ShiftId.HasValue ? await _repo.GetShiftByIdAsync(request.ShiftId.Value, cancellationToken) : null;
+            Shift? shift = request.ShiftId.HasValue ? await _repo.GetShiftByIdAsync(request.ShiftId.Value, _currentUser.CompanyId!.Value, cancellationToken) : null;
 
             record.ShiftId = shift?.Id;
             record.CheckInAtUtc = request.CheckInAtUtc;

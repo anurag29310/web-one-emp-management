@@ -10,13 +10,15 @@ namespace EMS.Application.Features.Teams.Handlers
     public class GetTeamsByDepartmentQueryHandler : IRequestHandler<GetTeamsByDepartmentQuery, IEnumerable<Team>>
     {
         private readonly ITeamRepository _repo;
+        private readonly ICurrentUserService _currentUser;
 
-        public GetTeamsByDepartmentQueryHandler(ITeamRepository repo)
+        public GetTeamsByDepartmentQueryHandler(ITeamRepository repo, ICurrentUserService currentUser)
         {
             _repo = repo;
+            _currentUser = currentUser;
         }
 
         public async Task<IEnumerable<Team>> Handle(GetTeamsByDepartmentQuery request, CancellationToken cancellationToken)
-            => await _repo.GetByDepartmentAsync(request.DepartmentId, cancellationToken);
+            => await _repo.GetByDepartmentAsync(request.DepartmentId, _currentUser.CompanyId!.Value, cancellationToken);
     }
 }

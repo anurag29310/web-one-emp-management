@@ -24,16 +24,19 @@ namespace EMS.Tests
             return new ApplicationDbContext(options);
         }
 
+        private static readonly Guid TestCompanyId = Guid.NewGuid();
+
         private class FakeCurrentUserService : ICurrentUserService
         {
             public Guid? UserId => Guid.NewGuid();
+            public Guid? CompanyId => TestCompanyId;
             public string? IpAddress => null;
             public string? UserAgent => null;
         }
 
         private static async Task<Department> SeedDepartmentAsync(ApplicationDbContext db, string suffix)
         {
-            var dept = new Department { Id = Guid.NewGuid(), Name = "Dept-" + suffix, Code = "D" + suffix, CreatedAtUtc = DateTime.UtcNow };
+            var dept = new Department { Id = Guid.NewGuid(), CompanyId = TestCompanyId, Name = "Dept-" + suffix, Code = "D" + suffix, CreatedAtUtc = DateTime.UtcNow };
             db.Departments.Add(dept);
             await db.SaveChangesAsync();
             return dept;
@@ -90,10 +93,10 @@ namespace EMS.Tests
             using var db = CreateDb();
             var dept = await SeedDepartmentAsync(db, "4");
             var repo = new TeamRepository(db);
-            await repo.AddAsync(new Team { Id = Guid.NewGuid(), DepartmentId = dept.Id, Name = "Existing", Code = "EXI", CreatedAtUtc = DateTime.UtcNow });
+            await repo.AddAsync(new Team { Id = Guid.NewGuid(), CompanyId = TestCompanyId, DepartmentId = dept.Id, Name = "Existing", Code = "EXI", CreatedAtUtc = DateTime.UtcNow });
             await repo.SaveChangesAsync();
 
-            var validator = new CreateTeamCommandValidator(repo, new DepartmentRepository(db));
+            var validator = new CreateTeamCommandValidator(repo, new DepartmentRepository(db), new FakeCurrentUserService());
             var result = await validator.ValidateAsync(new CreateTeamCommand { DepartmentId = dept.Id, Name = "New", Code = "EXI" });
 
             Assert.False(result.IsValid);
@@ -105,7 +108,7 @@ namespace EMS.Tests
         {
             using var db = CreateDb();
             var repo = new TeamRepository(db);
-            var validator = new CreateTeamCommandValidator(repo, new DepartmentRepository(db));
+            var validator = new CreateTeamCommandValidator(repo, new DepartmentRepository(db), new FakeCurrentUserService());
 
             var result = await validator.ValidateAsync(new CreateTeamCommand { DepartmentId = Guid.NewGuid(), Name = "Ghost", Code = "GHO" });
 
@@ -144,8 +147,8 @@ namespace EMS.Tests
 
             await deleteHandler.Handle(new DeleteTeamCommand { Id = created.Id }, CancellationToken.None);
 
-            Assert.Null(await repo.GetByIdAsync(created.Id, CancellationToken.None));
-            var stillThere = await repo.GetByIdIncludingDeletedAsync(created.Id, CancellationToken.None);
+            Assert.Null(await repo.GetByIdAsync(created.Id, TestCompanyId, CancellationToken.None));
+            var stillThere = await repo.GetByIdIncludingDeletedAsync(created.Id, TestCompanyId, CancellationToken.None);
             Assert.NotNull(stillThere);
             Assert.True(stillThere!.IsDeleted);
         }
@@ -157,11 +160,11 @@ namespace EMS.Tests
             var deptA = await SeedDepartmentAsync(db, "7A");
             var deptB = await SeedDepartmentAsync(db, "7B");
             var repo = new TeamRepository(db);
-            await repo.AddAsync(new Team { Id = Guid.NewGuid(), DepartmentId = deptA.Id, Name = "A1", Code = "A1", CreatedAtUtc = DateTime.UtcNow });
-            await repo.AddAsync(new Team { Id = Guid.NewGuid(), DepartmentId = deptB.Id, Name = "B1", Code = "B1", CreatedAtUtc = DateTime.UtcNow });
+            await repo.AddAsync(new Team { Id = Guid.NewGuid(), CompanyId = TestCompanyId, DepartmentId = deptA.Id, Name = "A1", Code = "A1", CreatedAtUtc = DateTime.UtcNow });
+            await repo.AddAsync(new Team { Id = Guid.NewGuid(), CompanyId = TestCompanyId, DepartmentId = deptB.Id, Name = "B1", Code = "B1", CreatedAtUtc = DateTime.UtcNow });
             await repo.SaveChangesAsync();
 
-            var result = await repo.GetByDepartmentAsync(deptA.Id, CancellationToken.None);
+            var result = await repo.GetByDepartmentAsync(deptA.Id, TestCompanyId, CancellationToken.None);
 
             Assert.Single(result);
         }

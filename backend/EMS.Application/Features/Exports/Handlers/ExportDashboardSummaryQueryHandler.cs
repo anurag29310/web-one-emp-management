@@ -11,18 +11,20 @@ namespace EMS.Application.Features.Exports.Handlers
     public class ExportDashboardSummaryQueryHandler : IRequestHandler<ExportDashboardSummaryQuery, ExportFileResult>
     {
         private readonly IDashboardRepository _repo;
+        private readonly ICurrentUserService _currentUser;
         private readonly IPdfService _pdfService;
 
-        public ExportDashboardSummaryQueryHandler(IDashboardRepository repo, IPdfService pdfService)
+        public ExportDashboardSummaryQueryHandler(IDashboardRepository repo, ICurrentUserService currentUser, IPdfService pdfService)
         {
             _repo = repo;
+            _currentUser = currentUser;
             _pdfService = pdfService;
         }
 
         public async Task<ExportFileResult> Handle(ExportDashboardSummaryQuery request, CancellationToken cancellationToken)
         {
             var date = (request.Date ?? DateTime.UtcNow).Date;
-            var summary = await _repo.GetSummaryAsync(request.DepartmentId, date, cancellationToken);
+            var summary = await _repo.GetSummaryAsync(_currentUser.CompanyId!.Value, request.DepartmentId, date, cancellationToken);
 
             var bytes = await _pdfService.GenerateDashboardSummaryPdfAsync(summary, date, request.DepartmentId);
             var fileName = $"dashboard-summary_{date:yyyyMMdd}.pdf";

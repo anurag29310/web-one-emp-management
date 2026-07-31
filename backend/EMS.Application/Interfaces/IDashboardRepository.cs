@@ -7,6 +7,6 @@ namespace EMS.Application.Interfaces
 {
     public interface IDashboardRepository
     {
-        Task<DashboardSummaryDto> GetSummaryAsync(Guid? departmentId, DateTime date, CancellationToken ct = default);
+        Task<DashboardSummaryDto> GetSummaryAsync(Guid companyId, Guid? departmentId, DateTime date, CancellationToken ct = default);
     }
 }
