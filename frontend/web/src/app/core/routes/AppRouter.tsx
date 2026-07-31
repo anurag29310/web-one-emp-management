@@ -206,6 +206,21 @@ const TaskListPage = lazy(() =>
 const TaskDetailPage = lazy(() =>
   import('@/app/features/tasks/pages/TaskDetailPage').then((m) => ({ default: m.TaskDetailPage })),
 )
+const ReimbursementListPage = lazy(() =>
+  import('@/app/features/reimbursements/pages/ReimbursementListPage').then((m) => ({
+    default: m.ReimbursementListPage,
+  })),
+)
+const ReimbursementDetailPage = lazy(() =>
+  import('@/app/features/reimbursements/pages/ReimbursementDetailPage').then((m) => ({
+    default: m.ReimbursementDetailPage,
+  })),
+)
+const ReimbursementReviewQueuePage = lazy(() =>
+  import('@/app/features/reimbursements/pages/ReimbursementReviewQueuePage').then((m) => ({
+    default: m.ReimbursementReviewQueuePage,
+  })),
+)
 
 function PageFallback() {
   return <div className="min-h-screen bg-canvas p-6 text-sm text-ink-subtle">Loading…</div>
@@ -267,6 +282,9 @@ export function AppRouter() {
               <Route path="/clients/:id" element={<ClientDetailPage />} />
               <Route path="/tasks" element={<TaskListPage />} />
               <Route path="/tasks/:id" element={<TaskDetailPage />} />
+              <Route path="/reimbursements" element={<ReimbursementListPage />} />
+              <Route path="/reimbursements/review" element={<ReimbursementReviewQueuePage />} />
+              <Route path="/reimbursements/:id" element={<ReimbursementDetailPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>
           </Route>

@@ -237,6 +237,7 @@ const navEntries: NavEntry[] = [
     },
   },
   { kind: 'leaf', leaf: { to: '/announcements', label: 'Announcements', icon: announcementsIcon } },
+  { kind: 'leaf', leaf: { to: '/reimbursements', label: 'Reimbursements', icon: payslipsIcon } },
   {
     kind: 'group',
     group: {

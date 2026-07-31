@@ -215,7 +215,11 @@ export function TaskDetailPage() {
   const [isActing, setIsActing] = useState(false)
 
   const canManage = user?.role === 'Admin'
-  const isAssignee = task?.assignedEmployeeId === user?.id
+  // GET /tasks/{id} 404s for a non-Admin caller who isn't the assignee (existence isn't
+  // disclosed) — so a non-Admin who successfully loaded this task IS the assignee. There's no
+  // endpoint exposing the caller's own employeeId to compare directly (User.Id and Employee.Id
+  // are different entities, linked by a User.EmployeeId FK that GET /auth/me doesn't surface).
+  const isAssignee = !canManage
   const canAct = canManage || isAssignee
   const isReadOnly = task ? task.status === 'Completed' || task.status === 'Cancelled' : true
 
