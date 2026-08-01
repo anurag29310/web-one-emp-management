@@ -12,22 +12,6 @@ export const mfaChallengeSchema = z.object({
 })
 export type MfaChallengeFormValues = z.infer<typeof mfaChallengeSchema>
 
-export const registerSchema = z
-  .object({
-    userName: z
-      .string()
-      .min(3, 'Username must be at least 3 characters long.')
-      .max(50, 'Username must be 50 characters or fewer.'),
-    email: z.string().min(1, 'Email is required.').email('Enter a valid email address.'),
-    password: passwordPolicySchema,
-    confirmPassword: z.string().min(1, 'Confirm your password.'),
-  })
-  .refine((values) => values.password === values.confirmPassword, {
-    message: 'Passwords do not match.',
-    path: ['confirmPassword'],
-  })
-export type RegisterFormValues = z.infer<typeof registerSchema>
-
 export const forgotPasswordSchema = z.object({
   email: z.string().min(1, 'Email is required.').email('Enter a valid email address.'),
 })

@@ -39,7 +39,10 @@ export function LoginPage() {
         })
         return
       }
-      navigate(redirectTo, { replace: true })
+      const hasExplicitRedirect = Boolean((location.state as { from?: string } | null)?.from)
+      const target =
+        !hasExplicitRedirect && outcome.session.user.role === 'SuperAdmin' ? '/platform/dashboard' : redirectTo
+      navigate(target, { replace: true })
     } catch (err) {
       setFormError(err instanceof AppError ? err.message : 'Unable to sign in. Please try again.')
     }
@@ -125,7 +128,8 @@ export function LoginPage() {
         {appConfig.dataSource === 'mock' && (
           <div className="mt-4 rounded-lg border border-hairline bg-surface-1 px-4 py-3 text-xs text-ink-subtle">
             <p className="mb-1 font-medium text-ink-muted">Mock data source active — try:</p>
-            <p className="font-mono">admin / Admin@123</p>
+            <p className="font-mono">superadmin / SuperAdmin@123</p>
+            <p className="mt-1 font-mono">admin / Admin@123</p>
             <p className="mt-1 font-mono">manager / Manager@123 (MFA enabled — any 6-digit code works)</p>
           </div>
         )}

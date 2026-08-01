@@ -10,6 +10,8 @@ import type { PagedResult } from '@/app/shared/models/apiEnvelope'
  */
 export interface AuditLog {
   id: string
+  /** Null for a platform-level (Super Admin) action that isn't scoped to any one tenant. */
+  companyId: string | null
   userId: string | null
   entityName: string
   entityId: string | null

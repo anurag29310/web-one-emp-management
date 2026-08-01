@@ -13,7 +13,6 @@ import type {
   MfaRecoveryCodes,
   MfaSetupInfo,
   RegenerateRecoveryCodesInput,
-  RegisterInput,
   ResetPasswordInput,
   VerifyMfaCredentials,
 } from './authRepository'
@@ -165,37 +164,6 @@ export const mockAuthRepository: AuthRepository = {
       tokenStorage.clear()
       return null
     }
-  },
-
-  async register({ userName, email, password }: RegisterInput): Promise<AuthSession> {
-    await delay(400)
-    const exists = mockAccounts.some(
-      (a) =>
-        a.user.email.toLowerCase() === email.toLowerCase() ||
-        a.user.userName.toLowerCase() === userName.toLowerCase(),
-    )
-    if (exists) {
-      throw new AppError('Username or email already exists.', 409, 'ACCOUNT_EXISTS')
-    }
-
-    const account: MockAccount = {
-      password,
-      user: {
-        id: `mock-${Date.now()}`,
-        userName,
-        email,
-        role: null, // self-registration never grants a role, matching POST /auth/register
-        isActive: true,
-        isMfaEnabled: false,
-      },
-      mfa: { enabled: false, secret: null, pendingSecret: null, recoveryCodes: [] },
-    }
-    mockAccounts.push(account)
-
-    const session = buildSession(account.user.id)
-    tokenStorage.setAccessToken(session.accessToken)
-    tokenStorage.setRefreshToken(session.refreshToken)
-    return session
   },
 
   async forgotPassword({ email }: ForgotPasswordInput): Promise<void> {

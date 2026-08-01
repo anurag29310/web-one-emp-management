@@ -18,7 +18,6 @@ export type {
   MfaRecoveryCodes,
   MfaSetupInfo,
   RegenerateRecoveryCodesInput,
-  RegisterInput,
   ResetPasswordInput,
   VerifyMfaCredentials,
 } from './authRepository'

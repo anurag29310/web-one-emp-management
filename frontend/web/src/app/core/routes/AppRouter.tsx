@@ -1,7 +1,9 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from './ProtectedRoute'
+import { PlatformProtectedRoute } from './PlatformProtectedRoute'
 import { AppLayout } from '@/app/core/layout/AppLayout'
+import { PlatformLayout } from '@/app/core/layout/PlatformLayout'
 
 const LoginPage = lazy(() =>
   import('@/app/features/auth/pages/LoginPage').then((m) => ({ default: m.LoginPage })),
@@ -9,8 +11,10 @@ const LoginPage = lazy(() =>
 const MfaChallengePage = lazy(() =>
   import('@/app/features/auth/pages/MfaChallengePage').then((m) => ({ default: m.MfaChallengePage })),
 )
-const RegisterPage = lazy(() =>
-  import('@/app/features/auth/pages/RegisterPage').then((m) => ({ default: m.RegisterPage })),
+const CompanyRegisterPage = lazy(() =>
+  import('@/app/features/company-registration/pages/CompanyRegisterPage').then((m) => ({
+    default: m.CompanyRegisterPage,
+  })),
 )
 const ForgotPasswordPage = lazy(() =>
   import('@/app/features/auth/pages/ForgotPasswordPage').then((m) => ({
@@ -251,6 +255,21 @@ const ConversationListPage = lazy(() =>
 const ConversationDetailPage = lazy(() =>
   import('@/app/features/messaging/pages/ConversationDetailPage').then((m) => ({ default: m.ConversationDetailPage })),
 )
+const PlatformDashboardPage = lazy(() =>
+  import('@/app/features/platform/pages/PlatformDashboardPage').then((m) => ({ default: m.PlatformDashboardPage })),
+)
+const CompanyListPage = lazy(() =>
+  import('@/app/features/platform/pages/CompanyListPage').then((m) => ({ default: m.CompanyListPage })),
+)
+const CompanyDetailPage = lazy(() =>
+  import('@/app/features/platform/pages/CompanyDetailPage').then((m) => ({ default: m.CompanyDetailPage })),
+)
+const PlatformAuditLogsPage = lazy(() =>
+  import('@/app/features/platform/pages/PlatformAuditLogsPage').then((m) => ({ default: m.PlatformAuditLogsPage })),
+)
+const PlatformSettingsPage = lazy(() =>
+  import('@/app/features/platform/pages/PlatformSettingsPage').then((m) => ({ default: m.PlatformSettingsPage })),
+)
 
 function PageFallback() {
   return <div className="min-h-screen bg-canvas p-6 text-sm text-ink-subtle">Loading…</div>
@@ -263,9 +282,19 @@ export function AppRouter() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/login/mfa" element={<MfaChallengePage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register" element={<CompanyRegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+          <Route element={<PlatformProtectedRoute />}>
+            <Route element={<PlatformLayout />}>
+              <Route path="/platform/dashboard" element={<PlatformDashboardPage />} />
+              <Route path="/platform/companies" element={<CompanyListPage />} />
+              <Route path="/platform/companies/:id" element={<CompanyDetailPage />} />
+              <Route path="/platform/audit-logs" element={<PlatformAuditLogsPage />} />
+              <Route path="/platform/settings" element={<PlatformSettingsPage />} />
+            </Route>
+          </Route>
 
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>

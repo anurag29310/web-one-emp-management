@@ -20,12 +20,6 @@ export interface VerifyMfaCredentials {
   code: string
 }
 
-export interface RegisterInput {
-  userName: string
-  email: string
-  password: string
-}
-
 export interface ForgotPasswordInput {
   email: string
 }
@@ -70,7 +64,6 @@ export interface AuthRepository {
   logout(): Promise<void>
   /** Re-establishes a session from a persisted refresh token on app load, or resolves to null if none exists / it's no longer valid. */
   restoreSession(): Promise<AuthSession | null>
-  register(input: RegisterInput): Promise<AuthSession>
   /** Always resolves — never reveals whether the email belongs to an account. */
   forgotPassword(input: ForgotPasswordInput): Promise<void>
   resetPassword(input: ResetPasswordInput): Promise<void>

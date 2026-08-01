@@ -1,10 +1,14 @@
 import type { AuditLog } from './auditLogRepository'
 
-// User/employee IDs match the ones used in employees mock data, so mock mode
-// stays cross-consistent across modules.
+// User/employee IDs match the ones used in employees mock data, and companyId matches Acme
+// Corporation in features/platform/api/mockData.ts, so mock mode stays cross-consistent across
+// modules.
+const MOCK_COMPANY_ID = '00000000-0000-0000-0000-00000000c001'
+
 export const mockAuditLogs: AuditLog[] = [
   {
     id: '90000000-0000-0000-0000-000000000001',
+    companyId: MOCK_COMPANY_ID,
     userId: '10000000-0000-0000-0000-000000000001',
     entityName: 'Employee',
     entityId: '10000000-0000-0000-0000-000000000002',
@@ -17,6 +21,7 @@ export const mockAuditLogs: AuditLog[] = [
   },
   {
     id: '90000000-0000-0000-0000-000000000002',
+    companyId: MOCK_COMPANY_ID,
     userId: '10000000-0000-0000-0000-000000000001',
     entityName: 'LeaveRequest',
     entityId: '20000000-0000-0000-0000-000000000001',
@@ -29,6 +34,7 @@ export const mockAuditLogs: AuditLog[] = [
   },
   {
     id: '90000000-0000-0000-0000-000000000003',
+    companyId: MOCK_COMPANY_ID,
     userId: '10000000-0000-0000-0000-000000000002',
     entityName: 'Department',
     entityId: '00000000-0000-0000-0000-000000000303',
@@ -41,6 +47,7 @@ export const mockAuditLogs: AuditLog[] = [
   },
   {
     id: '90000000-0000-0000-0000-000000000004',
+    companyId: null,
     userId: null,
     entityName: 'User',
     entityId: null,
@@ -53,6 +60,7 @@ export const mockAuditLogs: AuditLog[] = [
   },
   {
     id: '90000000-0000-0000-0000-000000000005',
+    companyId: MOCK_COMPANY_ID,
     userId: '10000000-0000-0000-0000-000000000001',
     entityName: 'PayrollRun',
     entityId: '30000000-0000-0000-0000-000000000001',

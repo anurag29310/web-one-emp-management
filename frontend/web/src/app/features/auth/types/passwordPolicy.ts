@@ -5,8 +5,8 @@ import { z } from 'zod'
  * ChangePasswordCommandValidator / ResetPasswordCommandValidator
  * (backend/EMS.Application/Features/Auth/Validators/*.cs): at least 8
  * characters, one uppercase letter, one lowercase letter, one digit, and one
- * special character. Register (POST /auth/register) enforces the same
- * policy — see docs/api-specification.md section 3.10.
+ * special character. POST /company-registration enforces the same policy on
+ * the new admin's password — see docs/api-specification.md section 27.4.
  */
 export const PASSWORD_POLICY_RULES: readonly string[] = [
   'At least 8 characters',

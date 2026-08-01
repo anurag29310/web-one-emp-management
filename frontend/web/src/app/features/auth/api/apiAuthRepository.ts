@@ -12,7 +12,6 @@ import type {
   MfaRecoveryCodes,
   MfaSetupInfo,
   RegenerateRecoveryCodesInput,
-  RegisterInput,
   ResetPasswordInput,
   VerifyMfaCredentials,
 } from './authRepository'
@@ -118,13 +117,6 @@ export const apiAuthRepository: AuthRepository = {
       tokenStorage.clear()
       return null
     }
-  },
-
-  async register(input: RegisterInput): Promise<AuthSession> {
-    const response = await httpClient.post<{ data: LoginResultDto }>('/auth/register', input)
-    const result = unwrap(response)
-    const { accessToken, refreshToken } = requireTokens(result)
-    return establishSession(accessToken, refreshToken, result.expiresInSeconds)
   },
 
   async forgotPassword(input: ForgotPasswordInput): Promise<void> {

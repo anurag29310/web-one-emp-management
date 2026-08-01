@@ -18,6 +18,18 @@ export interface MockAccount {
 
 export const mockAccounts: MockAccount[] = [
   {
+    password: 'SuperAdmin@123',
+    user: {
+      id: '00000000-0000-0000-0000-00000000a001',
+      userName: 'superadmin',
+      email: 'superadmin@ems.local',
+      role: 'SuperAdmin',
+      isActive: true,
+      isMfaEnabled: false,
+    },
+    mfa: { enabled: false, secret: null, pendingSecret: null, recoveryCodes: [] },
+  },
+  {
     password: 'Admin@123',
     user: {
       id: '00000000-0000-0000-0000-000000000001',

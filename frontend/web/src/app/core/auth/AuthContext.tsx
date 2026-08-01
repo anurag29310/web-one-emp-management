@@ -3,10 +3,10 @@ import {
   authRepository,
   type LoginCredentials,
   type LoginOutcome,
-  type RegisterInput,
   type VerifyMfaCredentials,
 } from '@/app/features/auth/api'
 import type { AuthenticatedUser } from '@/app/shared/models/user'
+import { tokenStorage } from './tokenStorage'
 import { sessionEvents } from './sessionEvents'
 import { AuthContext, type AuthContextValue } from './authContextType'
 
@@ -46,9 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(session.user)
   }, [])
 
-  const register = useCallback(async (input: RegisterInput): Promise<void> => {
-    const session = await authRepository.register(input)
-    setUser(session.user)
+  const establishSession = useCallback(async (accessToken: string, refreshToken: string): Promise<void> => {
+    tokenStorage.setAccessToken(accessToken)
+    tokenStorage.setRefreshToken(refreshToken)
+    const user = await authRepository.getCurrentUser()
+    setUser(user)
   }, [])
 
   const logout = useCallback(async () => {
@@ -63,10 +65,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isInitializing,
       login,
       completeMfaLogin,
-      register,
+      establishSession,
       logout,
     }),
-    [user, isInitializing, login, completeMfaLogin, register, logout],
+    [user, isInitializing, login, completeMfaLogin, establishSession, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

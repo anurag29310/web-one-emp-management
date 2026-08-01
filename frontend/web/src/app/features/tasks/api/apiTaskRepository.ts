@@ -1,5 +1,5 @@
 import { httpClient, unwrap } from '@/app/core/api/httpClient'
-import type { PagedResult } from '@/app/shared/models/apiEnvelope'
+import type { ApiSuccessEnvelope, PagedResult } from '@/app/shared/models/apiEnvelope'
 import type {
   CreateTaskInput,
   TaskAttachment,
@@ -22,10 +22,42 @@ function extractFileName(contentDisposition: string | undefined, fallback: strin
   return quotedMatch ? quotedMatch[1] : fallback
 }
 
+/**
+ * Shape of EMS.Application.Common.DTOs.PagedResult<T> as it actually serializes: the backend
+ * wraps it a second time inside ApiResponse<T>, so a list endpoint's JSON body is
+ * `{ data: { data: [...], page, pageSize, totalCount, totalPages }, message, correlationId }`
+ * — the pagination fields live one level deeper than the flat `{ data, page, pageSize, ... }`
+ * shape documented in api-specification.md §2.3. Confirmed against TaskController.GetAll,
+ * which returns `ApiResponse<PagedResult<TaskItemDto>>.Success(result)` — same pattern already
+ * used in attendance/audit-logs/performance repositories.
+ */
+interface BackendPagedResult<T> {
+  data: T[]
+  page: number
+  pageSize: number
+  totalCount: number
+  totalPages: number
+}
+
+function unwrapPaged<T>(response: { data: ApiSuccessEnvelope<BackendPagedResult<T>> }): PagedResult<T> {
+  const envelope = response.data
+  const paged = envelope.data
+  return {
+    data: paged.data,
+    page: paged.page,
+    pageSize: paged.pageSize,
+    totalCount: paged.totalCount,
+    totalPages: paged.totalPages,
+    correlationId: envelope.correlationId,
+  }
+}
+
 export const apiTaskRepository: TaskRepository = {
   async list(filters?: TaskListFilters): Promise<PagedResult<TaskItem>> {
-    const response = await httpClient.get<PagedResult<TaskItem>>('/tasks', { params: filters })
-    return response.data
+    const response = await httpClient.get<ApiSuccessEnvelope<BackendPagedResult<TaskItem>>>('/tasks', {
+      params: filters,
+    })
+    return unwrapPaged(response)
   },
 
   async getById(id: string): Promise<TaskItem> {

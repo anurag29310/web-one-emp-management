@@ -23,7 +23,7 @@ export function buildAuthContextValue(role: Role | null): AuthContextValue {
     isInitializing: false,
     login: vi.fn(),
     completeMfaLogin: vi.fn(),
-    register: vi.fn(),
+    establishSession: vi.fn(),
     logout: vi.fn(),
   }
 }
